@@ -16,10 +16,13 @@ All randomness comes from one seeded RNG. ``musil.refine`` + invariants are the 
 from __future__ import annotations
 
 import heapq
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass
 from random import Random
 from typing import Protocol
+
+from musil.core import Model
+from musil.refine import RefinementMonitor
 
 
 @dataclass(frozen=True, slots=True)
@@ -207,12 +210,16 @@ class Simulator:
         max_steps: int = 10_000,
         until: Callable[[Simulator], bool] | None = None,
         on_step: Callable[[Simulator], None] | None = None,
+        after_start: Callable[[Simulator], None] | None = None,
     ) -> RunResult:
         """Drive the system to quiescence (queue empty), until ``until(sim)`` is true, or until
-        ``max_steps`` events have fired. ``on_step(sim)`` runs after each fired event -- the hook the
-        oracle uses to snapshot and check the world."""
+        ``max_steps`` events have fired. ``after_start(sim)`` runs once after every node's
+        ``on_start`` (the initial world); ``on_step(sim)`` runs after each fired event -- the hooks
+        the oracle uses to snapshot and check the world."""
         for name in sorted(self._nodes):
             self._nodes[name].on_start(self._ctxs[name])
+        if after_start is not None:
+            after_start(self)
         if until is not None and until(self):
             return RunResult(0, self._now, self._delivered, self._dropped, "until")
 
@@ -243,3 +250,133 @@ class Simulator:
                 break
 
         return RunResult(steps, self._now, self._delivered, self._dropped, reason)
+
+
+@dataclass(frozen=True, slots=True)
+class SimFailure[W]:
+    """A reproducible failure from ``simulate``. ``kind`` is ``"invariant"``, ``"refinement"``, or
+    ``"goal"``; ``detail`` names the broken invariant / the refinement violation / the goal. ``world``
+    is the offending snapshot and ``history`` the snapshots leading to it (a trace). Re-run with
+    ``seeds=[seed]`` to reproduce exactly."""
+
+    seed: int
+    kind: str
+    detail: str
+    step: int
+    world: W
+    history: tuple[W, ...]
+
+    def __str__(self) -> str:
+        return (
+            f"{self.kind.upper()} on seed {self.seed} at step {self.step}: {self.detail}\n"
+            f"  world: {self.world}\n"
+            f"  reproduce with seeds=[{self.seed}]"
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class SimReport[W]:
+    ok: bool
+    runs: int
+    failure: SimFailure[W] | None = None
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+    def __str__(self) -> str:
+        if self.ok:
+            return f"OK -- {self.runs} simulated runs, no failures"
+        assert self.failure is not None
+        return f"{self.failure}\n({self.runs} runs before the failing seed)"
+
+
+class _OracleStop(Exception):
+    """Internal: abort a run the instant the oracle finds a failure."""
+
+
+class _Oracle[W, S: Hashable]:
+    """Per-run checker fed to ``Simulator.run`` as the after-start / per-step hook: snapshots the
+    world, checks invariants, and (if present) advances the refinement monitor; stashes the first
+    failure and raises ``_OracleStop`` to abort the run."""
+
+    __slots__ = ("_invariants", "_monitor", "_nodes", "_seed", "_snapshot", "failure", "history")
+
+    def __init__(
+        self,
+        seed: int,
+        nodes: Mapping[str, Node],
+        snapshot: Callable[[Mapping[str, Node]], W],
+        invariants: Mapping[str, Callable[[W], bool]],
+        monitor: RefinementMonitor[W, S] | None,
+    ) -> None:
+        self._seed = seed
+        self._nodes = nodes
+        self._snapshot = snapshot
+        self._invariants = invariants
+        self._monitor = monitor
+        self.history: list[W] = []
+        self.failure: SimFailure[W] | None = None
+
+    def __call__(self, _sim: Simulator) -> None:
+        world = self._snapshot(self._nodes)
+        self.history.append(world)
+        step = len(self.history) - 1
+        for name, predicate in self._invariants.items():
+            if not predicate(world):
+                self.failure = SimFailure(self._seed, "invariant", name, step, world, tuple(self.history))
+                raise _OracleStop
+        if self._monitor is not None:
+            violation = self._monitor.observe(world)
+            if violation is not None:
+                self.failure = SimFailure(self._seed, "refinement", str(violation), step, world, tuple(self.history))
+                raise _OracleStop
+
+
+def simulate[W, S: Hashable](
+    factory: Callable[[], Mapping[str, Node]],
+    *,
+    seeds: Iterable[int],
+    snapshot: Callable[[Mapping[str, Node]], W],
+    network: NetworkModel | None = None,
+    invariants: Mapping[str, Callable[[W], bool]] | None = None,
+    model: Model[S] | None = None,
+    abstraction: Callable[[W], S] | None = None,
+    goal: Callable[[W], bool] | None = None,
+    goal_name: str = "goal",
+    max_steps: int = 10_000,
+    require_init: bool = True,
+) -> SimReport[W]:
+    """Deterministic simulation testing of the real nodes. Runs the system once per seed under
+    ``network`` faults; after every step it checks each invariant and (if a ``model`` + ``abstraction``
+    are given) that the run refines the model. After each run settles, if a ``goal`` is given the final
+    world must satisfy it (the convergence check). Returns at the FIRST failing seed -- a reproducible
+    repro (``report.failure.seed``). ``factory`` builds a fresh node map per run; ``snapshot`` maps the
+    live nodes to an immutable world value used by the oracle."""
+    if model is not None and abstraction is None:
+        raise ValueError("model given without abstraction: pass abstraction=... to map worlds to model states")
+    invs: Mapping[str, Callable[[W], bool]] = invariants if invariants is not None else {}
+    runs = 0
+    for seed in seeds:
+        runs += 1
+        nodes = factory()
+        sim = Simulator(nodes, seed=seed, network=network)
+        monitor: RefinementMonitor[W, S] | None = (
+            RefinementMonitor(model, abstraction, require_init=require_init)
+            if model is not None and abstraction is not None
+            else None
+        )
+        oracle = _Oracle(seed, nodes, snapshot, invs, monitor)
+        try:
+            sim.run(max_steps=max_steps, after_start=oracle, on_step=oracle)
+        except _OracleStop:
+            return SimReport(ok=False, runs=runs, failure=oracle.failure)
+        if goal is not None:
+            final = oracle.history[-1] if oracle.history else snapshot(nodes)
+            if not goal(final):
+                step = len(oracle.history) - 1
+                return SimReport(
+                    ok=False,
+                    runs=runs,
+                    failure=SimFailure(seed, "goal", goal_name, step, final, tuple(oracle.history)),
+                )
+    return SimReport(ok=True, runs=runs)
