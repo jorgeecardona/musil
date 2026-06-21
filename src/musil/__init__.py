@@ -47,6 +47,12 @@ from musil.fsm import (
 )
 from musil.graph import to_dot
 from musil.liveness import LivenessResult, check_liveness
+from musil.refine import (
+    RefinementMonitor,
+    RefinementResult,
+    RefinementViolation,
+    check_refinement,
+)
 
 __all__ = [
     "Action",
@@ -57,11 +63,15 @@ __all__ = [
     "Invariant",
     "LivenessResult",
     "Model",
+    "RefinementMonitor",
+    "RefinementResult",
+    "RefinementViolation",
     "Result",
     "Step",
     "channel_actions",
     "check",
     "check_liveness",
+    "check_refinement",
     "compose",
     "declared_states",
     "explore",
