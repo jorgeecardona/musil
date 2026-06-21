@@ -35,6 +35,9 @@ cache:
 
 test:
   stage: test
+  before_script:
+    # pyright downloads a prebuilt Node that needs libatomic.so.1, absent in the slim image
+    - apt-get update && apt-get install -y --no-install-recommends libatomic1
   script:
     - uv sync --frozen
     - uv run ruff check src tests
