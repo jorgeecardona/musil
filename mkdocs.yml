@@ -1,0 +1,59 @@
+site_name: musil
+site_description: A tiny, dependency-free explicit-state model checker for Python.
+site_url: https://musil.readthedocs.io/
+repo_url: https://gitlab.com/jorgeecardona/musil
+repo_name: jorgeecardona/musil
+copyright: MIT &copy; Jorge Cardona
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.snippets:
+      base_path: [".", "docs"]
+      check_paths: true
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_root_heading: true
+            show_source: true
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            docstring_section_style: spacy
+
+nav:
+  - Home: index.md
+  - API reference: api.md
+  - Changelog: changelog.md

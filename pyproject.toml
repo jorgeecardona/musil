@@ -31,6 +31,14 @@ classifiers = [
 ]
 dependencies = []
 
+[project.optional-dependencies]
+# docs are an *extra* (not a uv dependency-group) so Read the Docs can install them via pip
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+    "mkdocstrings[python]>=0.27",
+]
+
 [project.urls]
 Homepage = "https://gitlab.com/jorgeecardona/musil"
 Repository = "https://gitlab.com/jorgeecardona/musil"

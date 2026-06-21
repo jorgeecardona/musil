@@ -53,6 +53,17 @@ build:
       - dist/
     expire_in: 1 week
 
+# Build the docs strictly (same as Read the Docs does) so doc breakage fails CI early.
+docs:
+  stage: build
+  script:
+    - uv sync --frozen --extra docs
+    - uv run mkdocs build --strict
+  artifacts:
+    paths:
+      - site/
+    expire_in: 1 week
+
 publish:
   stage: publish
   rules:
