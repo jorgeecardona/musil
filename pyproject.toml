@@ -1,0 +1,70 @@
+[project]
+# musil — named for Robert Musil (engineer-mathematician turned novelist, "The Man Without
+# Qualities"). A standalone, dependency-free explicit-state model checker.
+name = "musil"
+version = "0.1.0"
+description = "A tiny, dependency-free explicit-state model checker for Python: safety, deadlock, reachability, liveness — and concurrency by interleaving."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Jorge Cardona", email = "jorgeecardona@gmail.com" }]
+keywords = [
+    "model-checking",
+    "formal-methods",
+    "verification",
+    "state-machine",
+    "concurrency",
+    "liveness",
+    "safety",
+    "temporal-logic",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering",
+    "Typing :: Typed",
+]
+dependencies = []
+
+[project.urls]
+Homepage = "https://gitlab.com/jorgeecardona/musil"
+Repository = "https://gitlab.com/jorgeecardona/musil"
+Changelog = "https://gitlab.com/jorgeecardona/musil/-/blob/main/CHANGELOG.md"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/musil"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "examples", "README.md", "CHANGELOG.md", "LICENSE"]
+
+[dependency-groups]
+dev = ["ruff>=0.6", "pyright>=1.1.390", "pytest>=8"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["musil"]
+
+[tool.pyright]
+include = ["src", "tests"]
+extraPaths = ["src"]
+pythonVersion = "3.12"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"

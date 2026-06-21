@@ -1,0 +1,69 @@
+# musil CI/CD
+#
+# - on every push / MR: lint (ruff) + typecheck (pyright) + tests (pytest)
+# - on every push: build sdist + wheel (smoke-test that the package builds)
+# - on a git tag: publish to PyPI via OIDC **Trusted Publishing** — no stored API token.
+#   GitLab mints a short-lived OIDC token; PyPI exchanges it for a one-shot upload token.
+#   Requires a Trusted Publisher configured on PyPI for this project first (see README).
+
+default:
+  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+
+variables:
+  UV_CACHE_DIR: .uv-cache
+
+# Avoid duplicate (branch + MR) pipelines; always run for tags.
+workflow:
+  rules:
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+
+stages:
+  - test
+  - build
+  - publish
+
+cache:
+  key:
+    files:
+      - uv.lock
+  paths:
+    - .uv-cache
+
+test:
+  stage: test
+  script:
+    - uv sync --frozen
+    - uv run ruff check src tests
+    - uv run pyright
+    - uv run pytest -q
+
+build:
+  stage: build
+  script:
+    - uv build --out-dir dist
+  artifacts:
+    paths:
+      - dist/
+    expire_in: 1 week
+
+publish:
+  stage: publish
+  rules:
+    - if: $CI_COMMIT_TAG
+  environment:
+    name: pypi
+    url: https://pypi.org/project/musil/
+  id_tokens:
+    PYPI_ID_TOKEN:
+      aud: pypi
+  script:
+    # Exchange GitLab's OIDC ID token for a short-lived PyPI upload token, then publish dist/*.
+    - >-
+      resp="$(curl -sS -X POST https://pypi.org/_/oidc/mint-token -d "{\"token\":\"${PYPI_ID_TOKEN}\"}")"
+    - >-
+      pypi_token="$(printf '%s' "$resp" | python3 -c 'import sys, json; print(json.load(sys.stdin)["token"])')"
+    - uv publish --token "$pypi_token"
