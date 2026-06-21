@@ -2,6 +2,22 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+## [Unreleased]
+
+### Added — verify the *implementation*, not just the design
+- **Refinement** (`check_refinement`, `RefinementMonitor`) — check that an observed run of the real
+  system refines a model: every transition is a model edge or a stutter (the runtime analog of
+  seL4/TLA+ refinement). The oracle that holds real code to a model-checked spec.
+- **Deterministic simulation** (`simulate`, `Simulator`, `NetworkModel`, `BaseNode`, `Context`) —
+  run real, event-driven node code under a virtual clock and a fault-injecting network (loss /
+  duplication / latency-driven reordering), reproducible from a seed. `simulate` runs many seeds with
+  invariants + refinement + a convergence goal as the oracle and returns the first failing seed as a
+  reproducible `SimFailure`. This is the FoundationDB/TigerBeetle "deterministic simulation testing"
+  technique as a pure-Python library -- bug *finding*, not proof.
+- **Worked example** (`examples/route_delivery.py`) and a guide (Verifying a distributed system):
+  model-check a protocol's design, then put the real code through simulation; the fire-and-forget bug
+  is caught with a seed, the per-tick re-push converges and refines the model.
+
 ## [0.1.0] - 2026-06-21
 
 Initial release.

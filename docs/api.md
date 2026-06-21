@@ -38,6 +38,21 @@ Generate traces from the model and replay them against the real implementation.
 
 ::: musil.conformance
 
+## Refinement — `check_refinement`, `RefinementMonitor`
+
+Check that an observed run of the real system refines the model (each transition is a model edge or a
+stutter) -- the oracle `simulate` uses to hold real code to a model-checked spec.
+
+::: musil.refine
+
+## Simulation — `simulate`, `Simulator`, `NetworkModel`
+
+Deterministic simulation testing: run real event-driven node code under a controlled clock and a
+fault-injecting network, reproducible from a seed, with invariants + refinement + a convergence goal
+as the oracle.
+
+::: musil.sim
+
 ## Graph export — `to_dot`, `explore`
 
 The reachable state graph and its Graphviz DOT rendering.

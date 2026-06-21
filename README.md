@@ -101,6 +101,24 @@ model = Model(
 **Visualize** — `to_dot(model)` returns Graphviz DOT (`dot -Tsvg`); pass `highlight=[s.state for s in
 result.trace]` to colour a counterexample.
 
+**Verify the implementation, not just the design** — `simulate` runs your *real* event-driven node
+code under a deterministic, fault-injecting network (loss / duplication / reordering), reproducible
+from a seed, holding it to a model (`check_refinement`) plus invariants and a convergence goal. It's
+the [FoundationDB](https://apple.github.io/foundationdb/testing.html)/TigerBeetle deterministic-
+simulation-testing technique as a pure-Python library — bug *finding*, not proof:
+
+```python
+from musil import simulate, NetworkModel
+report = simulate(node_factory, seeds=range(1000), snapshot=snapshot,
+                  network=NetworkModel(loss=0.3, max_latency=3),
+                  model=spec, abstraction=lift, goal=lambda w: w.applied == w.desired)
+if not report.ok:
+    print(report.failure)   # which seed, which step, which world — re-run seeds=[that_seed] to replay
+```
+
+See **[Verifying a distributed system](https://musil.readthedocs.io/en/latest/verifying-distributed-systems/)**
+and the runnable [`examples/route_delivery.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/route_delivery.py).
+
 ## How it compares
 
 | | what it is | spec language | runs the real code? | liveness |
