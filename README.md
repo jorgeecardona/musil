@@ -192,13 +192,8 @@ Publishing uses OIDC Trusted Publishing, so **no token is stored anywhere**. On 
 pipeline, `:release` ships to PyPI whenever `pyproject`'s version isn't published yet — there is no
 git tag step.
 
-### Manual release (fallback)
-
-```
-make release        # tags HEAD as v<pyproject version> and pushes
-```
-
-Pushes and MRs run lint + typecheck + test + build + docs only.
+Releases are automatic on `main` — there is no manual tag or publish step. Pushes and MRs run
+lint + typecheck + test + build + docs only.
 
 ## License
 

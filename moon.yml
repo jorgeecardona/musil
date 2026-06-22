@@ -67,10 +67,12 @@ tasks:
       cache: false
       runInCI: false
 
-  # main-only: no-op if pyproject's version is already on PyPI; else publish + tag marker.
+  # main-only: no-op if pyproject's version is already on PyPI; else publish.
+  # Invoked explicitly by the CI job on the default branch (`moon run :release`), so it
+  # MUST be runnable in CI -- do NOT set runInCI:false here (that makes `:release` resolve
+  # to "no tasks found" under CI). It is never part of `:ci`, so it only runs when targeted.
   release:
     command: 'sh scripts/release'
     deps: ['~:ci']
     options:
       cache: false
-      runInCI: false
