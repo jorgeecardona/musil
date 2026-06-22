@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from musil.__main__ import main
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
@@ -17,7 +19,7 @@ def test_check_a_violating_model_returns_one() -> None:
     assert main([str(EXAMPLES / "lost_update.py")]) == 1  # the race violates its invariant
 
 
-def test_dot_flag_returns_zero(capsys) -> None:  # type: ignore[no-untyped-def]
+def test_dot_flag_returns_zero(capsys: pytest.CaptureFixture[str]) -> None:
     assert main([str(EXAMPLES / "traffic_light.py"), "--dot"]) == 0
     out = capsys.readouterr().out
     assert out.startswith("digraph")

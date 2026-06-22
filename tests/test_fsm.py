@@ -61,7 +61,7 @@ def test_model_built_from_table_is_reachable_and_sound() -> None:
 
 def test_table_with_unreachable_state_leaves_it_unexplored() -> None:
     # 'orphan' is declared as a target of nothing reachable from pending
-    table = {"pending": {"active"}, "active": set(), "orphan": {"active"}}
+    table: dict[str, set[str]] = {"pending": {"active"}, "active": set(), "orphan": {"active"}}
     model = Model(
         init=Thing("pending"),
         actions=status_field_actions(table),

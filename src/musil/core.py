@@ -55,7 +55,7 @@ class Model[S: Hashable]:
 
     init: S | Iterable[S]
     actions: Iterable[Action[S]]
-    invariants: Mapping[str, Invariant[S]] = field(default_factory=dict)
+    invariants: Mapping[str, Invariant[S]] = field(default_factory=dict[str, Invariant[S]])
     terminal: Callable[[S], bool] = _never
 
     def initial_states(self) -> tuple[S, ...]:

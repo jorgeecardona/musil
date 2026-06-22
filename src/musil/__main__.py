@@ -11,6 +11,7 @@ import importlib.util
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any, cast
 
 from musil.core import Model, check
 from musil.graph import to_dot
@@ -32,11 +33,11 @@ def _load(target: str) -> ModuleType:
     return importlib.import_module(target)
 
 
-def _find_model(module: ModuleType) -> Model:
+def _find_model(module: ModuleType) -> Model[Any]:
     for name in ("MODEL", "model"):
         candidate = getattr(module, name, None)
         if isinstance(candidate, Model):
-            return candidate
+            return cast("Model[Any]", candidate)
     raise ValueError("no Model named MODEL or model in the module")
 
 

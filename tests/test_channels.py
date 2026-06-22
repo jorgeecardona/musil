@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable, Hashable
 from dataclasses import dataclass, replace
 
 from musil import Action, Model, channel_actions, explore, send
@@ -11,20 +12,20 @@ MSGS = ("a", "b")
 
 @dataclass(frozen=True)
 class Wire:
-    inflight: frozenset[str] = frozenset()
-    sent: frozenset[str] = frozenset()
-    received: tuple[str, ...] = ()  # ordered log of deliveries
+    inflight: frozenset[Hashable] = frozenset()
+    sent: frozenset[Hashable] = frozenset()
+    received: tuple[Hashable, ...] = ()  # ordered log of deliveries
 
 
-_get = lambda s: s.inflight  # noqa: E731
-_put = lambda s, nf: replace(s, inflight=nf)  # noqa: E731
+_get: Callable[[Wire], frozenset[Hashable]] = lambda s: s.inflight  # noqa: E731
+_put: Callable[[Wire, frozenset[Hashable]], Wire] = lambda s, nf: replace(s, inflight=nf)  # noqa: E731
 # cap at 2 deliveries per message so a duplicating channel's state space stays bounded
-_deliver = lambda s, m: s if s.received.count(m) >= 2 else replace(s, received=(*s.received, m))  # noqa: E731
+_deliver: Callable[[Wire, Hashable], Wire] = lambda s, m: s if s.received.count(m) >= 2 else replace(s, received=(*s.received, m))  # noqa: E731
 _inject = send(_get, _put)
 
 
 def _model(*, lossy: bool = False, duplicating: bool = False) -> Model[Wire]:
-    sends = [
+    sends: list[Action[Wire]] = [
         Action(f"send:{m}", lambda s, _m=m: _m not in s.sent, lambda s, _m=m: _inject(replace(s, sent=s.sent | {_m}), _m))
         for m in MSGS
     ]

@@ -15,6 +15,7 @@ from __future__ import annotations
 from collections.abc import Hashable, Mapping
 from dataclasses import dataclass
 from itertools import product
+from typing import Any
 
 from musil.core import Action, Invariant, Model
 
@@ -37,7 +38,7 @@ class Composite:
 
 
 def compose(
-    components: Mapping[str, Model],
+    components: Mapping[str, Model[Any]],
     *,
     invariants: Mapping[str, Invariant[Composite]] | None = None,
 ) -> Model[Composite]:

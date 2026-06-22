@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 
 from musil import Action, Model, check_liveness
@@ -62,7 +63,7 @@ def test_fair_cycle_violates_without_fairness_but_holds_with_it() -> None:
         ],
         terminal=lambda s: s.at == "P",
     )
-    goal = lambda s: s.at == "P"  # noqa: E731
+    goal: Callable[[T], bool] = lambda s: s.at == "P"  # noqa: E731
 
     # no fairness: the A<->B loop that ignores escape is a valid counterexample
     strict = check_liveness(model, goal=goal, goal_name="P")
@@ -90,7 +91,7 @@ def test_weak_fairness_does_not_force_a_flickering_action() -> None:
         ],
         terminal=lambda s: s.at == "P",
     )
-    goal = lambda s: s.at == "P"  # noqa: E731
+    goal: Callable[[T], bool] = lambda s: s.at == "P"  # noqa: E731
     # even with weak fairness on escape, the flicker (disabled in B) means the loop is admissible
     result = check_liveness(model, goal=goal, goal_name="P", fair=["escape"])
     assert not result.ok
@@ -112,7 +113,7 @@ def test_strong_fairness_forces_a_flickering_action_that_weak_cannot() -> None:
         ],
         terminal=lambda s: s.at == "P",
     )
-    goal = lambda s: s.at == "P"  # noqa: E731
+    goal: Callable[[T], bool] = lambda s: s.at == "P"  # noqa: E731
     # weak fairness can't force escape (not continuously enabled) -> still a counterexample
     assert not check_liveness(model, goal=goal, fair=["escape"]).ok
     # strong fairness CAN (escape is enabled infinitely often) -> liveness holds
@@ -138,7 +139,7 @@ def test_everywhere_recurrence_vs_eventually_from_init() -> None:
             Action("spin", lambda s: s.at == "stuck", lambda s: s),  # ¬P self-loop
         ],
     )
-    goal = lambda s: s.at == "ok"  # noqa: E731
+    goal: Callable[[W], bool] = lambda s: s.at == "ok"  # noqa: E731
     assert check_liveness(model, goal=goal).ok  # <>P: holds at init
     recurrence = check_liveness(model, goal=goal, everywhere=True)  # []<>P: reachable stale cycle
     assert not recurrence.ok

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from musil import Action, Model, check
+from musil import Action, Invariant, Model, check
 
 
 @dataclass(frozen=True)
@@ -13,7 +13,7 @@ class Light:
 
 
 def _light_model(invariant_ok: bool = True) -> Model[Light]:
-    inv = {"known-color": lambda s: s.color in {"red", "green", "yellow"}}
+    inv: dict[str, Invariant[Light]] = {"known-color": lambda s: s.color in {"red", "green", "yellow"}}
     if not invariant_ok:
         inv = {"never-yellow": lambda s: s.color != "yellow"}  # deliberately false once we reach it
     return Model(
