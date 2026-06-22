@@ -40,7 +40,7 @@ test:
     - apt-get update && apt-get install -y --no-install-recommends libatomic1
   script:
     - uv sync --frozen
-    - uv run ruff check src tests
+    - uv run ruff check src tests examples
     - uv run pyright
     - uv run pytest -q
 

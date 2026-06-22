@@ -70,7 +70,7 @@ ignore = ["E501"]
 known-first-party = ["musil"]
 
 [tool.pyright]
-include = ["src", "tests"]
+include = ["src", "tests", "examples"]
 extraPaths = ["src"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"

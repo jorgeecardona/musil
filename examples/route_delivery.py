@@ -130,7 +130,7 @@ def _factory(repush: bool) -> Callable[[], Mapping[str, Node]]:
 _LOSSY = NetworkModel(loss=0.3, min_latency=1, max_latency=3)
 
 
-def run_fire_and_forget(seeds: range = range(300)):  # noqa: B008
+def run_fire_and_forget(seeds: range = range(300)):
     return simulate(
         _factory(repush=False),
         seeds=seeds,
@@ -143,7 +143,7 @@ def run_fire_and_forget(seeds: range = range(300)):  # noqa: B008
     )
 
 
-def run_repush(seeds: range = range(300)):  # noqa: B008
+def run_repush(seeds: range = range(300)):
     return simulate(
         _factory(repush=True),
         seeds=seeds,

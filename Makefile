@@ -17,7 +17,7 @@ format: ## auto-format + autofix lint (ruff)
 	uv run ruff check --fix src tests examples
 
 lint: ## lint (ruff) -- same as CI
-	uv run ruff check src tests
+	uv run ruff check src tests examples
 
 typecheck: ## type-check (pyright) -- same as CI
 	uv run pyright
