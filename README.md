@@ -116,7 +116,7 @@ if not report.ok:
     print(report.failure)   # which seed, which step, which world — re-run seeds=[that_seed] to replay
 ```
 
-See **[Verifying a distributed system](https://musil.readthedocs.io/en/latest/verifying-distributed-systems/)**
+See **[Verifying a distributed system](https://jorgeecardona.gitlab.io/musil/verifying-distributed-systems/)**
 and the runnable [`examples/route_delivery.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/route_delivery.py).
 
 ## How it compares
