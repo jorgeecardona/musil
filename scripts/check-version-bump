@@ -15,6 +15,14 @@ cd "$(dirname "$0")/.."
 BASE="$1"
 HEAD_REF="${2:-HEAD}"
 
+# Fail loudly if git is absent rather than letting the diff below come back empty
+# and silently "pass" -- that would turn this guard into a no-op (e.g. the uv CI
+# image ships without a git binary; the job must install it first).
+if ! command -v git >/dev/null 2>&1; then
+    echo "check-version-bump: git not found -- cannot verify; failing closed" >&2
+    exit 1
+fi
+
 if [ -z "$BASE" ]; then
     echo "check-version-bump: no base ref given; skipping" >&2
     exit 0

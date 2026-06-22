@@ -58,6 +58,9 @@ version-guard:
       when: never
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    # the uv image has no git binary (GitLab clones via a helper container); install it
+    - apt-get update && apt-get install -y --no-install-recommends git
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
@@ -103,6 +106,9 @@ tag:
   needs: ["test", "build", "docs", "version-guard"]
   rules:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $TAG_PUSH_TOKEN
+  before_script:
+    # the uv image has no git binary (GitLab clones via a helper container); install it
+    - apt-get update && apt-get install -y --no-install-recommends git
   script:
     - |
       V="$(sed -nE 's/^version = "(.*)"/\1/p' pyproject.toml | head -1)"
