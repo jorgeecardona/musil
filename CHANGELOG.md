@@ -25,6 +25,13 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 - **Producer–consumer / bounded buffer** (`examples/producer_consumer.py`) — the check-then-act
   race: two non-atomic producers both pass the "there is room" check and overflow a one-slot buffer;
   the atomic test-and-insert stays within capacity, never deadlocks, and converges.
+- **Shared-memory concurrency examples** completing that textbook section: dining philosophers
+  (`examples/dining_philosophers.py` — the circular-wait deadlock and the resource-ordering fix),
+  readers–writers (`examples/readers_writers.py` — mutual exclusion holds, yet reader-preference
+  starves the writer: a liveness/fairness lesson), and bank transfer (`examples/bank_transfer.py` —
+  the lock-ordering deadlock plus a conservation invariant).
+- **`examples/` is now linted and type-checked** (ruff + pyright strict) in CI and `make check`, so
+  the worked examples can't rot.
 
 ## [0.1.0] - 2026-06-21
 

@@ -49,9 +49,9 @@ Legend: ✓ written · ○ planned.
 | Producer–consumer / bounded buffer | check-then-act race overflows capacity | interleaving, conservation invariant | ✓ [`producer_consumer.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/producer_consumer.py) |
 | Lost update | two non-atomic increments drop a write | interleaving | ✓ [`lost_update.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/lost_update.py) |
 | Mutual exclusion (Peterson) | a correct mutex, proved over every interleaving | safety, no-deadlock | ✓ [`mutex.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/mutex.py) |
-| Readers–writers | writer exclusion; reader/writer starvation | liveness, fairness | ○ |
-| Dining philosophers | deadlock and starvation | deadlock detection, liveness | ○ |
-| Bank transfer | conservation under concurrent transfers; lock-order deadlock | interleaving, deadlock | ○ |
+| Readers–writers | mutual exclusion holds; reader-preference starves the writer | liveness, fairness | ✓ [`readers_writers.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/readers_writers.py) |
+| Dining philosophers | the circular-wait deadlock; the resource-ordering fix | deadlock detection | ✓ [`dining_philosophers.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/dining_philosophers.py) |
+| Bank transfer | lock-ordering deadlock; a conservation invariant | deadlock, safety | ✓ [`bank_transfer.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/bank_transfer.py) |
 
 ### Agreement & coordination
 
