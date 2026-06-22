@@ -188,11 +188,9 @@ The version in `pyproject.toml` is the single source of truth, and releases are 
 | Top-level pipeline file | `.gitlab-ci.yml` |
 | Environment name | `pypi` |
 
-**GitLab — `TAG_PUSH_TOKEN` (optional).** PyPI publishing needs no token (OIDC). The token is only
-for pushing the `vX.Y.Z` git tag *marker*: `:release` creates+pushes it as a convenience, but
-`CI_JOB_TOKEN` can't push, so it's skipped until you add one. To enable: Settings → Access Tokens →
-**Project Access Token**, role `Developer`+, scope `write_repository`; then Settings → CI/CD →
-Variables → add `TAG_PUSH_TOKEN`, **masked** + **protected**.
+Publishing uses OIDC Trusted Publishing, so **no token is stored anywhere**. On a green `main`
+pipeline, `:release` ships to PyPI whenever `pyproject`'s version isn't published yet — there is no
+git tag step.
 
 ### Manual release (fallback)
 

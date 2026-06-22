@@ -2,10 +2,8 @@
 # Release driver, invoked by the `release` moon task (deps `ci`) which the CI job runs
 # on the default branch. Idempotent:
 #   - if pyproject's version is already on PyPI -> no-op (safe on every main pipeline)
-#   - else publish it to PyPI via OIDC (scripts/pypi-publish) -- this is the real release
-#   - then, only if a write token is configured, push the vX.Y.Z tag as a marker
-# The tag is best-effort: PyPI publishing needs no token, but pushing a tag from CI does
-# (CI_JOB_TOKEN cannot push), so it is skipped until TAG_PUSH_TOKEN is set.
+#   - else publish it to PyPI via OIDC (scripts/pypi-publish) -- this IS the release
+# Publishing needs no token (OIDC Trusted Publishing); there is no git tag step.
 set -e
 cd "$(CDPATH= cd "$(dirname "$0")/.." && pwd)"
 
@@ -29,19 +27,3 @@ fi
 
 echo "release: publishing musil $V to PyPI"
 sh scripts/pypi-publish
-
-# Best-effort tag marker (the PyPI upload above is the real release).
-if [ -n "${TAG_PUSH_TOKEN:-}" ]; then
-    if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
-        echo "release: tag v$V already exists"
-    else
-        git config user.name "musil CI"
-        git config user.email "ci@musil.invalid"
-        git remote set-url origin "https://oauth2:${TAG_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-        git tag -a "v$V" -m "release v$V"
-        git push origin "v$V"
-        echo "release: pushed tag v$V"
-    fi
-else
-    echo "release: TAG_PUSH_TOKEN not set -- skipping tag marker (PyPI publish is the release)"
-fi
