@@ -1,146 +1,60 @@
-# musil CI/CD
+# musil CI/CD -- a single moon-driven job.
 #
-# - on every push / MR: lint (ruff) + typecheck (pyright) + tests (pytest)
-# - on every push: build sdist + wheel (smoke-test that the package builds)
-# - on a git tag: publish to PyPI via OIDC **Trusted Publishing** — no stored API token.
-#   GitLab mints a short-lived OIDC token; PyPI exchanges it for a one-shot upload token.
-#   Requires a Trusted Publisher configured on PyPI for this project first (see README).
+# proto installs the pinned toolchain (.prototools: moon + uv); then ONE `moon run`
+# orchestrates the whole task graph (lint, typecheck, test, build, docs, version-guard)
+# -- no per-language jobs, no hand-wired stages/needs, moon resolves the order. On the
+# default branch it runs `:release` instead: the same `:ci` checks run as deps, then it
+# publishes to PyPI via OIDC Trusted Publishing when pyproject's version isn't on PyPI
+# yet (no stored API token). See README "Releasing".
 
 default:
-  image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+  image: debian:bookworm-slim
 
 variables:
-  UV_CACHE_DIR: .uv-cache
+  UV_LINK_MODE: copy
+  # version-guard diffs against a base older than a shallow clone would contain.
+  GIT_DEPTH: "0"
 
-# Avoid duplicate (branch + MR) pipelines; always run for tags.
+# Avoid duplicate (branch + MR) pipelines.
 workflow:
   rules:
-    - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
       when: never
     - if: $CI_COMMIT_BRANCH
 
-stages:
-  - test
-  - build
-  - release
-  - publish
-
-cache:
-  key:
-    files:
-      - uv.lock
-  paths:
-    - .uv-cache
-
-test:
-  stage: test
-  before_script:
-    # pyright downloads a prebuilt Node that needs libatomic.so.1, absent in the slim image
-    - apt-get update && apt-get install -y --no-install-recommends libatomic1
-  script:
-    - uv sync --frozen
-    - uv run ruff check src tests examples
-    - uv run pyright
-    - uv run pytest -q
-
-# Block changes to the shipped package (src/) that arrive without a version bump.
-# This is the non-bypassable counterpart to the pre-commit auto-bump: --no-verify
-# and unhooked clones can dodge the local hook, but not this. Pure git + sh, so it
-# needs no uv sync. GIT_DEPTH 0 because the diff base may be older than a shallow clone.
-version-guard:
-  stage: test
-  variables:
-    GIT_DEPTH: "0"
-  rules:
-    - if: $CI_COMMIT_TAG
-      when: never
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-  before_script:
-    # the uv image has no git binary (GitLab clones via a helper container); install it
-    - apt-get update && apt-get install -y --no-install-recommends git
-  script:
-    - |
-      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
-        BASE="$CI_MERGE_REQUEST_DIFF_BASE_SHA"
-      else
-        BASE="$CI_COMMIT_BEFORE_SHA"
-      fi
-      case "$BASE" in
-        ''|0000000000000000000000000000000000000000)
-          echo "version-guard: no usable base sha (new branch/first push); skipping"
-          exit 0 ;;
-      esac
-      sh scripts/check-version-bump "$BASE" "$CI_COMMIT_SHA"
-
-build:
-  stage: build
-  script:
-    - uv build --out-dir dist
-  artifacts:
-    paths:
-      - dist/
-    expire_in: 1 week
-
-# Build the docs strictly (same as Read the Docs does) so doc breakage fails CI early.
-docs:
-  stage: build
-  script:
-    - uv sync --frozen --extra docs
-    - uv run mkdocs build --strict
-  artifacts:
-    paths:
-      - site/
-    expire_in: 1 week
-
-# Auto-cut the release tag so the published version tracks pyproject -- the bug this
-# fixes: the pre-commit bumped pyproject to 0.1.1 but nothing ever tagged it, so PyPI
-# stayed at 0.1.0. On a green main pipeline, if pyproject's version has no matching
-# tag yet, create and push it; that tag push triggers a fresh pipeline whose `publish`
-# job ships to PyPI. Idempotent (skips if the tag exists) so version-unchanged pushes
-# are no-ops. Dormant until TAG_PUSH_TOKEN is set (CI_JOB_TOKEN can't push) -- see README.
-tag:
-  stage: release
-  needs: ["test", "build", "docs", "version-guard"]
-  rules:
-    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $TAG_PUSH_TOKEN
-  before_script:
-    # the uv image has no git binary (GitLab clones via a helper container); install it
-    - apt-get update && apt-get install -y --no-install-recommends git
-  script:
-    - |
-      V="$(sed -nE 's/^version = "(.*)"/\1/p' pyproject.toml | head -1)"
-      [ -n "$V" ] || { echo "tag: could not read version from pyproject.toml" >&2; exit 1; }
-      if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
-        echo "tag: v$V already exists -- nothing to do"
-        exit 0
-      fi
-      git config user.name "musil CI"
-      git config user.email "ci@musil.invalid"
-      git remote set-url origin "https://oauth2:${TAG_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
-      git tag -a "v$V" -m "release v$V"
-      git push origin "v$V"
-      echo "tag: pushed v$V -> triggers the publish pipeline"
-
-publish:
-  stage: publish
-  rules:
-    - if: $CI_COMMIT_TAG
-  environment:
-    name: pypi
-    url: https://pypi.org/project/musil/
+ci:
+  # OIDC Trusted Publishing: GitLab mints a short-lived id_token; scripts/pypi-publish
+  # exchanges it for a one-shot PyPI token. The `pypi` environment matches the PyPI
+  # publisher config (it is also recorded on non-publishing runs -- cosmetic only).
   id_tokens:
     PYPI_ID_TOKEN:
       aud: pypi
+  environment:
+    name: pypi
+    url: https://pypi.org/project/musil/
+  cache:
+    - key:
+        files:
+          - uv.lock
+      paths:
+        - .venv
+  before_script:
+    # debian-slim is bare: bring what proto + pyright's bundled node (libatomic1) need.
+    - apt-get update && apt-get install -y --no-install-recommends curl git ca-certificates unzip xz-utils bash libatomic1
+    - export PATH="$HOME/.proto/bin:$HOME/.proto/shims:$PATH"
+    - curl -fsSL https://moonrepo.dev/install/proto.sh | bash -s -- --yes
+    - proto install                       # moon + uv, pinned in .prototools
+    - uv sync --frozen --extra docs       # ruff + pyright + pytest + mkdocs
   script:
-    # Exchange GitLab's OIDC ID token for a short-lived PyPI upload token, then publish dist/*.
-    # Done in Python (the slim image has no curl); the token is captured, never echoed.
-    - >-
-      pypi_token="$(python3 -c 'import json, os, urllib.request;
-      req = urllib.request.Request("https://pypi.org/_/oidc/mint-token",
-      data=json.dumps({"token": os.environ["PYPI_ID_TOKEN"]}).encode(),
-      headers={"Content-Type": "application/json"});
-      print(json.load(urllib.request.urlopen(req))["token"])')"
-    - uv publish --token "$pypi_token"
+    # One moon invocation owns all interdependence. `-c 1` (serial) sidesteps the proto
+    # temp-rename race a parallel fan-out can hit; `proto install` above also pre-warmed
+    # the cache. On main: `:release` runs the full `:ci` graph then publishes if the
+    # version is new. Elsewhere (MRs/branches): checks only.
+    - export PATH="$HOME/.proto/bin:$HOME/.proto/shims:$PATH"
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "$CI_DEFAULT_BRANCH" ]; then
+        moon run :release -c 1
+      else
+        moon run :ci -c 1
+      fi

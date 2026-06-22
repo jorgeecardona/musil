@@ -1,0 +1,47 @@
+#!/bin/sh
+# Release driver, invoked by the `release` moon task (deps `ci`) which the CI job runs
+# on the default branch. Idempotent:
+#   - if pyproject's version is already on PyPI -> no-op (safe on every main pipeline)
+#   - else publish it to PyPI via OIDC (scripts/pypi-publish) -- this is the real release
+#   - then, only if a write token is configured, push the vX.Y.Z tag as a marker
+# The tag is best-effort: PyPI publishing needs no token, but pushing a tag from CI does
+# (CI_JOB_TOKEN cannot push), so it is skipped until TAG_PUSH_TOKEN is set.
+set -e
+cd "$(CDPATH= cd "$(dirname "$0")/.." && pwd)"
+
+V="$(grep -E '^version = "' pyproject.toml | head -1 | cut -d'"' -f2)"
+[ -n "$V" ] || { echo "release: could not read version from pyproject.toml" >&2; exit 1; }
+
+# Already on PyPI? Then this version is released; nothing to do.
+if uv run python - "$V" <<'PY'
+import json, sys, urllib.request, urllib.error
+version = sys.argv[1]
+try:
+    data = json.load(urllib.request.urlopen("https://pypi.org/pypi/musil/json"))
+    sys.exit(0 if version in data["releases"] else 1)
+except Exception:
+    sys.exit(1)
+PY
+then
+    echo "release: musil $V already on PyPI -- nothing to do"
+    exit 0
+fi
+
+echo "release: publishing musil $V to PyPI"
+sh scripts/pypi-publish
+
+# Best-effort tag marker (the PyPI upload above is the real release).
+if [ -n "${TAG_PUSH_TOKEN:-}" ]; then
+    if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
+        echo "release: tag v$V already exists"
+    else
+        git config user.name "musil CI"
+        git config user.email "ci@musil.invalid"
+        git remote set-url origin "https://oauth2:${TAG_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+        git tag -a "v$V" -m "release v$V"
+        git push origin "v$V"
+        echo "release: pushed tag v$V"
+    fi
+else
+    echo "release: TAG_PUSH_TOKEN not set -- skipping tag marker (PyPI publish is the release)"
+fi

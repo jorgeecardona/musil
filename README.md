@@ -145,19 +145,35 @@ deadlocks / stuck states and proving convergence.
   `generate_traces` + `replay` give you conformance testing (generate from the model, replay against
   the code) as a pragmatic bridge.
 
+## Development & CI
+
+The toolchain is pinned with [proto](https://moonrepo.dev/proto) (`.prototools`: `moon` + `uv`)
+and every task is a [moon](https://moonrepo.dev) target running through `uv run`. After cloning:
+
+```
+proto install          # installs the pinned moon + uv
+moon run :ci           # lint + typecheck + test + build + docs (one task graph)
+moon run :test         # or run a single target
+make install-hooks     # pre-commit auto-bump + pre-push checks (one-time)
+```
+
+CI is a **single GitLab job**: `proto install` brings up the toolchain, then one `moon run`
+resolves the whole graph — there are no per-language jobs or hand-wired stages. (`make` targets
+still work locally; they call `uv run` directly and don't need moon.)
+
 ## Releasing
 
-The version in `pyproject.toml` is the single source of truth, and releases are automated end to end:
+The version in `pyproject.toml` is the single source of truth, and releases are automated:
 
 1. **`pre-commit` auto-bumps** the patch version whenever a commit touches `src/` (run
    `make install-hooks` once after cloning). Doc/test/example/config-only commits don't bump.
-2. **`version-guard` (CI)** enforces the same rule non-bypassably: a push or MR that changes `src/`
-   without a version bump fails the pipeline. This catches `--no-verify` and unhooked clones.
-3. **`tag` (CI)** runs on a green `main` pipeline: if `pyproject`'s version has no matching `vX.Y.Z`
-   tag yet, it creates and pushes one. That tag push triggers a fresh pipeline whose `publish` job
-   ships to PyPI. So a merge to `main` that bumps the version releases itself.
-
-For an intentional minor/major release, bump deliberately before committing: `make bump TYPE=minor`.
+   For an intentional minor/major release, bump deliberately: `make bump TYPE=minor`.
+2. **`version-guard`** (the `moon run :version-guard` task, part of `:ci`) enforces the same rule
+   non-bypassably in CI: a push or MR that changes `src/` without a version bump fails the pipeline,
+   catching `--no-verify` and unhooked clones.
+3. **`:release`** runs on a green `main` pipeline (after the full `:ci` graph as deps): if
+   `pyproject`'s version isn't on PyPI yet, it publishes via OIDC Trusted Publishing. So merging a
+   version bump to `main` releases itself — no second pipeline, no tag required.
 
 ### One-time setup
 
@@ -172,20 +188,19 @@ For an intentional minor/major release, bump deliberately before committing: `ma
 | Top-level pipeline file | `.gitlab-ci.yml` |
 | Environment name | `pypi` |
 
-**GitLab — `TAG_PUSH_TOKEN`** (so the `tag` job can push; `CI_JOB_TOKEN` can't). Settings → Access
-Tokens → create a **Project Access Token** with role `Developer` (or higher) and scope
-`write_repository`, then Settings → CI/CD → Variables → add `TAG_PUSH_TOKEN` = that token, **masked**
-and **protected**. Until this variable exists the `tag` job stays dormant and versions won't
-auto-release — you'd cut tags manually with `make release`.
+**GitLab — `TAG_PUSH_TOKEN` (optional).** PyPI publishing needs no token (OIDC). The token is only
+for pushing the `vX.Y.Z` git tag *marker*: `:release` creates+pushes it as a convenience, but
+`CI_JOB_TOKEN` can't push, so it's skipped until you add one. To enable: Settings → Access Tokens →
+**Project Access Token**, role `Developer`+, scope `write_repository`; then Settings → CI/CD →
+Variables → add `TAG_PUSH_TOKEN`, **masked** + **protected**.
 
 ### Manual release (fallback)
 
 ```
-make release        # tags HEAD as v<pyproject version> and pushes -> triggers publish
+make release        # tags HEAD as v<pyproject version> and pushes
 ```
 
-The tag pipeline builds the sdist+wheel and the `publish` job exchanges GitLab's OIDC token for a
-short-lived PyPI token and uploads. Pushes and MRs run lint + typecheck + tests only.
+Pushes and MRs run lint + typecheck + test + build + docs only.
 
 ## License
 
