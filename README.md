@@ -145,15 +145,6 @@ deadlocks / stuck states and proving convergence.
   `generate_traces` + `replay` give you conformance testing (generate from the model, replay against
   the code) as a pragmatic bridge.
 
-## Provenance
-
-musil grew out of keeping a real control plane (a Railway/Heroku-style PaaS) correct. It is exercised
-there against the actual state machines and concurrency: the allowed-transition tables, a concurrent
-cert-vs-service-death race that reproduces a real outage, the ingress route-delivery convergence
-proof, a multi-replica hub fan-out (showing leader election alone doesn't fix delivery across
-replicas), and the overlay full-mesh. The core has **zero** dependencies on that project — it is a
-standalone library.
-
 ## Releasing
 
 CI publishes to PyPI on a git tag via **OIDC Trusted Publishing** — no API token is stored anywhere.

@@ -1,10 +1,11 @@
 """The zero-drift bridge: build a model straight from an allowed-transitions table.
 
-This is how musil is used in paas — point it at the real ``ALLOWED[entity]`` map and the model is
-the code's table, so it can't drift. Here we use a small standalone copy of a service lifecycle.
-musil checks every declared state is reachable with no deadlock (sinks declared terminal).
+Point musil at the very ``ALLOWED[entity]`` map your code already enforces and the model *is* the
+code's table, so it can never drift -- there is no separate spec file to keep in sync. Here a small
+service lifecycle stands in for that table. musil checks that every declared state is reachable with
+no deadlock (sinks are declared terminal).
 
-Run: python examples/paas_service.py
+Run: python examples/service_lifecycle.py
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from dataclasses import dataclass
 
 from musil import Model, check, declared_states, status_field_actions, terminal_states, to_dot
 
-# a service lifecycle (shape of paas state.py:ALLOWED["service"], standalone here)
+# a service lifecycle state machine, expressed as an allowed-transitions table
 ALLOWED: dict[str, set[str]] = {
     "pending": {"placed", "failed"},
     "placed": {"running", "failed", "stopped", "pending"},
