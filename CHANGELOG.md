@@ -18,6 +18,14 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   model-check a protocol's design, then put the real code through simulation; the fire-and-forget bug
   is caught with a seed, the per-tick re-push converges and refines the model.
 
+### Added — the textbook (a canon of worked examples)
+- **`docs/textbook.md`** — a roadmap mapping the classic concurrency / distributed-systems problems
+  (each bounded, ordering- or failure-driven — musil's diet) to the bug each teaches and the feature
+  it exercises, so the example suite doubles as documentation and as musil's own coverage matrix.
+- **Producer–consumer / bounded buffer** (`examples/producer_consumer.py`) — the check-then-act
+  race: two non-atomic producers both pass the "there is room" check and overflow a one-slot buffer;
+  the atomic test-and-insert stays within capacity, never deadlocks, and converges.
+
 ## [0.1.0] - 2026-06-21
 
 Initial release.

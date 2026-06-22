@@ -56,5 +56,6 @@ plugins:
 nav:
   - Home: index.md
   - Verifying a distributed system: verifying-distributed-systems.md
+  - The textbook (worked examples): textbook.md
   - API reference: api.md
   - Changelog: changelog.md
