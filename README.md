@@ -147,9 +147,22 @@ deadlocks / stuck states and proving convergence.
 
 ## Releasing
 
-CI publishes to PyPI on a git tag via **OIDC Trusted Publishing** — no API token is stored anywhere.
-One-time setup on PyPI (Account → Publishing → add a *pending* GitLab publisher; or add it to the
-project after the first manual upload):
+The version in `pyproject.toml` is the single source of truth, and releases are automated end to end:
+
+1. **`pre-commit` auto-bumps** the patch version whenever a commit touches `src/` (run
+   `make install-hooks` once after cloning). Doc/test/example/config-only commits don't bump.
+2. **`version-guard` (CI)** enforces the same rule non-bypassably: a push or MR that changes `src/`
+   without a version bump fails the pipeline. This catches `--no-verify` and unhooked clones.
+3. **`tag` (CI)** runs on a green `main` pipeline: if `pyproject`'s version has no matching `vX.Y.Z`
+   tag yet, it creates and pushes one. That tag push triggers a fresh pipeline whose `publish` job
+   ships to PyPI. So a merge to `main` that bumps the version releases itself.
+
+For an intentional minor/major release, bump deliberately before committing: `make bump TYPE=minor`.
+
+### One-time setup
+
+**PyPI — OIDC Trusted Publishing** (no API token is stored anywhere). Account → Publishing → add a
+*pending* GitLab publisher (or add it to the project after the first manual upload):
 
 | Field | Value |
 |-------|-------|
@@ -159,11 +172,16 @@ project after the first manual upload):
 | Top-level pipeline file | `.gitlab-ci.yml` |
 | Environment name | `pypi` |
 
-Then cut a release:
+**GitLab — `TAG_PUSH_TOKEN`** (so the `tag` job can push; `CI_JOB_TOKEN` can't). Settings → Access
+Tokens → create a **Project Access Token** with role `Developer` (or higher) and scope
+`write_repository`, then Settings → CI/CD → Variables → add `TAG_PUSH_TOKEN` = that token, **masked**
+and **protected**. Until this variable exists the `tag` job stays dormant and versions won't
+auto-release — you'd cut tags manually with `make release`.
+
+### Manual release (fallback)
 
 ```
-# bump version in pyproject.toml + add a CHANGELOG entry, commit, then:
-git tag v0.1.0 && git push origin v0.1.0
+make release        # tags HEAD as v<pyproject version> and pushes -> triggers publish
 ```
 
 The tag pipeline builds the sdist+wheel and the `publish` job exchanges GitLab's OIDC token for a

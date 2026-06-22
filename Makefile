@@ -1,7 +1,7 @@
 # musil -- task runner. uv is the only tool needed (the package itself is zero-dep).
 # One-time setup after cloning:  make install-hooks
 .DEFAULT_GOAL := help
-.PHONY: help install-hooks format lint typecheck test check bump docs build
+.PHONY: help install-hooks format lint typecheck test check bump release docs build
 
 help: ## list targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -9,7 +9,7 @@ help: ## list targets
 
 install-hooks: ## point git at the tracked .githooks/ (pre-commit + pre-push)
 	git config core.hooksPath .githooks
-	chmod +x .githooks/pre-commit .githooks/pre-push scripts/bump-version
+	chmod +x .githooks/pre-commit .githooks/pre-push scripts/bump-version scripts/check-version-bump
 	@echo "hooks installed: core.hooksPath -> .githooks"
 
 format: ## auto-format + autofix lint (ruff)
@@ -29,6 +29,12 @@ check: lint typecheck test ## the full CI test stage: lint + typecheck + test
 
 bump: ## bump version in pyproject.toml -- TYPE=patch|minor|major (default patch)
 	./scripts/bump-version $(or $(TYPE),patch)
+
+release: ## tag HEAD with pyproject's version (vX.Y.Z) and push -- triggers PyPI publish
+	@V=$$(sed -nE 's/^version = "(.*)"/\1/p' pyproject.toml | head -1); \
+	if git rev-parse "v$$V" >/dev/null 2>&1; then echo "tag v$$V already exists"; exit 1; fi; \
+	echo "tagging v$$V and pushing"; \
+	git tag -a "v$$V" -m "release v$$V" && git push origin "v$$V"
 
 docs: ## build docs strictly (as CI / Read the Docs do)
 	uv run --extra docs mkdocs build --strict

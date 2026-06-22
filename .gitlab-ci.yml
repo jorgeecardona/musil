@@ -24,6 +24,7 @@ workflow:
 stages:
   - test
   - build
+  - release
   - publish
 
 cache:
@@ -44,6 +45,33 @@ test:
     - uv run pyright
     - uv run pytest -q
 
+# Block changes to the shipped package (src/) that arrive without a version bump.
+# This is the non-bypassable counterpart to the pre-commit auto-bump: --no-verify
+# and unhooked clones can dodge the local hook, but not this. Pure git + sh, so it
+# needs no uv sync. GIT_DEPTH 0 because the diff base may be older than a shallow clone.
+version-guard:
+  stage: test
+  variables:
+    GIT_DEPTH: "0"
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - |
+      if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
+        BASE="$CI_MERGE_REQUEST_DIFF_BASE_SHA"
+      else
+        BASE="$CI_COMMIT_BEFORE_SHA"
+      fi
+      case "$BASE" in
+        ''|0000000000000000000000000000000000000000)
+          echo "version-guard: no usable base sha (new branch/first push); skipping"
+          exit 0 ;;
+      esac
+      sh scripts/check-version-bump "$BASE" "$CI_COMMIT_SHA"
+
 build:
   stage: build
   script:
@@ -63,6 +91,32 @@ docs:
     paths:
       - site/
     expire_in: 1 week
+
+# Auto-cut the release tag so the published version tracks pyproject -- the bug this
+# fixes: the pre-commit bumped pyproject to 0.1.1 but nothing ever tagged it, so PyPI
+# stayed at 0.1.0. On a green main pipeline, if pyproject's version has no matching
+# tag yet, create and push it; that tag push triggers a fresh pipeline whose `publish`
+# job ships to PyPI. Idempotent (skips if the tag exists) so version-unchanged pushes
+# are no-ops. Dormant until TAG_PUSH_TOKEN is set (CI_JOB_TOKEN can't push) -- see README.
+tag:
+  stage: release
+  needs: ["test", "build", "docs", "version-guard"]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $TAG_PUSH_TOKEN
+  script:
+    - |
+      V="$(sed -nE 's/^version = "(.*)"/\1/p' pyproject.toml | head -1)"
+      [ -n "$V" ] || { echo "tag: could not read version from pyproject.toml" >&2; exit 1; }
+      if git ls-remote --exit-code --tags origin "refs/tags/v$V" >/dev/null 2>&1; then
+        echo "tag: v$V already exists -- nothing to do"
+        exit 0
+      fi
+      git config user.name "musil CI"
+      git config user.email "ci@musil.invalid"
+      git remote set-url origin "https://oauth2:${TAG_PUSH_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+      git tag -a "v$V" -m "release v$V"
+      git push origin "v$V"
+      echo "tag: pushed v$V -> triggers the publish pipeline"
 
 publish:
   stage: publish
