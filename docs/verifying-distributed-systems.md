@@ -103,7 +103,11 @@ When a seed fails, [`SimFailure`][musil.sim.SimFailure] tells you exactly which 
 `seeds=[that_seed]` and the run replays bit-for-bit, because the whole simulation is a deterministic
 function of the seed. That is the property that makes simulation testing debuggable.
 
-The full, runnable version is [`examples/route_delivery.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/route_delivery.py).
+Here is the full, runnable example in one piece — run it with `python examples/route_delivery.py`:
+
+```python
+--8<-- "examples/route_delivery.py"
+```
 
 ## The faults you can inject
 
