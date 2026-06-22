@@ -1,6 +1,6 @@
 site_name: musil
 site_description: A tiny, dependency-free explicit-state model checker for Python.
-site_url: https://jorgeecardona.gitlab.io/musil/
+site_url: https://musil-d34e71.gitlab.io/
 repo_url: https://gitlab.com/jorgeecardona/musil
 repo_name: jorgeecardona/musil
 copyright: MIT &copy; Jorge Cardona
