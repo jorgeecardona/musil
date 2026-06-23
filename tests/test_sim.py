@@ -5,7 +5,7 @@ Python library; musil.refine + invariants are the oracle (wired in the next slic
 
 from __future__ import annotations
 
-from musil.sim import BaseNode, Context, NetworkModel, Simulator
+from musil.sim import BaseNode, Context, Crash, FaultSchedule, NetworkModel, Partition, Simulator
 
 
 class Pinger(BaseNode):
@@ -151,3 +151,25 @@ def test_timers_fire_and_drive_a_retry() -> None:
     sim.run()
     assert client.acked
     assert client.attempts == 2  # first ignored, retry acked
+
+
+def test_a_partition_drops_all_traffic_on_a_cut_link() -> None:
+    a, b = Pinger(), Ponger()
+    cut = FaultSchedule(partitions=(Partition(frozenset({("a", "b")}), start=0, end=100),))
+    sim = Simulator({"a": a, "b": b}, seed=1, faults=cut)
+    result = sim.run()
+    assert b.pings == 0 and a.pongs == 0  # the ping never crosses the cut link
+    assert result.dropped >= 1
+
+
+def test_a_crashed_node_drops_inbound_then_recovers_on_restart() -> None:
+    class Acker(BaseNode):
+        def on_message(self, ctx: Context, src: str, payload: object) -> None:
+            ctx.send(src, "ack")
+
+    client, server = TimeoutRetrier(), Acker()
+    crash = FaultSchedule(crashes=(Crash(node="b", start=0, end=5),))
+    sim = Simulator({"a": client, "b": server}, seed=1, faults=crash)
+    sim.run()
+    assert client.acked  # a retry after b restarts gets through
+    assert client.attempts >= 2  # at least one request was lost while b was down

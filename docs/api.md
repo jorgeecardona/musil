@@ -45,11 +45,14 @@ stutter) -- the oracle `simulate` uses to hold real code to a model-checked spec
 
 ::: musil.refine
 
-## Simulation — `simulate`, `Simulator`, `NetworkModel`
+## Simulation — `simulate`, `Simulator`, `NetworkModel`, `FaultSchedule`
 
 Deterministic simulation testing: run real event-driven node code under a controlled clock and a
 fault-injecting network, reproducible from a seed, with invariants + refinement + a convergence goal
-as the oracle.
+as the oracle. Beyond `NetworkModel`'s independent per-message loss, a `FaultSchedule` of **sustained,
+heal-able** faults — network `Partition`s and node `Crash`es (with optional cold restart) — drives
+VOPR-style **liveness** testing: after the faults heal, the system must converge to its goal (a
+failure to do so is reported as `kind="liveness"`).
 
 ::: musil.sim
 
