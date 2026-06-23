@@ -63,8 +63,63 @@ differential test is green, `reduce` defaults to off and the full interleaving s
 supported mode. For the bounded models musil targets today (tens to low thousands of states) the full
 search is fast enough; POR matters when models grow, and that is when this gets built — carefully.
 
+## Update (2026 research): the sound path forward
+
+A literature review (primary sources below) sharpened both the design and the deferral. Three
+findings change the plan:
+
+**1. Use source sets, not the classic C0–C3 ample-set conditions.** Abdulla/Aronis/Jonsson/Sagonas
+proved that being a *source set* is the **necessary and sufficient** condition for a DPOR algorithm
+to be sound (explore ≥1 interleaving per Mazurkiewicz/happens-before class). Source sets subsume
+ample/persistent/stubborn sets and are provably minimal — a smaller persistent set than the source
+set only ever triggers sleep-set-blocked (wasted) explorations. So the C1/C2-style branch-point
+obligation above is better stated as the single condition "the explored set at each scheduling point
+is a source set." Provably *optimal*-DPOR (source sets + wakeup trees) is the ceiling — exactly one
+interleaving per class, zero blocked explorations — but wakeup trees can cost exponential memory, so
+plain **source-set DPOR is the pragmatic target**.
+
+**2. The deferral was right: every DPOR soundness proof assumes ACYCLIC, finite, bounded-length
+state spaces.** musil is stateful and *cyclic* (control loops), so basic DPOR does not transfer.
+Naively stopping a run at a state-match leaves backtracking points unset and **silently drops
+bug-reaching runs** (Trimananda/Yi/Demsky, VMCAI 2022 — they show a missed assertion failure; they
+note Yi et al.'s earlier "cyclic" DPOR "overlooks the need for a proviso ... and can produce
+incorrect results"). Shipping DPOR over musil's models therefore *requires* a **full-cycle proviso**:
+stop a run only if its state matches a state from a *previous* execution, **or** matches a state from
+the *current* execution **and** every enabled action in that cycle has been explored at least once.
+This is the concrete replacement for the old C3 "ignoring" condition. Pair it with an explicit
+acyclic/depth-bound guard.
+
+**3. Never couple POR to the liveness engine.** Peled's standard on-the-fly POR (in SPIN for ~20
+years) was *proven unsound* in CAV 2019 (Siegel, "What's Wrong with On-the-Fly Partial Order
+Reduction") — "the algorithm is incorrect ... realized in Spin, which can produce an incorrect
+result." The bug is precisely the C3/ignoring proviso applied to the system × Büchi product, and the
+repair (Neele/Valmari/Willemse) restores soundness only for a *subclass* of property automata. So:
+**POR applies to the safety/reachability fragment only** (`check` on the cert-vs-service race,
+backup/restore safety, deploy/rolling-upgrade machines). `check_liveness` (ingress convergence,
+scheduler liveness) stays on the existing fairness/lasso engine, uncoupled from any reduction.
+
+**On C2 invisibility for arbitrary-predicate invariants.** Flanagan & Godefroid's insight is that
+DPOR is *stateless* and computes dependencies **dynamically** from observed interactions (which state
+fields an `apply` actually touched), sidestepping conservative static analysis — a good fit for
+musil's pure `enabled`/`apply`. Dynamic dependency resolves *action–action* conflicts, but
+*predicate-invisibility* (does this action change a field some invariant reads?) is still opaque when
+invariants are arbitrary Python. Open question: extract read-sets by instrumenting field access on the
+frozen-dataclass state, vs. requiring a per-invariant `reads=` annotation, vs. conservatively
+treating every action as visible (no reduction). The differential soundness gate above remains the
+real proof obligation regardless.
+
+Net revised plan: `reduce=True` = **source-set DPOR + full-cycle proviso + acyclic/depth guard, for
+safety runs only**; keep the differential test; keep liveness on the fairness engine.
+
 ## References
 
-Flanagan & Godefroid, "Dynamic Partial-Order Reduction for Model Checking Software" (POPL 2005);
-Clarke, Grumberg, Peled, *Model Checking* (ch. on partial-order reduction). See
-`docs/specs/RESEARCH.md`.
+- Flanagan & Godefroid, "Dynamic Partial-Order Reduction for Model Checking Software" (POPL 2005) —
+  stateless DPOR, dynamic dependencies; soundness scoped to acyclic state spaces.
+- Abdulla, Aronis, Jonsson, Sagonas, "Optimal Dynamic Partial Order Reduction" (POPL 2014) and the
+  JACM 2017 journal version — **source sets** (necessary & sufficient), wakeup trees, optimal-DPOR.
+- Trimananda, Yi/Luo, Demsky, Xu, "Stateful DPOR for ... Applications that Do Not Terminate"
+  (VMCAI 2022) — the **full-cycle proviso** for sound DPOR over cyclic/stateful state spaces.
+- Siegel, "What's Wrong with On-the-Fly Partial Order Reduction" (CAV 2019); Neele, Valmari,
+  Willemse (LMCS) — the POR-vs-liveness/Büchi unsoundness and partial repair.
+- Clarke, Grumberg, Peled, *Model Checking* (ch. on partial-order reduction). See
+  `docs/specs/RESEARCH.md` (in the paas repo) for the wider literature map.
