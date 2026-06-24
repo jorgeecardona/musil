@@ -8,8 +8,8 @@ invariants, where musil *finds* the classic bug and *verifies* the classic fix.
 
 Each chapter does double duty — it is documentation (read it to learn the problem) and a test of
 musil itself (each classic exercises a different feature: deadlock, fairness, channels, composition,
-crash-recovery). **The full source of every completed chapter is embedded below**, inlined straight
-from the runnable file in `examples/`; run any of them with `python examples/<name>.py`.
+crash-recovery). Every completed chapter has its own page with a full walkthrough and the embedded
+source; run any example directly with `python examples/<name>.py`.
 
 ## When musil is the right tool
 
@@ -26,106 +26,67 @@ drop, partition, or wedge is the second kind — musil's home.
 
 ## How a chapter is built
 
-Every chapter follows the same four beats — the loop the **Reconciliation under loss** example
-(below) demonstrates end to end:
+Every chapter follows the same four beats:
 
-1. **Design** — describe the protocol as a small state machine: a frozen dataclass plus guarded
-   actions.
+1. **Design** — describe the protocol as a small state machine: a frozen dataclass plus guarded actions.
 2. **Model the error** — inject the fault (a race via interleaving, or loss / crash / partition).
    musil returns the *shortest* counterexample: the exact sequence that breaks the invariant.
 3. **Prevent** — change the design until the invariant holds across every reachable state.
-4. **Guard** — keep the model (and, for real code, `simulate` / `check_refinement`) as a permanent
-   regression test.
+4. **Guard** — keep the model (and, for real code, `simulate` / `check_refinement`) as a permanent regression test.
 
-## The worked examples
+---
 
-In reading order, simplest first — finite-state machines, then shared-memory races, then mutual
-exclusion, liveness, deadlock, and finally a distributed protocol checked design-and-implementation.
+## Finite-state machines
 
-### Traffic light — the minimal finite-state machine
+The simplest models: a single state field, a handful of actions, one invariant.
 
-The smallest possible model: a three-state cycle. `check` sweeps every reachable state and confirms
-the colour invariant holds.
+| Example | Bug / lesson | musil feature |
+|---------|-------------|---------------|
+| [Traffic light](examples/traffic_light.md) | Minimal FSM; confirm the three-state cycle is safe | `check`, `to_dot` |
+| [Service lifecycle](examples/service_lifecycle.md) | Build the model from the code's own transition table — zero drift | `status_field_actions`, `declared_states` |
 
-```python
---8<-- "examples/traffic_light.py"
-```
+---
 
-### Service lifecycle — a model straight from a transition table (zero drift)
+## Shared-memory concurrency
 
-Build the model directly from an allowed-transitions table with `status_field_actions`, so the spec
-*is* the code's table and can't drift from it. `check` confirms every declared state is reachable
-with no deadlock.
+Two or more actors share mutable state. The bug lives in the interleaving — a specific ordering that
+no single-threaded test can find.
 
-```python
---8<-- "examples/service_lifecycle.py"
-```
+| Example | Bug / lesson | musil feature |
+|---------|-------------|---------------|
+| [Lost update](examples/lost_update.md) | Non-atomic read-modify-write; one increment silently lost | `check`, interleaving |
+| [Producer–consumer](examples/producer_consumer.md) | Check-then-act race overflows a bounded buffer; atomic fix passes | `check`, `check_liveness` |
+| [Mutual exclusion (Peterson)](examples/mutex.md) | Exhaustive proof that Peterson's algorithm is correct | `check`, invariant |
+| [Readers–writers](examples/readers_writers.md) | Safety holds for both policies; reader-preference starves the writer | `check`, `check_liveness`, fairness |
+| [Dining philosophers](examples/dining_philosophers.md) | Circular-wait deadlock; resource-ordering rule eliminates it | `check`, deadlock |
+| [Bank transfer](examples/bank_transfer.md) | Lock-ordering deadlock; conservation invariant holds through the fix | `check`, invariant |
 
-### Lost update — a non-atomic increment race
+---
 
-Two actors each read-then-write a shared counter as separate steps. The interleaving sweep finds the
-order where both read the stale value before either writes, so one increment is silently lost.
+## Distributed protocols
 
-```python
---8<-- "examples/lost_update.py"
-```
+Nodes that communicate over a network. Correctness depends on message ordering, loss, and failure.
 
-### Producer–consumer — the bounded-buffer check-then-act race
+| Example | Bug / lesson | musil feature |
+|---------|-------------|---------------|
+| [Reconciliation under loss](examples/route_delivery.md) | Fire-and-forget fails on a lossy link; re-push converges — verified by simulation + refinement | `simulate`, `check_refinement`, `check_liveness` |
+| [Partition + heal](examples/partition_heal.md) | A sustained partition wedges fire-and-forget forever; cold restart loses un-retried writes | `simulate`, `FaultSchedule`, `Partition`, `Crash` |
 
-The room-check and the insert are separate steps, so two producers can both pass the "there is room"
-check and overflow a one-slot buffer. The atomic test-and-insert stays within capacity and converges.
+---
 
-```python
---8<-- "examples/producer_consumer.py"
-```
+## Open systems
 
-### Mutual exclusion (Peterson) — a correct mutex, proved
+Real systems interact with external actors — platforms, clouds, humans — that can behave
+adversarially. `check_open` and `EnvironmentSpec` extend the BFS to include those behaviors.
 
-The classic mutual-exclusion algorithm, proved correct by exhaustive interleaving: the two processes
-are never in the critical section together, and the protocol can't deadlock.
+| Example | Bug / lesson | musil feature |
+|---------|-------------|---------------|
+| [K8s scheduler](examples/k8s_scheduler.md) | Pod eviction violates availability unless the service restarts; residual obligations surfaced | `check_open`, `EnvironmentSpec`, `Assumption` |
+| [Byzantine service](examples/byzantine_service.md) | Wrong answers and wire corruption; validation and mutation hooks catch both | `AdversarialNode`, `NetworkModel.mutate` |
+| [Multi-environment composition](examples/open_system_composed.md) | K8s + AWS + etcd faults composed into a single BFS | `check_open` with multiple envs |
+| [TCAS II](examples/tcas.md) | Four scenarios: correct coordination, Überlingen (pilot deviates), post-fix, Tenerife (v7.1 reversal) | `check_open`, `EnvironmentSpec`, `Assumption` |
 
-```python
---8<-- "examples/mutex.py"
-```
-
-### Readers–writers — safety holds, but a naive policy starves the writer
-
-Mutual exclusion holds for both policies; the temporal question is liveness. Reader-preference lets
-readers hand the lock among themselves forever and starve a waiting writer — a fair cycle musil finds
-— while writer-preference drains the readers and lets the writer in.
-
-```python
---8<-- "examples/readers_writers.py"
-```
-
-### Dining philosophers — the circular-wait deadlock
-
-Everyone grabbing their left fork first wedges in a circular wait; musil reports the deadlock with
-the shortest path into it. The resource-ordering rule (take the lower-numbered fork first) removes it.
-
-```python
---8<-- "examples/dining_philosophers.py"
-```
-
-### Bank transfer — a lock-ordering deadlock and a conservation law
-
-Two transfers locking their accounts in opposite order deadlock; locking in a fixed global order
-fixes it, and the conservation invariant — money is neither created nor destroyed — holds throughout.
-
-```python
---8<-- "examples/bank_transfer.py"
-```
-
-### Reconciliation under loss — design *and* implementation
-
-The full loop: model-check a control-plane/agent protocol for safety and convergence, then run the
-*real* event-driven node code under a lossy, reordering network with `simulate`, held to the same
-model by refinement. The fire-and-forget push is caught with a reproducible seed; the per-tick
-re-push converges on every seed.
-
-```python
---8<-- "examples/route_delivery.py"
-```
+---
 
 ## On the roadmap
 
