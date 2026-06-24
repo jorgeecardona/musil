@@ -314,6 +314,59 @@ seL4's verification cannot discharge from within.
 This makes the trust boundary explicit and inspectable, without requiring the developer to
 read the seL4 paper to understand what is and isn't guaranteed.
 
+### 5.4  TCAS II Resolution Advisory coordination
+
+TCAS II (Traffic Collision Avoidance System) is a safety-critical aviation protocol that has
+attracted extensive formal verification work: RSML specification analysis (Heimdahl & Leveson
+1994–1996), SMV model checking (Chan et al. 1998), hybrid I/O automata proofs (Lygeros &
+Lynch 1997; Livadas, Lygeros & Lynch 2000), PVS theorem proving of the RA detection algorithm
+(Muñoz et al. 2013), and KeYmaera differential-dynamic-logic proofs for the successor system
+ACAS X (Jeannin, Platzer et al. 2015, 2017). This body of work makes TCAS II an unusually
+well-documented case study for comparing verification approaches.
+
+The `examples/tcas.py` model encodes the TCAS II v7.1 coordination protocol accurately:
+own aircraft selects an RA sense (CLIMB or DESCEND) and broadcasts a Vertical Resolution
+Advisory Complement (VRC) constraint to the intruder via a UF=16 addressed Mode S message
+(BDS register 0x30). The VRC constraint forces the intruder to pick the complementary sense.
+This asymmetric, constraint-based protocol (rather than symmetric "negotiation") is reflected
+directly in the state: an `Aircraft` carries `vrc_received` alongside its own `ra`.
+
+Four scenarios are checked:
+
+1. **Closed model** — both pilots follow their RAs. `check` verifies the invariant
+   "both aircraft never maneuver in the same vertical direction" holds for all traces.
+
+2. **Überlingen (open model)** — the environment injects `pilot:deviates-from-ra`, modeling
+   a pilot who follows an ATC instruction over the active TCAS RA (the 2002 Überlingen disaster;
+   71 killed). `check_open` finds the counterexample in 5 steps and surfaces
+   `PILOT_FOLLOWS_RA` (status: unverified; source: BFU AX001-1-2/02, 2004) as a residual
+   proof obligation.
+
+3. **ATC suppression enforcement (open model)** — the environment's deviation action is guarded
+   by `_atc_suppressed`, modeling a "TCAS-only" avionics policy. `check_open` passes;
+   `ATC_SUPPRESSED_DURING_RA` surfaces as the residual assumption (source: ICAO Annex 2,
+   Amendment 42).
+
+4. **v7.1 reversal + Tenerife (open model)** — `reversal_model` adds an `own:ra=reversed`
+   system action (the DO-185B v7.1 mechanism: own reverses sense when intruder has an RA but
+   hasn't maneuvered within the timing window). The environment injects
+   `intruder:maneuvers-with-old-ra`, modeling the intruder executing its original RA while
+   re-coordination is incomplete (2011 Tenerife near-collision; Thomas Cook / Finnair).
+   `check_open` finds the counterexample in 7 steps and surfaces `INTRUDER_FOLLOWS_REVERSAL`
+   (source: CIAIAC A-032/2011; Eurocontrol SISG 2017 reports ~25% RA non-compliance).
+
+The TCAS example demonstrates a key feature: the same `Assumption` mechanism used for platform
+contracts (K8s eviction rate, seL4 TCB) applies equally to human-behavioral assumptions
+(pilot RA compliance) and to protocol timing assumptions (intruder responds within window).
+Every unverified assumption names its primary incident report as a `source` — the model is
+self-documenting about what it relies on and where those assumptions have historically failed.
+
+The connection to Livadas, Lygeros & Lynch (2000) is direct: their Hybrid I/O Automata model
+partitions TCAS behaviors into *input actions* (the environment can inject) and *output actions*
+(the system produces). musil's `EnvironmentSpec.behaviors` = input actions; `Model.actions` =
+output actions. musil is the first tool to make this partition runnable in Python with
+machine-readable, citable assumptions attached to each input action.
+
 ---
 
 ## 6  Limitations
@@ -365,3 +418,19 @@ capabilities in a form that is easy to adopt incrementally alongside production 
 - Lamport, L., Shostak, R., & Pease, M. (1982). *The Byzantine Generals Problem.* TOPLAS.
 - Newcombe, C., Rath, T., Zhang, F., Munteanu, B., Brooker, M., & Deardeuff, M. (2015).
   *How Amazon Web Services Uses Formal Methods.* CACM.
+- Lygeros, J., & Lynch, N. (1997). *On the Formal Verification of the TCAS Conflict Resolution
+  Algorithms.* 36th IEEE Conference on Decision and Control.
+- Livadas, C., Lygeros, J., & Lynch, N. A. (2000). *High-Level Modeling and Analysis of the
+  Traffic Alert and Collision Avoidance System (TCAS).* Proceedings of the IEEE, 88(7).
+- Chan, W., Anderson, R. J., Beame, P., Burns, S., Modugno, F., Notkin, D., & Reese, J. D.
+  (1998). *Model Checking Large Software Specifications.* IEEE Transactions on Software
+  Engineering, 24(7).
+- Muñoz, C., Narkawicz, A., & Chamberlain, J. (2013). *A TCAS-II Resolution Advisory Detection
+  Algorithm.* AIAA GNC Conference. NASA/TM-2014-218082.
+- Jeannin, J.-B., Ghorbal, K., Kouskoulas, Y., Gardner, R., Schmidt, A., Zawadzki, E., &
+  Platzer, A. (2015). *A Formally Verified Hybrid System for the Next-Generation Airborne
+  Collision Avoidance System.* TACAS. LNCS 9035.
+- Jeannin, J.-B., Ghorbal, K., Kouskoulas, Y., Schmidt, A., Gardner, R., Mitsch, S., &
+  Platzer, A. (2017). *A Formally Verified Hybrid System for Safe Advisories in the
+  Next-Generation Airborne Collision Avoidance System.* International Journal on Software Tools
+  for Technology Transfer, 19(6).

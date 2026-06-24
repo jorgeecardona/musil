@@ -4,6 +4,27 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Changed — TCAS II example revised to protocol-accurate coordination model
+
+- **`examples/tcas.py`** — four scenarios (was three). VRC constraint broadcast now modeled
+  accurately: `Aircraft` gains a `vrc_received` field carrying the Mode S coordination constraint
+  (`"no-climb"` / `"no-descend"`). The intruder's RA is forced by the constraint it received
+  from own, not computed symmetrically. This matches the actual UF=16/DF=16 Mode S coordination
+  protocol (BDS register 0x30, bits MB:23–26; RTCA DO-185B / ICAO Annex 10 Vol. IV).
+
+- **New scenario 4 — v7.1 reversal + Tenerife.** `reversal_model` adds the `own:ra=reversed`
+  system action (DO-185B v7.1 mechanism: own reverses when intruder has not maneuvered within
+  the timing window; one reversal per encounter). `tenerife_env` injects
+  `intruder:maneuvers-with-old-ra` (intruder executes its original RA while re-coordination is
+  incomplete). `check_open` finds the counterexample in 7 steps and surfaces
+  `INTRUDER_FOLLOWS_REVERSAL` as a residual obligation. Models the 2011 Tenerife near-collision
+  (CIAIAC A-032/2011; Thomas Cook / Finnair).
+
+- **`docs/paper.md`** — § 5.4 added: TCAS II as a fourth evaluation case study, including
+  connection to Lynch's Hybrid I/O Automata model (Livadas, Lygeros & Lynch 2000) and the
+  ACAS X formal verification line (Jeannin, Platzer et al. 2015/2017). References section
+  updated with seven TCAS/ACAS formal verification papers.
+
 ## [0.5.0] - 2026-06-24
 
 ### Added — academic paper draft
