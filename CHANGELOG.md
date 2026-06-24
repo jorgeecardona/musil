@@ -4,6 +4,45 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-06-24
+
+### Added — pre-built adversarial environment library
+
+- **`musil.environments`** — new sub-package with five production-grade adversarial environments,
+  each shipping named `Assumption` constants (with real source citations), an `EnvironmentSpec`
+  factory for `check_open`, and an `AdversarialNode` factory for simulation:
+
+  - **`k8s`** — pod eviction, OOM kill. Assumptions: `k8s:node-capacity`,
+    `k8s:scheduler-liveness`, `k8s:eviction-rate-bounded` (all unverified; cites Kubernetes docs).
+    Factories: `pod_eviction`, `eviction_notifier`, `oom_notifier`.
+
+  - **`aws`** — API throttling, request timeouts. Assumptions: `aws:s3-eventual-delivery`,
+    `aws:region-availability`, `aws:throttle-transient` (unverified); `aws:iam-correctness`
+    (verified; cites AWS IAM docs). Factories: `aws_api_faults`, `throttling_service`,
+    `timeout_service`.
+
+  - **`linux`** — OOM kill, SIGTERM, ENOSPC filesystem errors. Assumptions:
+    `linux:oom-killer-bounded`, `linux:signal-delivery`, `linux:enospc-recoverable` (unverified);
+    `linux:fs-rename-atomic` (verified; cites rename(2) POSIX guarantee). Factories:
+    `process_faults`, `fs_faults`, `oom_notifier`, `signal_sender`.
+
+  - **`sel4`** — capability revocation, IPC timeout. Assumptions: `sel4:hardware-memory-safety`
+    (axiom; Klein et al., SOSP 2009 TCB), `sel4:capability-integrity` (verified; Klein et al.,
+    SOSP 2009 § 4 formal proof), `sel4:ipc-liveness` (unverified; not covered by the functional
+    correctness proof). Factories: `capability_revocation`, `cap_revocation_notifier`.
+
+  - **`etcd`** — Raft leader change, write conflict, compaction. Assumptions:
+    `etcd:quorum-maintained`, `etcd:bounded-leader-election`, `etcd:compaction-bounded`
+    (unverified); `etcd:unique-leader` (verified; Ongaro & Ousterhout, USENIX ATC 2014 § 5 Raft
+    safety). Factories: `cluster_faults`, `etcd_adversary`.
+
+- **`examples/open_system_composed.py`** — end-to-end multi-environment example: a service
+  composed against K8s + AWS + etcd simultaneously, showing a BFS-discovered counter-example
+  (unbounded evictions exhaust retry budget) and the full residual proof obligation list.
+
+- **`docs/environments.md`** — reference guide for the environments library: all assumptions,
+  factory signatures, composition patterns, simulation usage, and custom assumption injection.
+
 ## [0.3.0] - 2026-06-24
 
 ### Added — open-system verification
