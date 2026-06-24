@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-06-24
+
+### Added — academic paper draft
+
+- **`docs/paper.md`** — paper draft targeting OOPSLA tool track / ISSTA / ECOOP tool track.
+  Stakes the claim that musil is the first Python library to unify explicit-state model
+  checking, deterministic simulation testing, and open-system contract verification.
+  Formal grounding: Interface Automata (de Alfaro & Henzinger, ESEC/FSE 2001),
+  contract-based design (Benveniste et al., INRIA RR-8147, 2012), I/O Automata
+  (Lynch & Tuttle, 1987), seL4 assumption layering (Klein et al., SOSP 2009).
+  Sections: Abstract, Introduction, Background and Related Work, Design, Implementation,
+  Evaluation (three case studies), Limitations, Conclusion, References.
+
+- **`mkdocs.yml`** — added paper to site nav as "Paper draft".
+
 ## [0.4.0] - 2026-06-24
 
 ### Added — pre-built adversarial environment library

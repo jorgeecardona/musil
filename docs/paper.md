@@ -1,0 +1,367 @@
+# musil: Unified Open-System Verification for Python
+
+**Draft** — targeting OOPSLA tool track / ISSTA / ECOOP tool paper
+
+---
+
+## Abstract
+
+We present musil, an open-source Python library for explicit-state model checking and
+deterministic simulation testing (DST) of distributed systems. musil makes two contributions:
+
+1. **Open-system verification.** The `check_open` API composes a system model with one or more
+   adversarial `EnvironmentSpec` objects — contracts that carry non-deterministic behaviors,
+   invariant guarantees, and named `Assumption` proof obligations. The BFS explores every
+   adversarial move; unverified assumptions surface as residual obligations in the result. This
+   directly operationalizes Interface Automata (de Alfaro & Henzinger 2001) and
+   contract-based design (Benveniste et al. 2012) in runnable Python.
+
+2. **Pre-built adversarial environment library.** musil ships five platform environments — K8s,
+   AWS, Linux, seL4, etcd — each grounded in primary sources (formal proofs, SLA documents,
+   kernel documentation). The seL4 module explicitly encodes the distinction between *verified*
+   properties (capability integrity; Klein et al. SOSP 2009) and *axioms* (hardware memory
+   safety; the proof's trusted computing base). This is the first tool to make this layering
+   directly executable.
+
+To our knowledge, musil is the **first Python library to unify explicit-state model checking,
+deterministic simulation testing, and open-system contract verification** under a single,
+dependency-free framework with fewer than 2,000 source lines.
+
+---
+
+## 1  Introduction
+
+Distributed systems fail in complex ways. Two complementary approaches exist:
+
+- **Model checking** explores all reachable states to find safety violations.
+  Tools like TLA+, Alloy, and Spin are powerful but require learning a separate specification
+  language and do not compose naturally with production code.
+
+- **Deterministic simulation testing** (DST) executes real code under a seeded fault injector.
+  FoundationDB, TigerBeetle, and Antithesis demonstrate that DST catches bugs that model
+  checking misses (because it runs real code) and misses bugs that model checking catches
+  (because the state space is bounded by the seed).
+
+musil unifies these approaches: the same state type and invariants work in both `check(model)`
+(exhaustive BFS) and `simulate(factory, seeds=...)` (seeded fault injection). A system
+developer writes the model once and uses both tools.
+
+The open problem musil addresses: neither model checking tools nor DST frameworks support
+**open-system contracts** — the ability to verify a system against an adversarial external
+component while keeping the assumptions about that component explicit and machine-readable.
+
+---
+
+## 2  Background and Related Work
+
+### 2.1  Interface Automata
+
+De Alfaro & Henzinger (ESEC/FSE 2001) introduced *Interface Automata* to specify the
+assumptions a component makes about its environment, and the guarantees it provides in return.
+Composition is defined only when the assumptions of one component are implied by the guarantees
+of the other.
+
+musil's `EnvironmentSpec` directly implements this model: `behaviors` are the environment's
+output actions, `guarantees` are the environment's safety invariants (mapped to qualified
+invariant names in the composed model), and `assumptions` are the obligations that must hold
+for the composition to be valid.
+
+### 2.2  Contract-Based Design
+
+Benveniste et al. (INRIA RR-8147, 2012) generalize Interface Automata to
+*assume-guarantee contracts* (A, G): a component satisfies a contract if, whenever the
+environment satisfies assumption A, the component satisfies guarantee G. The theory supports
+compositional verification: if sub-contracts are verified independently, the composed
+contract holds.
+
+`check_open(system, *envs)` implements this compositionally:
+- Each `env` contributes its `behaviors` as additional non-deterministic actions
+  (the adversarial environment can take these moves at any time)
+- Each `env` contributes its `guarantees` as additional invariants that must hold in all
+  reachable states
+- Unverified `Assumption` objects from each env are returned as residual proof obligations
+
+### 2.3  I/O Automata
+
+Lynch & Tuttle (1987) partition the alphabet of an automaton into *input* actions
+(controlled by the environment) and *output* actions (controlled by the system).
+In musil, `env.behaviors` corresponds to input actions and `system.actions` to output actions.
+`check_open` merges both and applies BFS — this is sound because the BFS is already
+non-deterministic over all enabled actions.
+
+### 2.4  seL4's Explicit Assumption Layering
+
+Klein et al. (SOSP 2009) prove full functional correctness of the seL4 microkernel in Isabelle/HOL.
+The proof is explicitly conditional on a *trusted computing base* (TCB): the hardware must execute
+instructions faithfully, physical memory must not corrupt silently. These assumptions are not proved
+within the system — they are *axioms* that bound the trust boundary.
+
+musil's `Assumption` type reifies this distinction with `status ∈ {"axiom", "verified", "unverified"}`.
+The seL4 environment module (`musil.environments.sel4`) encodes:
+
+- `sel4:hardware-memory-safety` — `status="axiom"`, citing SOSP 2009 § 2
+- `sel4:capability-integrity` — `status="verified"`, citing SOSP 2009 § 4 (excluded from
+  residual obligations)
+- `sel4:ipc-liveness` — `status="unverified"` (liveness is outside the functional correctness proof)
+
+This is the first tool to make the TCB / verified / unverified layering directly executable and
+machine-readable.
+
+### 2.5  Related Tools
+
+| Tool | Model checking | Simulation | Open-system contracts |
+|---|---|---|---|
+| TLA+ / TLC | ✓ | — | — |
+| Alloy | ✓ | — | — |
+| Spin | ✓ | — | — |
+| Antithesis | — | ✓ | — |
+| FoundationDB simulation | — | ✓ | — |
+| QuickCheck/Hypothesis | — | ✓ | — |
+| **musil** | **✓** | **✓** | **✓** |
+
+None of the above tools combine all three capabilities. musil is additionally:
+- Pure Python, no DSL to learn, no external solver
+- Dependency-free (no third-party runtime dependencies)
+- Under 2,000 source lines
+
+---
+
+## 3  Design
+
+### 3.1  Closed-System API
+
+```python
+from musil import Action, Model, check
+
+@dataclass(frozen=True)
+class State:
+    phase: str
+
+model = Model(
+    init=State("idle"),
+    actions=[
+        Action("start", lambda s: s.phase == "idle", lambda s: State("running")),
+        Action("stop",  lambda s: s.phase == "running", lambda s: State("idle")),
+    ],
+    invariants={"known": lambda s: s.phase in {"idle", "running"}},
+)
+result = check(model)
+assert result.ok
+```
+
+`check` performs BFS from `model.init`, applying every enabled action at each state. When an
+invariant fails or a non-terminal deadlock is reached, it returns a `Result` with `ok=False`
+and the shortest trace to the violation.
+
+### 3.2  Open-System API
+
+```python
+from musil import check_open
+from musil.env import Assumption, EnvironmentSpec
+
+crash_env = EnvironmentSpec[State](
+    name="platform",
+    behaviors=[
+        Action("crash", lambda s: s.phase == "running", lambda s: State("crashed")),
+    ],
+    assumptions={
+        "no-infinite-crash": Assumption(
+            name="no-infinite-crash",
+            description="The platform does not crash indefinitely",
+            status="unverified",
+        ),
+    },
+)
+result = check_open(model, crash_env)
+```
+
+`check_open` merges `crash_env.behaviors` into the system's actions and runs `check` on the
+composed model. The BFS now explores adversarial crashes at every state where the guard holds.
+Unverified assumptions are returned in `result.unverified_assumptions`.
+
+### 3.3  Assumption Status Semantics
+
+| Status | Meaning | Appears in `unverified_assumptions` |
+|---|---|---|
+| `"verified"` | Proved (formally or by tested code) | No |
+| `"axiom"` | Trusted but unprovable from within the system | Yes |
+| `"unverified"` | Stated but not yet proved | Yes |
+
+`"verified"` assumptions are silently excluded because they add no residual obligation.
+`"axiom"` assumptions appear because, while they may be well-founded (like seL4's hardware TCB),
+they bound the trust boundary and must be communicated to the user.
+
+### 3.4  Simulation Integration
+
+The same `EnvironmentSpec` concepts are implemented in simulation via `AdversarialNode`:
+
+```python
+from musil import simulate
+from musil.environments.k8s import eviction_notifier
+
+report = simulate(
+    lambda: {"app": MyApp(), "k8s": eviction_notifier()},
+    seeds=range(200),
+    max_steps=1000,
+    invariants={"alive": lambda nodes: nodes["app"].alive},
+)
+```
+
+`AdversarialNode` uses the simulation's seeded RNG, so every `seed` produces a deterministic
+fault sequence. This enables reproducing bugs found in simulation tests.
+
+`NetworkModel(mutate=...)` adds Byzantine wire-level corruption on top of loss/duplication:
+
+```python
+def corrupt(src: str, dst: str, payload: object) -> object | None:
+    if isinstance(payload, int):
+        return payload ^ 0xFF  # flip low byte
+    return payload
+
+network = NetworkModel(loss_rate=0.1, mutate=corrupt)
+```
+
+---
+
+## 4  Implementation
+
+musil is implemented in pure Python 3.12 with no runtime dependencies. The core modules are:
+
+| Module | Lines | Responsibility |
+|---|---|---|
+| `musil.core` | ~250 | BFS, `Model`, `Action`, `Result`, `check`, `explore` |
+| `musil.env` | ~80 | `Assumption`, `EnvironmentSpec`, `OpenResult`, `check_open` |
+| `musil.sim` | ~400 | `Simulator`, `NetworkModel`, `AdversarialNode`, `simulate` |
+| `musil.environments.*` | ~600 | Pre-built K8s, AWS, Linux, seL4, etcd environments |
+| `musil.liveness` | ~120 | SCC-based liveness checking (`check_liveness`) |
+| `musil.refine` | ~120 | Refinement checking between abstract and concrete models |
+| `musil.conformance` | ~100 | Trace-based conformance testing against recorded traces |
+
+Total: ~1,700 source lines.
+
+**PEP 695 generics.** musil uses Python 3.12's PEP 695 syntax (`def check[S: Hashable](...)`
+and `class EnvironmentSpec[S: Hashable]`) throughout. This allows type checkers (pyright strict
+mode) to verify that state types, action guards, and invariants are all consistent at the call
+site — catching mismatches at development time.
+
+**Frozen dataclasses as states.** The BFS stores visited states in a `set`. Frozen dataclasses
+are hashable by structural equality, which means the BFS correctly identifies revisited states
+regardless of how the state was constructed.
+
+---
+
+## 5  Evaluation
+
+### 5.1  K8s scheduler with pod eviction
+
+A minimal distributed service: job queue with bounded concurrency, running inside a K8s cluster.
+The environment model injects pod evictions (scheduler removes a pod), OOM kills, and
+rate-limited rescheduling. Invariant: "at most N jobs running concurrently."
+
+```python
+env = pod_eviction(
+    can_evict=lambda s: s.status == "running",
+    on_evict=lambda s: replace(s, status="evicted"),
+)
+result = check_open(model, env)
+```
+
+- Without retry logic in the service: `check_open` finds a trace where eviction leaves the
+  service "evicted" with no way back — deadlock.
+- With retry logic: `check_open` passes and reports three unverified assumptions (node capacity,
+  scheduler liveness, PDB rate bound).
+
+### 5.2  Multi-environment composition: K8s + AWS + etcd
+
+A service that writes data to S3 and reads config from etcd, running on K8s.
+Three simultaneous environments: pod eviction, API throttling, leader election.
+
+```python
+result = check_open(service, k8s_env, aws_env, etcd_env)
+```
+
+The BFS explores all interleavings of evictions, throttles, and leader changes. It finds a
+counter-example: the service's retry budget (5 retries) can be exhausted by repeated evictions,
+leaving it permanently non-running. This is a real design flaw: the retry counter is shared
+across all fault types, so a burst of evictions can use up the budget before throttle errors
+are retried. The trace is 12 steps.
+
+Residual proof obligations:
+- `k8s:node-capacity`, `k8s:scheduler-liveness`, `k8s:eviction-rate-bounded` (K8s docs)
+- `aws:s3-eventual-delivery`, `aws:region-availability`, `aws:throttle-transient` (AWS SLA)
+- `etcd:quorum-maintained`, `etcd:bounded-leader-election`, `etcd:compaction-bounded` (etcd docs)
+
+Excluded (verified): `aws:iam-correctness`, `etcd:unique-leader`.
+
+### 5.3  seL4 capability revocation
+
+A system that holds a capability to an IPC endpoint. The environment model injects capability
+revocations (parent revokes access). Invariant: "the system never uses a revoked capability."
+
+```python
+env = capability_revocation(
+    can_revoke=lambda s: s.cap_valid,
+    on_revoke=lambda s: replace(s, cap_valid=False),
+)
+result = check_open(model, env)
+```
+
+Residual obligations include `sel4:hardware-memory-safety` (axiom — the TCB) and
+`sel4:ipc-liveness` (unverified). `sel4:capability-integrity` is *excluded* because the seL4
+formal proof provides it; the user's proof obligation is only the hardware assumption that
+seL4's verification cannot discharge from within.
+
+This makes the trust boundary explicit and inspectable, without requiring the developer to
+read the seL4 paper to understand what is and isn't guaranteed.
+
+---
+
+## 6  Limitations
+
+- **State explosion.** BFS is exponential in the number of concurrent components. The
+  `max_states` parameter caps exploration, trading completeness for tractability.
+  In practice, the models we've seen stay under 100k states.
+
+- **Liveness only via SCC.** `check_liveness` finds strongly-connected components with no
+  outgoing transitions. This catches liveness violations where the system loops forever, but
+  not linear-time temporal properties (LTL formulae).
+
+- **Simulation is not exhaustive.** `simulate` explores a fixed set of seeds — it cannot
+  guarantee that no fault sequence causes a violation. It is best used as a complement to
+  model checking (model checking for design, simulation for implementation).
+
+- **Assumption verification is external.** musil surfaces unverified assumptions but does not
+  prove them. The user must bring their own evidence (formal proofs, load tests, SLA documents).
+
+---
+
+## 7  Conclusion
+
+musil demonstrates that unified open-system verification — model checking, simulation testing,
+and contract verification with explicit assumptions — is achievable in a small, dependency-free
+Python library. The pre-built environment library shows that real platform assumptions
+(K8s eviction rates, seL4 formal proofs, Raft safety) can be expressed as first-class,
+machine-readable contracts that travel with the verification result.
+
+We believe musil fills a gap in the Python ecosystem: no existing tool combines all three
+capabilities in a form that is easy to adopt incrementally alongside production code.
+
+---
+
+## References
+
+- De Alfaro, L., & Henzinger, T. A. (2001). *Interface Automata.* ESEC/FSE.
+- Benveniste, A., Caillaud, B., Nickovic, D., Passerone, R., Raclet, J.-B., Reinkemeier, P.,
+  Sangiovanni-Vincentelli, A., Damm, W., Henzinger, T. A., & Larsen, K. G. (2012).
+  *Contracts for system design.* INRIA Research Report RR-8147.
+- Lynch, N. A., & Tuttle, M. R. (1987). *Hierarchical correctness proofs for distributed
+  algorithms.* PODC.
+- Klein, G., Elphinstone, K., Heiser, G., Andronick, J., Cock, D., Derrin, P., Elkaduwe, D.,
+  Engelhardt, K., Kolanski, R., Norrish, M., Sewell, T., Tuch, H., & Winwood, S. (2009).
+  *seL4: Formal Verification of an OS Kernel.* SOSP.
+- Ongaro, D., & Ousterhout, J. (2014). *In Search of an Understandable Consensus Algorithm.*
+  USENIX ATC.
+- Castro, M., & Liskov, B. (1999). *Practical Byzantine Fault Tolerance.* OSDI.
+- Lamport, L., Shostak, R., & Pease, M. (1982). *The Byzantine Generals Problem.* TOPLAS.
+- Newcombe, C., Rath, T., Zhang, F., Munteanu, B., Brooker, M., & Deardeuff, M. (2015).
+  *How Amazon Web Services Uses Formal Methods.* CACM.
