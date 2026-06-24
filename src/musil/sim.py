@@ -41,12 +41,19 @@ class Envelope:
 class NetworkModel:
     """How the virtual network treats each message. Defaults are a reliable, in-order channel; set
     ``loss``/``duplicate`` (probabilities in [0, 1]) and a ``min_latency``/``max_latency`` spread
-    (virtual-time units) to inject drops, duplicates, and reordering. All draws use the sim's seed."""
+    (virtual-time units) to inject drops, duplicates, and reordering. All draws use the sim's seed.
+
+    ``mutate`` is a Byzantine fault hook: ``mutate(src, dst, payload) -> object | None``. The
+    returned value replaces the payload before delivery; returning ``None`` drops the message.
+    Applied after loss/duplicate decisions, so it targets messages that survive the network model.
+    Models wire-level corruption, wrong-answer injection, or selective drops (Castro & Liskov, OSDI
+    1999)."""
 
     loss: float = 0.0
     duplicate: float = 0.0
     min_latency: int = 1
     max_latency: int = 1
+    mutate: Callable[[str, str, object], object | None] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -197,6 +204,43 @@ class BaseNode:
         pass
 
 
+class AdversarialNode(BaseNode):
+    """A simulation node that injects adversarial behavior via a prioritized behavior list.
+
+    Models an external component (a K8s node, an AWS service, a Byzantine peer) that sometimes
+    misbehaves. Each behavior is a ``(guard, response)`` pair:
+
+    - ``guard(src, payload) -> bool``  — returns True when this behavior should fire.
+    - ``response(ctx, src, payload) -> None``  — the adversarial action: send wrong data,
+      send nothing, send duplicate responses, violate the protocol.
+
+    On each ``on_message``, behaviors are tried in order; the first matching guard fires and
+    no further behaviors are tried. If no guard matches, the message is silently dropped —
+    the default adversarial posture (an external service that ignores requests).
+
+    All randomness in behavior callbacks must go through ``ctx.random()`` / ``ctx.randint()``
+    so runs stay reproducible across seeds. This is the simulation counterpart of
+    ``EnvironmentSpec``: same contract theory, different execution model.
+    """
+
+    def __init__(
+        self,
+        behaviors: list[
+            tuple[
+                Callable[[str, object], bool],         # guard(src, payload)
+                Callable[[Context, str, object], None], # response(ctx, src, payload)
+            ]
+        ],
+    ) -> None:
+        self._behaviors = behaviors
+
+    def on_message(self, ctx: Context, src: str, payload: object) -> None:
+        for guard, response in self._behaviors:
+            if guard(src, payload):
+                response(ctx, src, payload)
+                return
+
+
 class Simulator:
     """Runs a fixed set of named nodes under a virtual clock and network. Construct with the node
     map, a ``seed``, and an optional ``NetworkModel``; call ``run``. Determinism: identical
@@ -270,6 +314,11 @@ class Simulator:
         if net.loss > 0.0 and self._rng.random() < net.loss:
             self._dropped += 1
             return
+        if net.mutate is not None:
+            payload = net.mutate(src, dst, payload)
+            if payload is None:
+                self._dropped += 1
+                return
         latency = self._rng.randint(net.min_latency, net.max_latency)
         env = Envelope(seq=self._counter + 1, src=src, dst=dst, payload=payload)
         self._schedule(self._now + latency, _Deliver(env))

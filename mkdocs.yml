@@ -57,5 +57,6 @@ nav:
   - Home: index.md
   - Verifying a distributed system: verifying-distributed-systems.md
   - The textbook (worked examples): textbook.md
+  - Open systems: open-systems.md
   - API reference: api.md
   - Changelog: changelog.md

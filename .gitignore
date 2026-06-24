@@ -25,3 +25,6 @@ uv.lock.bak
 .vscode/
 .idea/
 *.swp
+
+# Local session logs
+logs/

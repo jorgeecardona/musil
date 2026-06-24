@@ -56,6 +56,18 @@ failure to do so is reported as `kind="liveness"`).
 
 ::: musil.sim
 
+## Open systems — `check_open`, `EnvironmentSpec`, `Assumption`
+
+Verify a system against adversarial external environments. Each `EnvironmentSpec` is a contract:
+the non-deterministic *behaviors* the environment can exhibit (eviction, crash, wrong answer), the
+*guarantees* it commits to, and the *assumptions* those guarantees rest on (following seL4's
+two-layer assurance model: Klein et al., SOSP 2009). `check_open` composes by merging environment
+behaviors into the system's action set (so the BFS explores every adversarial move) and environment
+guarantees into the invariants. The result surface all `Assumption` objects that are not yet
+`"verified"` as residual proof obligations.
+
+::: musil.env
+
 ## Graph export — `to_dot`, `explore`
 
 The reachable state graph and its Graphviz DOT rendering.

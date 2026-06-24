@@ -101,6 +101,34 @@ model = Model(
 **Visualize** — `to_dot(model)` returns Graphviz DOT (`dot -Tsvg`); pass `highlight=[s.state for s in
 result.trace]` to colour a counterexample.
 
+**Open-system verification** — `check_open(system, *envs)` verifies a system against adversarial
+external components (K8s, AWS, Linux, seL4). Each `EnvironmentSpec` is a contract: the
+non-deterministic *behaviors* the environment can exhibit (eviction, crash, wrong answer), the
+*guarantees* it commits to, and the *assumptions* those guarantees rest on. The BFS is adversarial —
+it tries every environment move at every reachable state:
+
+```python
+from musil import Assumption, EnvironmentSpec, Action, check_open
+
+k8s = EnvironmentSpec[ServiceState](
+    name="k8s",
+    behaviors=[Action("k8s:evict-pod", can_evict, do_evict)],
+    guarantees={"restarts-non-negative": lambda s: s.restarts >= 0},
+    assumptions={"node-capacity": Assumption(
+        name="node-capacity",
+        description="At least one node is always available after eviction",
+        status="unverified", source="Kubernetes docs",
+    )},
+)
+
+result = check_open(model, k8s)
+result.ok                        # did the system survive every adversarial eviction?
+result.unverified_assumptions    # residual proof obligations (the contract's fine print)
+```
+
+`check_open(m)` with no envs is exactly `check(m)`. See
+[open-systems.md](https://musil-d34e71.gitlab.io/open-systems/) and `examples/k8s_scheduler.py`.
+
 **Verify the implementation, not just the design** — `simulate` runs your *real* event-driven node
 code under a deterministic, fault-injecting network (loss / duplication / reordering), reproducible
 from a seed, holding it to a model (`check_refinement`) plus invariants and a convergence goal. It's
@@ -115,6 +143,9 @@ report = simulate(node_factory, seeds=range(1000), snapshot=snapshot,
 if not report.ok:
     print(report.failure)   # which seed, which step, which world — re-run seeds=[that_seed] to replay
 ```
+
+For Byzantine testing, `AdversarialNode` injects wrong answers / protocol violations, and
+`NetworkModel(mutate=...)` corrupts payloads in transit. See `examples/byzantine_service.py`.
 
 See **[Verifying a distributed system](https://musil-d34e71.gitlab.io/verifying-distributed-systems/)**
 and the runnable [`examples/route_delivery.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/route_delivery.py).

@@ -39,6 +39,7 @@ from musil.core import (
     explore,
     format_trace,
 )
+from musil.env import Assumption, EnvironmentSpec, OpenResult, check_open
 from musil.fsm import (
     declared_states,
     status_field_actions,
@@ -54,6 +55,7 @@ from musil.refine import (
     check_refinement,
 )
 from musil.sim import (
+    AdversarialNode,
     BaseNode,
     Context,
     Crash,
@@ -71,6 +73,8 @@ from musil.sim import (
 
 __all__ = [
     "Action",
+    "AdversarialNode",
+    "Assumption",
     "BaseNode",
     "Composite",
     "ConformanceResult",
@@ -78,6 +82,7 @@ __all__ = [
     "Crash",
     "Divergence",
     "Envelope",
+    "EnvironmentSpec",
     "FaultSchedule",
     "Graph",
     "Invariant",
@@ -85,6 +90,7 @@ __all__ = [
     "Model",
     "NetworkModel",
     "Node",
+    "OpenResult",
     "Partition",
     "RefinementMonitor",
     "RefinementResult",
@@ -98,6 +104,7 @@ __all__ = [
     "channel_actions",
     "check",
     "check_liveness",
+    "check_open",
     "check_refinement",
     "compose",
     "declared_states",

@@ -4,6 +4,52 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-06-24
+
+### Added — open-system verification
+
+- **`EnvironmentSpec[S]`** — a named contract for an adversarial external component (K8s, AWS, seL4,
+  Linux). Each spec carries: `behaviors` (the non-deterministic `Action[S]` objects the environment
+  can take), `guarantees` (invariants the environment commits to), and `assumptions` (named proof
+  obligations, following seL4's two-layer assurance model: Klein et al., SOSP 2009).
+
+- **`Assumption`** — a named, machine-readable proof obligation with `status ∈ {"axiom", "verified",
+  "unverified"}`, an optional `source` citation, and an optional `predicate` for machine-checking.
+  Axioms and unverified assumptions surface as residual obligations in `OpenResult`, making hidden
+  hypotheses first-class.
+
+- **`check_open(system, *envs)`** — verifies a system against one or more adversarial environments.
+  Composes by merging environment behaviors into the system's action set (the BFS explores every
+  adversarial move) and environment guarantees into the invariants (qualified as `"<env.name>:<k>"`).
+  Returns an `OpenResult` wrapping the underlying `Result` plus all unverified assumptions. With no
+  envs, `check_open(m) == check(m)` exactly. Theoretical grounding: Interface Automata (de Alfaro &
+  Henzinger, ESEC/FSE 2001) and contract-based design (Benveniste et al., INRIA RR-8147, 2012).
+
+- **`OpenResult[S]`** — the result of `check_open`: `.ok` / `bool()` delegates to the underlying
+  `Result`, and `.unverified_assumptions` surfaces residual proof obligations.
+
+- **`AdversarialNode`** — a simulation `BaseNode` that injects Byzantine behavior via a list of
+  `(guard, response)` pairs. The first matching guard fires; no match silently drops the message.
+  Models external services that return wrong answers, violate protocols, or refuse to respond.
+  Grounded in Byzantine fault injection (Castro & Liskov, OSDI 1999).
+
+- **`NetworkModel.mutate`** — a `Callable[[src, dst, payload], object | None]` hook on
+  `NetworkModel`. Applied after loss/duplicate decisions, before delivery. `None` return drops the
+  message. Models wire-level Byzantine corruption: a component that sends wrong data, not just absent
+  data.
+
+- **Worked examples** — `examples/k8s_scheduler.py`: a distributed service verified against K8s pod
+  eviction (fragile service fails, resilient service with restart logic passes, residual proof
+  obligations printed). `examples/byzantine_service.py`: an `AdversarialNode` that returns wrong
+  answers (client without validation fails, with validation passes) and `NetworkModel(mutate=...)` for
+  wire-level payload corruption.
+
+- **`docs/open-systems.md`** — a conceptual guide: closed vs. open systems, when to use `check_open`
+  vs. `check`, and how to write an `EnvironmentSpec`.
+
+- **`docs/api.md`** — new "Open systems" section documenting `check_open`, `EnvironmentSpec`, and
+  `Assumption`.
+
 ### Added — verify the *implementation*, not just the design
 - **Refinement** (`check_refinement`, `RefinementMonitor`) — check that an observed run of the real
   system refines a model: every transition is a model edge or a stutter (the runtime analog of
