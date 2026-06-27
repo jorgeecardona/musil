@@ -25,7 +25,7 @@ concurrent actors) for the first invariant violation or deadlock, with the short
     assert check(model).ok
 """
 
-from musil.channels import channel_actions, send
+from musil.channels import channel_actions, fifo_channel_actions, fifo_send, send
 from musil.compose import Composite, compose
 from musil.conformance import ConformanceResult, Divergence, generate_traces, replay
 from musil.core import (
@@ -34,14 +34,19 @@ from musil.core import (
     Invariant,
     Model,
     Result,
+    StateViolation,
     Step,
     check,
     explore,
     format_trace,
+    invariant_from_violations,
+    reachable_violations,
+    symmetry_reduction_sound,
 )
 from musil.env import Assumption, EnvironmentSpec, OpenResult, check_open
 from musil.fsm import (
     declared_states,
+    multi_status_field_actions,
     status_field_actions,
     terminal_states,
     transition_actions,
@@ -100,6 +105,7 @@ __all__ = [
     "SimFailure",
     "SimReport",
     "Simulator",
+    "StateViolation",
     "Step",
     "channel_actions",
     "check",
@@ -109,12 +115,18 @@ __all__ = [
     "compose",
     "declared_states",
     "explore",
+    "fifo_channel_actions",
+    "fifo_send",
     "format_trace",
     "generate_traces",
+    "invariant_from_violations",
+    "multi_status_field_actions",
+    "reachable_violations",
     "replay",
     "send",
     "simulate",
     "status_field_actions",
+    "symmetry_reduction_sound",
     "terminal_states",
     "to_dot",
     "transition_actions",
