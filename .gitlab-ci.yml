@@ -43,7 +43,11 @@ ci:
     # debian-slim is bare: bring what proto + pyright's bundled node (libatomic1) need.
     - apt-get update && apt-get install -y --no-install-recommends curl git ca-certificates unzip xz-utils bash libatomic1
     - export PATH="$HOME/.proto/bin:$HOME/.proto/shims:$PATH"
-    - curl -fsSL https://moonrepo.dev/install/proto.sh | bash -s -- --yes
+    # Fetch proto straight from its GitHub release. moonrepo.dev/install/proto.sh merely downloads
+    # this tarball, and the runner's access to moonrepo.dev is flaky (curl SSL timeouts); GitHub is
+    # reliable. `proto install` then pulls the pinned toolchain from each tool's own upstream — not
+    # moonrepo. (Same fix as paas's CI image.)
+    - mkdir -p "$HOME/.proto/bin" /tmp/proto && curl -fsSL "https://github.com/moonrepo/proto/releases/latest/download/proto_cli-x86_64-unknown-linux-gnu.tar.xz" -o /tmp/proto/p.tar.xz && tar xf /tmp/proto/p.tar.xz --strip-components 1 -C /tmp/proto && mv /tmp/proto/proto /tmp/proto/proto-shim "$HOME/.proto/bin/" && rm -rf /tmp/proto
     - proto install                       # moon + uv, pinned in .prototools
     - uv sync --frozen --extra docs       # ruff + pyright + pytest + mkdocs
   script:
