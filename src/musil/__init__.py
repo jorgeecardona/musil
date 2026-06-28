@@ -53,6 +53,12 @@ from musil.fsm import (
 )
 from musil.graph import to_dot
 from musil.liveness import LivenessResult, check_liveness
+from musil.metrics import (
+    StateSpaceMetrics,
+    metrics_of,
+    solution_cardinality,
+    state_space_metrics,
+)
 from musil.refine import (
     RefinementMonitor,
     RefinementResult,
@@ -105,6 +111,7 @@ __all__ = [
     "SimFailure",
     "SimReport",
     "Simulator",
+    "StateSpaceMetrics",
     "StateViolation",
     "Step",
     "channel_actions",
@@ -120,11 +127,14 @@ __all__ = [
     "format_trace",
     "generate_traces",
     "invariant_from_violations",
+    "metrics_of",
     "multi_status_field_actions",
     "reachable_violations",
     "replay",
     "send",
     "simulate",
+    "solution_cardinality",
+    "state_space_metrics",
     "status_field_actions",
     "symmetry_reduction_sound",
     "terminal_states",
