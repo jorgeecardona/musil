@@ -29,6 +29,46 @@ def send[S: Hashable](
     return lambda s, msg: put(s, get(s) | frozenset({msg}))
 
 
+def fifo_send[S: Hashable](
+    get: Callable[[S], tuple[Message, ...]], put: Callable[[S, tuple[Message, ...]], S]
+) -> Callable[[S, Message], S]:
+    """Return a helper ``send(state, msg)`` that appends ``msg`` to the tail of an ORDERED channel
+    (a tuple, not a set). Unlike the unordered ``send``, this is not idempotent — each call enqueues
+    another copy — so the caller must bound the queue (e.g. only send when it's empty, or guard on a
+    capacity) to keep the model finite."""
+    return lambda s, msg: put(s, (*get(s), msg))
+
+
+def fifo_channel_actions[S: Hashable](
+    *,
+    get: Callable[[S], tuple[Message, ...]],
+    put: Callable[[S, tuple[Message, ...]], S],
+    deliver: Callable[[S, Message], S],
+    lossy: bool = False,
+    name: str = "ch",
+) -> list[Action[S]]:
+    """An **ordered (FIFO)** channel's steps over the caller's state, the order-preserving counterpart
+    to ``channel_actions``. The in-flight messages are an ordered tuple (``get``/``put`` read/write
+    it); only the **head** is deliverable, so messages arrive in send order — no reordering. ``lossy``
+    adds a head-drop (loss). ``deliver(state, msg)`` applies the delivered head to the receiver; the
+    head is then removed. Use for sequence-number protocols (alternating-bit, sliding-window) and any
+    link whose correctness assumes order — where the unordered ``channel_actions`` would wrongly
+    explore reorderings. (Bound the queue from the sender side; see ``fifo_send``.)"""
+    actions: list[Action[S]] = [
+        Action(
+            name=f"{name}:deliver",
+            enabled=lambda s: bool(get(s)),
+            apply=lambda s: put(deliver(s, get(s)[0]), get(s)[1:]),  # deliver head, then drop it
+        )
+    ]
+    if lossy:
+        actions.append(
+            Action(name=f"{name}:drop", enabled=lambda s: bool(get(s)),
+                   apply=lambda s: put(s, get(s)[1:]))  # lose the head
+        )
+    return actions
+
+
 def _deliver_action[S: Hashable](
     name: str,
     get: Callable[[S], frozenset[Message]],

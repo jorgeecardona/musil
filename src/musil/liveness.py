@@ -66,6 +66,7 @@ def check_liveness[S: Hashable](
     fair: Iterable[str] = (),
     fair_strong: Iterable[str] = (),
     everywhere: bool = False,
+    leadsto_from: Callable[[S], bool] | None = None,
     goal_name: str = "goal",
     max_states: int = 1_000_000,
 ) -> LivenessResult[S]:
@@ -76,6 +77,13 @@ def check_liveness[S: Hashable](
     state P is still eventually reached (the system always re-converges; no reachable stale cycle).
     Use ``everywhere=True`` for convergence/recurrence properties whose model may start already
     satisfying P.
+
+    ``leadsto_from=Q`` checks the **response** property ``[](Q -> <>P)`` — *whenever Q holds, P
+    eventually follows*. This is the untimed "no resource gets stuck" property: e.g. every service
+    that enters ``placed`` eventually reaches ``running`` or ``failed``. It is weaker than
+    ``everywhere=True`` — only states triggered by Q must reach P, so a ¬P cycle that no Q-state can
+    reach is not a violation. (Implemented by seeding the same analysis from every reachable Q∧¬P
+    state; ``everywhere`` is ignored when ``leadsto_from`` is given.)
 
     Fairness prunes cycles a fair scheduler would break. ``fair`` = weak fairness (an action
     *continuously* enabled along a cycle must eventually be taken). ``fair_strong`` = strong fairness
@@ -90,7 +98,16 @@ def check_liveness[S: Hashable](
     if not bad:
         return LivenessResult(ok=True, states_explored=len(g.states), goal=goal_name, truncated=g.truncated)
 
-    if everywhere:
+    if leadsto_from is not None:
+        # [](Q -> <>P): a violating run holds Q at some point, then stays ¬P forever. Every such run
+        # has a witnessing reachable Q∧¬P state; seed from all of them and stay within ¬P (once P is
+        # hit the obligation is discharged). Same ¬P-subgraph analysis as <>P, different seed.
+        triggers = [s for s in g.states if s in bad and leadsto_from(s)]
+        if not triggers:
+            return LivenessResult(ok=True, states_explored=len(g.states), goal=goal_name, truncated=g.truncated)
+        parent, order = _bfs(triggers, lambda s: [(a, t) for (a, t) in g.edges[s] if t in bad])
+        reachable_bad = set(order)
+    elif everywhere:
         # []<>P: a violating run may start anywhere, so seed from EVERY reachable ¬P state and take
         # stems over the full graph (the prefix may pass through P states before entering a stale cycle).
         parent, order_all = _bfs(g.initial, lambda s: g.edges[s])

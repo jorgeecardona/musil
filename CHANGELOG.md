@@ -4,6 +4,98 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-06-28
+
+### Added — leader-election and vote-tallying examples
+
+- **`examples/leader_election.py`** — quorum-based leader election (the Raft/Paxos essence). Three
+  results: no quorum → two leaders in one term (split brain); a majority → *at most one leader per
+  term* (safe); and "a leader is eventually elected" is FALSE in general — the split-vote livelock,
+  which is why real Raft needs randomized election timeouts. Docs page, subprocess test, nav entry.
+- **`examples/voting_tally.py`** — vote-tally integrity: a racy read-then-write count drops a vote
+  (lost update); the atomic count is correct (every eligible voter at most once, every ballot counted
+  exactly once, tally == ballots). Explicitly delimits scope — ballot secrecy is a cryptographic
+  property, not a state-machine one, so it is out of scope. Docs page, subprocess test, nav entry.
+
+### Added — symmetry reduction (opt-in, with a soundness gate)
+
+- **`check(..., canonicalize=f)`** and **`explore(..., canonicalize=f)`** enable symmetry reduction:
+  each state is mapped to a canonical representative of its symmetry-equivalence class, so
+  interchangeable components (sort the per-worker slices, etc.) collapse and the state space stops
+  blowing up combinatorially. Opt-in; `canonicalize=None` is the unchanged default.
+- **`symmetry_reduction_sound(model, f)`** is the validation gate (the project's "ships only with a
+  soundness check" rule for reductions): it explores fully and reduced and confirms both the
+  canonical-quotient *coverage* and the set of *violable invariants* agree. Coverage alone passes for
+  a lossy projection that merges non-equivalent states; the invariant-set check catches that — so the
+  gate rejects an unsound `canonicalize` (or a non-class-constant invariant). Methodology: validate on
+  small instances, then trust `canonicalize` on large ones. Does not cover deadlock-freedom.
+  Reduced counterexample traces are witnesses *up to symmetry*. Tests in `tests/test_symmetry.py`.
+
+### Added — `invariant_from_violations` adapter
+
+- **`musil.invariant_from_violations(checker, describe=…)`** adapts an external checker that returns a
+  sequence of violation objects (empty = OK) into a musil invariant: `True` when empty, else the first
+  violation's `describe(...)` string (a reason). The idiomatic, footgun-free way to drive a real
+  `world -> [Violation]` checker as an invariant — avoids the `not checker(s)` trap where a truthy
+  reason string reads as "holds". Documented that trap in the `Invariant` docstring. Test in
+  `tests/test_core.py`.
+
+### Added — `reachable_violations` (exhaustive audit)
+
+- **`musil.reachable_violations(model)`** returns every `(reachable state, broken invariant)` pair as
+  `StateViolation(state, invariant, reason)` — where `check` stops at the first counterexample, this
+  lists them all. For audits and *simplification*: enumerate the exact set of invalid states a model
+  can reach (e.g. to derive which cross-resource combinations a guard must exclude). Same invariant
+  semantics as `check` (string return = violation with reason). Test in `tests/test_core.py`.
+
+### Added — leads-to (response) liveness
+
+- **`check_liveness(..., leadsto_from=Q)`** checks the response property `[](Q -> <>P)` — *whenever
+  Q holds, P eventually follows*. This is the untimed "no resource gets stuck" property (e.g. every
+  service that enters `placed` eventually reaches `running`). Correctly **weaker** than
+  `everywhere=True`: a ¬P cycle no Q-state can reach is not a violation. Implemented by reusing the
+  existing `<>P` analysis seeded from every reachable Q∧¬P state — no new cycle logic — with a
+  soundness-distinguishing test (holds where `everywhere` fails). Tests in `tests/test_liveness.py`.
+
+### Added — FIFO (ordered) channel kit
+
+- **`musil.fifo_channel_actions` / `musil.fifo_send`** — the order-preserving counterpart to
+  `channel_actions`. In-flight messages are an ordered tuple; only the **head** is deliverable (and,
+  if `lossy`, droppable), so messages arrive in send order with no reordering. For sequence-number
+  protocols (alternating-bit, sliding-window) and any link whose correctness assumes order — where
+  the unordered `channel_actions` would wrongly explore reorderings (the ABP example had to hand-roll
+  this). Caller bounds the queue from the sender side. Tests in `tests/test_channels.py`.
+
+### Added — `multi_status_field_actions` for multi-resource models
+
+- **`musil.multi_status_field_actions(tables)`** — build the interleaved product of several status
+  machines over one dataclass in a single call: `tables` maps each field name to its `ALLOWED`-style
+  table, and actions are namespaced `"<field>:<src>-><dst>"`. Removes the per-field
+  `transition_actions` boilerplate every multi-resource model (e.g. a control-plane `World` with
+  `node`/`service`/`cert` fields) was hand-rolling. Test in `tests/test_fsm.py`.
+
+### Added — invariants can carry a reason
+
+- **`Invariant` may return `str`.** An invariant now returns `bool | str | None`: `True` holds,
+  `False`/`None` is a violation (as before), and a **string** is a violation that carries a
+  human-readable *reason*, surfaced on the new `Result.reason` field and in `str(result)`. Backward
+  compatible (only non-empty strings change meaning, which no bool predicate returned). This makes
+  wrapping a richer external checker first-class: e.g. driving a real `check(world) -> [Violation]`
+  and returning `f"{v.invariant}: {v.message}"` so the counterexample names which sub-rule and entity
+  broke, instead of a single generic invariant name. Tests in `tests/test_core.py`.
+
+### Added — Alternating Bit Protocol example
+
+- **`examples/alternating_bit.py`** — ABP as four `check`/`check_liveness` calls. (1) On musil's
+  **unordered** channel kit, `check` proves ABP *unsafe*: the one-bit counter wraps and a
+  two-generations-old frame is wrongly accepted — ABP assumes FIFO, which the kit does not model.
+  (2) On a hand-rolled single-slot FIFO link with the bit stripped, the duplicate is delivered twice
+  (3-step counterexample). (3) Real ABP on the FIFO link is safe. (4) Eventual delivery over the
+  lossy link is **false under weak fairness** (drop-forever lasso) and **true under strong fairness** —
+  the canonical demonstration of why `fair_strong` exists. Docs page, subprocess test, and nav entry
+  added. Surfaces an improvement for `musil.channels`: a `fifo=True` (ordered) channel mode, so
+  sequence-number protocols need not hand-roll their own.
+
 ### Changed — TCAS II example revised to protocol-accurate coordination model
 
 - **`examples/tcas.py`** — four scenarios (was three). VRC constraint broadcast now modeled

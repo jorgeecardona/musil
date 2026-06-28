@@ -8,6 +8,7 @@ from musil import (
     Model,
     check,
     declared_states,
+    multi_status_field_actions,
     status_field_actions,
     terminal_states,
     transition_actions,
@@ -71,3 +72,24 @@ def test_table_with_unreachable_state_leaves_it_unexplored() -> None:
     assert result.ok
     # only pending + active reachable; orphan never visited
     assert result.states_explored == 2
+
+
+def test_multi_status_field_actions_drives_several_machines() -> None:
+    # a state with two independent status fields, each its own table; the product is explored.
+    @dataclass(frozen=True)
+    class Pair:
+        a: str = "pending"
+        b: str = "pending"
+
+    table_a: dict[str, set[str]] = {"pending": {"active"}, "active": set()}
+    table_b: dict[str, set[str]] = {"pending": {"on", "off"}, "on": {"off"}, "off": {"on"}}
+    actions = multi_status_field_actions({"a": table_a, "b": table_b})
+    names = {act.name for act in actions}
+    assert "a:pending->active" in names and "b:on->off" in names  # namespaced per field
+    model = Model(init=Pair(), actions=actions,
+                  invariants={"known": lambda s: s.a in declared_states(table_a)
+                              and s.b in declared_states(table_b)})
+    result = check(model)
+    assert result.ok
+    # |reachable a| * |reachable b| = 2 (pending,active) * 3 (pending,on,off) = 6
+    assert result.states_explored == 6

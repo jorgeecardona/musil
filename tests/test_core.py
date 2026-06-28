@@ -130,3 +130,79 @@ def test_max_states_truncation_is_reported() -> None:
     result = check(model, max_states=50)
     assert result.ok and result.truncated
     assert result.states_explored >= 50
+
+
+def test_string_returning_invariant_carries_a_reason() -> None:
+    # an invariant that returns a string signals a violation AND a human-readable reason — useful
+    # when wrapping a richer checker that reports which sub-rule/entity broke.
+    def at_most_two(s: Light) -> bool | str:
+        order = {"red": 0, "green": 1, "yellow": 2}
+        return True if order[s.color] < 2 else f"reached {s.color} (rank {order[s.color]})"
+
+    result = check(_light_model().__class__(  # reuse the light machine with the string invariant
+        init=Light("red"),
+        actions=_light_model().actions,
+        invariants={"rank-bound": at_most_two},
+    ))
+    assert not result.ok
+    assert result.kind == "invariant"
+    assert result.invariant == "rank-bound"
+    assert result.reason == "reached yellow (rank 2)"
+    assert "reached yellow (rank 2)" in str(result)
+
+
+def test_empty_string_invariant_is_a_violation_without_reason() -> None:
+    # an empty string is falsy-but-str: still a violation, just no reason text.
+    result = check(
+        Model(init=Light("red"),
+              actions=[Action("go", lambda s: s.color == "red", lambda _s: Light("green"))],
+              invariants={"never": lambda _s: ""})
+    )
+    assert not result.ok and result.kind == "invariant" and result.reason is None
+
+
+def test_reachable_violations_enumerates_all_bad_states() -> None:
+    # a 3-state cycle red->green->yellow->red; two invariants, one with a reason string.
+    from musil import reachable_violations
+
+    model = Model(
+        init=Light("red"),
+        actions=[
+            Action("go", lambda s: s.color == "red", lambda _s: Light("green")),
+            Action("slow", lambda s: s.color == "green", lambda _s: Light("yellow")),
+            Action("stop", lambda s: s.color == "yellow", lambda _s: Light("red")),
+        ],
+        invariants={
+            "not-yellow": lambda s: s.color != "yellow",
+            "not-green": lambda s: True if s.color != "green" else "green is forbidden",
+        },
+    )
+    vs = reachable_violations(model)
+    by_inv = {(v.invariant, v.reason) for v in vs}
+    assert ("not-yellow", None) in by_inv  # bool invariant, no reason
+    assert ("not-green", "green is forbidden") in by_inv  # string invariant carries its reason
+    # exactly one violating state per invariant (yellow, green respectively)
+    assert len(vs) == 2
+
+
+def test_invariant_from_violations_adapts_a_checker() -> None:
+    from musil import invariant_from_violations, reachable_violations
+
+    # a checker that returns "violations" (here just strings) — empty means OK
+    def checker(s: Light) -> list[str]:
+        return [] if s.color != "yellow" else ["yellow-is-bad"]
+
+    inv = invariant_from_violations(checker, describe=lambda v: f"rule:{v}")
+    assert inv(Light("red")) is True
+    assert inv(Light("yellow")) == "rule:yellow-is-bad"
+
+    model = Model(
+        init=Light("red"),
+        actions=[
+            Action("go", lambda s: s.color == "red", lambda _s: Light("green")),
+            Action("slow", lambda s: s.color == "green", lambda _s: Light("yellow")),
+        ],
+        invariants={"checker": inv},
+    )
+    vs = reachable_violations(model)
+    assert len(vs) == 1 and vs[0].reason == "rule:yellow-is-bad"

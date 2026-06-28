@@ -68,9 +68,12 @@ nav:
       - Readers–writers: examples/readers_writers.md
       - Dining philosophers: examples/dining_philosophers.md
       - Bank transfer: examples/bank_transfer.md
+      - Vote tallying: examples/voting_tally.md
     - Distributed protocols:
       - Reconciliation under loss: examples/route_delivery.md
       - Partition + heal: examples/partition_heal.md
+      - Alternating Bit Protocol: examples/alternating_bit.md
+      - Leader election: examples/leader_election.md
     - Open systems:
       - K8s scheduler: examples/k8s_scheduler.md
       - Byzantine service: examples/byzantine_service.md

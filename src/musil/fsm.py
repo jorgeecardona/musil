@@ -53,6 +53,26 @@ def status_field_actions(table: Table, *, field: str = "status") -> list[Action[
     )
 
 
+def multi_status_field_actions(tables: Mapping[str, Table]) -> list[Action[Any]]:
+    """For a dataclass with SEVERAL status fields, each driven by its own table (e.g. a control-plane
+    ``World`` whose ``node``/``service``/``cert`` fields each follow a different ``ALLOWED[...]`` map):
+    build every field's edge-actions at once. ``tables`` maps a field name to its table; action names
+    are namespaced ``"<field>:<src>-><dst>"`` so they stay distinct across fields. musil fires every
+    enabled action from every state, so the interleaved product of the per-field machines — every way
+    the resources can advance concurrently — is explored for free."""
+    actions: list[Action[Any]] = []
+    for field, table in tables.items():
+        actions.extend(
+            transition_actions(
+                table,
+                get=lambda s, f=field: getattr(s, f),
+                with_status=lambda s, dst, f=field: replace(s, **{f: dst}),
+                name=lambda src, dst, f=field: f"{f}:{src}->{dst}",
+            )
+        )
+    return actions
+
+
 def declared_states(table: Table) -> set[str]:
     """Every state named in the table — sources (keys) plus every target."""
     return set(table) | {dst for dsts in table.values() for dst in dsts}

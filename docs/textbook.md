@@ -60,6 +60,7 @@ no single-threaded test can find.
 | [Readers–writers](examples/readers_writers.md) | Safety holds for both policies; reader-preference starves the writer | `check`, `check_liveness`, fairness |
 | [Dining philosophers](examples/dining_philosophers.md) | Circular-wait deadlock; resource-ordering rule eliminates it | `check`, deadlock |
 | [Bank transfer](examples/bank_transfer.md) | Lock-ordering deadlock; conservation invariant holds through the fix | `check`, invariant |
+| [Vote tallying](examples/voting_tally.md) | Racy read-then-write count drops a vote; atomic count is correct — and ballot secrecy is *not* a model-checking property | `check`, invariant |
 
 ---
 
@@ -71,6 +72,8 @@ Nodes that communicate over a network. Correctness depends on message ordering, 
 |---------|-------------|---------------|
 | [Reconciliation under loss](examples/route_delivery.md) | Fire-and-forget fails on a lossy link; re-push converges — verified by simulation + refinement | `simulate`, `check_refinement`, `check_liveness` |
 | [Partition + heal](examples/partition_heal.md) | A sustained partition wedges fire-and-forget forever; cold restart loses un-retried writes | `simulate`, `FaultSchedule`, `Partition`, `Crash` |
+| [Alternating Bit Protocol](examples/alternating_bit.md) | ABP is unsafe on an unordered link (it assumes FIFO); eventual delivery over loss needs strong, not weak, fairness | `channel_actions`, `check`, `check_liveness`, `fair_strong` |
+| [Leader election](examples/leader_election.md) | No quorum → two leaders (split brain); a majority gives safety; electing a leader can split-vote livelock (why Raft needs randomized timeouts) | `check`, `check_liveness` |
 
 ---
 

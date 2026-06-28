@@ -144,3 +144,61 @@ def test_everywhere_recurrence_vs_eventually_from_init() -> None:
     recurrence = check_liveness(model, goal=goal, everywhere=True)  # []<>P: reachable stale cycle
     assert not recurrence.ok
     assert recurrence.stem[-1].state == W("stuck")
+
+
+# --- leads-to / response: [](Q -> <>P) --------------------------------------------------------
+
+@dataclass(frozen=True)
+class Phase:
+    at: str = "I"
+
+
+def _phase_model(actions_spec: dict[str, set[str]]) -> Model[Phase]:
+    acts: list[Action[Phase]] = [
+        Action(f"{a}->{b}", lambda s, _a=a: s.at == _a, lambda s, _b=b: replace(s, at=_b))
+        for a, bs in actions_spec.items() for b in bs
+    ]
+    return Model(init=Phase(), actions=acts, terminal=lambda s: not actions_spec.get(s.at))
+
+
+def test_leadsto_holds_when_trigger_always_reaches_goal() -> None:
+    # I->T->G->G ; whenever at T (Q), eventually at G (P). From T the only move reaches G.
+    model = _phase_model({"I": {"T"}, "T": {"G"}, "G": {"G"}})
+    r = check_liveness(model, goal=lambda s: s.at == "G", leadsto_from=lambda s: s.at == "T")
+    assert r.ok
+
+
+def test_leadsto_fails_when_trigger_can_avoid_goal_forever() -> None:
+    # at T there's a self-loop that never reaches G — a fair cycle violating Q->[]<>... no fairness.
+    model = _phase_model({"I": {"T"}, "T": {"T", "G"}, "G": {"G"}})
+    r = check_liveness(model, goal=lambda s: s.at == "G", leadsto_from=lambda s: s.at == "T")
+    assert not r.ok and r.kind == "fair-cycle"
+    # weak fairness of the escape action repairs it (T->G continuously enabled along the T-loop)
+    r2 = check_liveness(model, goal=lambda s: s.at == "G",
+                        leadsto_from=lambda s: s.at == "T", fair=["T->G"])
+    assert r2.ok
+
+
+def test_leadsto_is_weaker_than_everywhere() -> None:
+    # a ¬P cycle (L->L) that NO trigger reaches: everywhere=True fails, but leads-to holds because
+    # the only Q-state (T) always reaches P (G). This is the soundness-distinguishing case.
+    model = _phase_model({"I": {"T", "L"}, "T": {"G"}, "G": {"G"}, "L": {"L"}})
+    goal: Callable[[Phase], bool] = lambda s: s.at == "G"  # noqa: E731
+    assert not check_liveness(model, goal=goal, everywhere=True).ok  # L loops, never P
+    assert check_liveness(model, goal=goal, leadsto_from=lambda s: s.at == "T").ok  # T always reaches G
+
+
+def test_leadsto_p_unreachable_when_trigger_reaches_a_dead_end() -> None:
+    # I->T(trigger)->X(¬P sink) ; from T the goal G is never reachable → p-unreachable, not a cycle.
+    model = _phase_model({"I": {"T", "G"}, "T": {"X"}, "X": set(), "G": {"G"}})
+    r = check_liveness(model, goal=lambda s: s.at == "G", leadsto_from=lambda s: s.at == "T")
+    assert not r.ok and r.kind == "p-unreachable"
+
+
+def test_leadsto_from_overrides_everywhere_flag() -> None:
+    # documented: when leadsto_from is given, `everywhere` is ignored. The L->L ¬P cycle would make
+    # everywhere=True fail, but leadsto_from=T (which always reaches G) must still hold regardless.
+    model = _phase_model({"I": {"T", "L"}, "T": {"G"}, "G": {"G"}, "L": {"L"}})
+    r = check_liveness(model, goal=lambda s: s.at == "G",
+                       leadsto_from=lambda s: s.at == "T", everywhere=True)
+    assert r.ok

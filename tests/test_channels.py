@@ -65,3 +65,48 @@ def test_channel_delivers_out_of_order_reordering() -> None:
 def test_duplicating_channel_can_deliver_twice() -> None:
     states = _reachable(_model(duplicating=True))
     assert any(s.received.count("a") == 2 for s in states)
+
+
+# --- FIFO (ordered) channel -------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class FifoWire:
+    inflight: tuple[Hashable, ...] = ()
+    received: tuple[Hashable, ...] = ()
+
+
+def test_fifo_channel_preserves_order() -> None:
+    from musil import fifo_channel_actions, fifo_send
+
+    get: Callable[[FifoWire], tuple[Hashable, ...]] = lambda s: s.inflight  # noqa: E731
+    put: Callable[[FifoWire, tuple[Hashable, ...]], FifoWire] = lambda s, q: replace(s, inflight=q)  # noqa: E731
+    deliver: Callable[[FifoWire, Hashable], FifoWire] = lambda s, m: replace(s, received=(*s.received, m))  # noqa: E731
+    enqueue = fifo_send(get, put)
+
+    # send a, then b, up front; the only legal delivery order is (a, b)
+    model = Model(
+        init=enqueue(enqueue(FifoWire(), "a"), "b"),
+        actions=fifo_channel_actions(get=get, put=put, deliver=deliver),
+        terminal=lambda s: not s.inflight,
+    )
+    g = explore(model)
+    delivered = [s.received for s in g.states if not s.inflight]
+    assert delivered == [("a", "b")]  # FIFO: never ("b", "a")
+
+
+def test_fifo_channel_lossy_can_drop_head() -> None:
+    from musil import fifo_channel_actions, fifo_send
+
+    get: Callable[[FifoWire], tuple[Hashable, ...]] = lambda s: s.inflight  # noqa: E731
+    put: Callable[[FifoWire, tuple[Hashable, ...]], FifoWire] = lambda s, q: replace(s, inflight=q)  # noqa: E731
+    deliver: Callable[[FifoWire, Hashable], FifoWire] = lambda s, m: replace(s, received=(*s.received, m))  # noqa: E731
+    enqueue = fifo_send(get, put)
+
+    model = Model(
+        init=enqueue(FifoWire(), "a"),
+        actions=fifo_channel_actions(get=get, put=put, deliver=deliver, lossy=True),
+        terminal=lambda s: not s.inflight,
+    )
+    g = explore(model)
+    outcomes = {s.received for s in g.states if not s.inflight}
+    assert outcomes == {("a",), ()}  # delivered, or dropped (lost)
