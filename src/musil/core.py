@@ -197,7 +197,7 @@ def check[S: Hashable](
             if not action.enabled(state):
                 continue
             fired = True
-            nxt = action.apply(state)
+            nxt = canon(action.apply(state))
             if nxt not in seen:
                 seen.add(nxt)
                 parent[nxt] = (state, action.name)
