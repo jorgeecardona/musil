@@ -1,9 +1,9 @@
 # musil
 
-A tiny, dependency-free **model checker** for Python. You describe a system as *states*, the *steps*
+A small, dependency-free **model checker** for Python. You describe a system as *states*, the *steps*
 that move between them (each guarded by a condition saying when it can happen), and *invariants*
-(rules that must hold in every state). musil then explores every state the system can reach — and
-every order in which concurrent steps can happen — and hands you the shortest sequence of steps that
+(rules that must hold in every state). musil then explores every state the system can reach, in
+every order concurrent steps can happen, and returns the shortest sequence of steps that
 breaks a rule, or confirms none can. ("Explicit-state" means it enumerates those states one by one,
 rather than reasoning about them symbolically — simple, and exact for systems small enough to fit.)
 
@@ -32,15 +32,15 @@ print(check(model))   # OK -- 3 states, no violations
 
 ## Why
 
-The expensive bugs in stateful and distributed systems are **temporal and concurrent**: a resource
+The expensive bugs in stateful and distributed systems are temporal and concurrent: a resource
 wedged forever, a race that drops data, a deadlock. Tests sample executions; a model checker proves
-properties over *all* of them. musil exists to do that **in Python, as a library** — no separate
+properties over *all* of them. musil does that in Python, as a library: no separate
 spec language, no external binary, no JVM. Your states are frozen dataclasses, your invariants are
 predicates, and the whole thing runs in pytest next to your other tests.
 
-The key move: **the model can be driven from the same data your code uses.** Point
-`transition_actions` at your real allowed-transitions table and the model can't drift from the code —
-it *is* the code's table.
+The model can be driven from the same data your code uses. Point
+`transition_actions` at your real allowed-transitions table and the model can't drift from the code,
+because it is built from the code's own table.
 
 ## Install
 
@@ -67,16 +67,16 @@ A **deadlock** is a state with no possible next step — the system is stuck. mu
 bug *unless* you declare that state a legitimate resting point with `terminal=...` (e.g. a `deleted`
 record, which nothing should ever leave).
 
-An invariant returns `True` (holds) or `False` (broken). It may also return a **string**, meaning
+An invariant returns `True` (holds) or `False` (broken). It may also return a string, meaning
 "broken, and here's why" — that text appears in the counterexample, so you learn *which* rule and
 *which* entity failed. `invariant_from_violations(checker)` builds such an invariant from a
-`state -> [problems]` function you already have. And where `check` stops at the first broken rule,
+`state -> [problems]` function you already have. Where `check` stops at the first broken rule,
 `reachable_violations(model)` lists *every* state-and-rule that breaks — a full audit, e.g. to
-enumerate exactly which situations a new guard needs to rule out.
+enumerate which situations a new guard needs to rule out.
 
 **Concurrency, for free** — give each actor's steps as actions and hand musil all of them. It tries
-every available step from every state, so *every interleaving* — every order the concurrent steps
-could run in — gets checked. That's how it finds races a normal test would only hit on an unlucky run:
+every available step from every state, so every interleaving (every order the concurrent steps
+could run in) gets checked. That's how it finds races a normal test would only hit on an unlucky run:
 
 ```python
 # two non-atomic increments race; musil finds the lost update
@@ -85,13 +85,20 @@ check(Model(init=Counter(), actions=[*actor_a, *actor_b], invariants={...}))
 
 **Liveness — "something good eventually happens"** — `check_liveness(model, goal=P)`. Where safety is
 "nothing bad happens," liveness is "the system never gets stuck short of where it should end up."
-`goal=P` asks: does every run *eventually* reach a state where P holds? `everywhere=True` asks the
-stronger question — from *any* reachable state, is P always still reachable later? — i.e. the system
-always re-converges and can't get trapped.
+`goal=P` checks that every run *eventually* reaches a state where P holds. `everywhere=True` is
+stronger: on every run, P must *always eventually* be reached again — the system re-converges no
+matter where a run has gotten to. Note this demands more than P merely staying *reachable*: a loop
+that forever declines an available exit toward P is a violation (name that exit in `fair=[...]` if
+a fair scheduler would take it eventually). For the plain reachability question — "from which
+states can the system still get to P?" — use `reaches`:
 
 ```python
 # every run eventually reaches served == desired; everywhere=True = it always re-converges
 check_liveness(model, goal=lambda s: s.served == s.desired, everywhere=True, fair=["reconcile"])
+
+# weaker: no reachable state is ever *trapped* away from the goal (the goal stays reachable)
+g = explore(model)
+assert reaches(g, lambda s: s.served == s.desired) == set(g.states)
 ```
 
 When liveness fails, the counterexample is a **lasso**: a path leading into a loop the system can
@@ -110,17 +117,51 @@ everyday "nothing gets stuck" (every service that reaches `placed` eventually re
 It's more lenient than `everywhere=True`: a never-reaching-the-goal loop only counts against you if
 Q can actually lead into it.
 
+**Where does it settle? — confluence** — `fixed_points(model)` reports, for each initial state
+*separately*, the distinct terminal states (no available step) its runs can end in. A single start
+that can settle in two different places means the outcome depends on the order steps fired — e.g.
+an event-iteration loop whose fixed point silently depends on which pending event is applied first.
+`fixed_points(model).confluent` asserts no start has that choice. Different starts settling in
+different places is fine (that's what a latch is *for*); a start with an empty set never settles at
+all, which is a liveness question, not a confluence one.
+
+**Reading results in assertions** — `print(result)` renders the verdict; in test assertions, use
+the fields (both result types are truthy exactly when `ok`):
+
+`check` → `Result`:
+
+| field | meaning |
+|---|---|
+| `ok` | `True` when every reachable state passed every invariant and nothing deadlocked |
+| `kind` | `None` on success, else `"invariant"` or `"deadlock"` |
+| `invariant` | name of the broken invariant (when `kind == "invariant"`) |
+| `reason` | the text a string-returning invariant produced, if any |
+| `trace` | shortest path to the offending state — a tuple of `Step`, each with `.action` and `.state` |
+| `states_explored` | how many states the sweep visited |
+| `truncated` | `True` if the `max_states` cap stopped the sweep before exhausting the space |
+
+`check_liveness` → `LivenessResult`:
+
+| field | meaning |
+|---|---|
+| `ok` | `True` when the property holds on every run |
+| `kind` | `None` on success, else `"p-unreachable"` or `"fair-cycle"` |
+| `goal` | the `goal_name` you passed, used in rendering |
+| `stem` | shortest path from an initial state to the offending state or loop (`Step` tuple) |
+| `cycle` | the loop the system can repeat forever (empty when `kind == "p-unreachable"`) |
+| `states_explored`, `truncated` | as above |
+
 **Compose components & model the network** — `compose(...)` takes several independent component
 models and builds the combined system (every way their steps can interleave), carrying over each
 component's own rules and letting you add rules about the whole. The channel kit (`channel_actions`,
 `send`) models a network link — reliable, lossy (drops messages), or duplicating — and treats
-messages as *unordered*, so **every possible reordering is checked for you**. For links that must
+messages as *unordered*, so every possible reordering is checked for you. For links that must
 preserve order (protocols that number their messages, like the alternating-bit protocol),
 `fifo_channel_actions` / `fifo_send` give a first-in-first-out queue with no reordering.
 
 **Keep the model in sync with your code ("zero-drift")** — rather than hand-write the model's steps,
-generate them from the *same* allowed-transitions table your code already enforces. Then the model
-can't silently disagree with the code, because it *is* the code's table:
+generate them from the same allowed-transitions table your code already enforces. Then the model
+can't silently disagree with the code, because it is the code's table:
 
 ```python
 from musil import status_field_actions, terminal_states
@@ -143,8 +184,8 @@ worst moment (Kubernetes evicts your pod, AWS throttles you, a disk fills up). `
 *envs)` checks your system while an external component misbehaves in *every* way its contract allows.
 Each `EnvironmentSpec` is that contract: the *behaviors* it can throw at you (evict, crash, return a
 wrong answer), the *guarantees* it still promises to keep, and the *assumptions* those promises rest
-on. musil tries every environment action from every reachable state — the worst case, not a sampled
-one:
+on. musil tries every environment action from every reachable state, covering the worst case rather
+than a sample:
 
 ```python
 from musil import Assumption, EnvironmentSpec, Action, check_open
@@ -170,7 +211,7 @@ result.unverified_assumptions    # the assumptions you're still trusting on fait
 
 **Check the real code, not just the design** — `simulate` runs your *actual* event-driven node code
 on a simulated network that drops, duplicates, and reorders messages, all driven by a random seed so
-each run is exactly reproducible. It holds the code to a model (every step the code takes must be one
+each run is reproducible. It holds the code to a model (every step the code takes must be one
 the model allows — that's `check_refinement`), plus your invariants and a goal it should settle into.
 This is the [FoundationDB](https://apple.github.io/foundationdb/testing.html)/TigerBeetle "deterministic
 simulation testing" technique as a pure-Python library — it *finds* bugs (with a seed you can replay),
@@ -185,11 +226,11 @@ if not report.ok:
     print(report.failure)   # which seed, which step, which world — re-run seeds=[that_seed] to replay
 ```
 
-To test against components that actively misbehave — "Byzantine" faults, meaning nodes that *lie* or
-break the protocol rather than merely crash — `AdversarialNode` injects wrong answers and
+To test against components that actively misbehave ("Byzantine" faults: nodes that lie or
+break the protocol rather than merely crash), `AdversarialNode` injects wrong answers and
 `NetworkModel(mutate=...)` corrupts messages in flight. See `examples/byzantine_service.py`.
 
-See **[Verifying a distributed system](https://musil-d34e71.gitlab.io/verifying-distributed-systems/)**
+See [Verifying a distributed system](https://musil-d34e71.gitlab.io/verifying-distributed-systems/)
 and the runnable [`examples/route_delivery.py`](https://gitlab.com/jorgeecardona/musil/-/blob/main/examples/route_delivery.py).
 
 ## How it compares
@@ -202,18 +243,18 @@ and the runnable [`examples/route_delivery.py`](https://gitlab.com/jorgeecardona
 | Stateright | Rust library, model-check + run | Rust | yes (same actors on a real network) | safety + liveness |
 | FizzBee | Go binary, Python-like DSL | `.fizz` | no | safety + basic liveness |
 
-musil is the **smallest** member of this family: pick it when your state space is bounded and small,
+musil is the smallest member of this family: pick it when your state space is bounded and small,
 you want the model *in* your test suite with zero new tooling, and the win is catching races /
 deadlocks / stuck states and proving convergence.
 
-## Honest limitations
+## Limitations
 
-- **It enumerates states**, so it's for **bounded** models — a finite, not-too-large number of
+- **It enumerates states**, so it's for bounded models — a finite, not-too-large number of
   reachable states. Very large or infinite state spaces blow up (cap with `max_states`; the result
   flags `truncated`). Tools that reason symbolically instead of enumerating (TLA+'s Apalache, etc.)
   scale further.
 - **Limited reduction of redundant work**: when many concurrent steps are independent, musil still
-  explores all their orderings, which can be slow (the standard cure, "partial-order reduction," is
+  explores all their orderings, which can be slow (the standard technique, "partial-order reduction," is
   not implemented). It *can* collapse interchangeable parts of the state — pass `canonicalize=...`
   (symmetry reduction), validated by `symmetry_reduction_sound`.
 - **Liveness is fairness-based, not arbitrary temporal logic**: it covers "eventually," "always
@@ -235,7 +276,7 @@ moon run :test         # or run a single target
 make install-hooks     # pre-commit auto-bump + pre-push checks (one-time)
 ```
 
-CI is a **single GitLab job**: `proto install` brings up the toolchain, then one `moon run`
+CI is a single GitLab job: `proto install` brings up the toolchain, then one `moon run`
 resolves the whole graph — there are no per-language jobs or hand-wired stages. (`make` targets
 still work locally; they call `uv run` directly and don't need moon.)
 
@@ -266,7 +307,7 @@ The version in `pyproject.toml` is the single source of truth, and releases are 
 | Top-level pipeline file | `.gitlab-ci.yml` |
 | Environment name | `pypi` |
 
-Publishing uses OIDC Trusted Publishing, so **no token is stored anywhere**. On a green `main`
+Publishing uses OIDC Trusted Publishing, so no token is stored anywhere. On a green `main`
 pipeline, `:release` ships to PyPI whenever `pyproject`'s version isn't published yet — there is no
 git tag step.
 

@@ -202,3 +202,27 @@ def test_leadsto_from_overrides_everywhere_flag() -> None:
     r = check_liveness(model, goal=lambda s: s.at == "G",
                        leadsto_from=lambda s: s.at == "T", everywhere=True)
     assert r.ok
+
+
+def test_everywhere_is_always_eventually_not_reachability() -> None:
+    # A loop that forever declines an available exit: enter/exit forever, with `finish` legal in
+    # every state. The goal stays *reachable* from everywhere (reaches == all states), yet strict
+    # []<>P is violated by the loop — `everywhere=True` means always *eventually*, not always
+    # *reachable*. Naming the exit weakly fair discharges the loop; `reaches` answers the weaker
+    # question directly.
+    from musil import explore, reaches
+
+    model = Model(
+        init=N(),
+        actions=[
+            Action("enter", lambda s: s.v == 0 and not s.done, lambda s: replace(s, v=1)),
+            Action("exit", lambda s: s.v == 1 and not s.done, lambda s: replace(s, v=0)),
+            Action("finish", lambda s: not s.done, lambda s: replace(s, done=True)),
+        ],
+        terminal=lambda s: s.done,
+    )
+    g = explore(model)
+    assert reaches(g, lambda s: s.done) == set(g.states)  # never trapped ...
+    strict = check_liveness(model, goal=lambda s: s.done, everywhere=True, goal_name="done")
+    assert not strict.ok and strict.kind == "fair-cycle"  # ... yet a run can loop forever
+    assert check_liveness(model, goal=lambda s: s.done, everywhere=True, fair=["finish"]).ok

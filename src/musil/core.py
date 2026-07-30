@@ -92,7 +92,14 @@ class Model[S: Hashable]:
 
 def _is_state_collection(init: object) -> bool:
     """A list/tuple/set/generator of states means 'several initial states'. A frozen dataclass (the
-    usual single state) is not treated as a collection even though some are technically iterable."""
+    usual single state) is not treated as a collection even though some are technically iterable.
+
+    A ``str`` (so also a ``StrEnum`` member, and ``bytes``) is one state and never a collection of
+    them, even though iterating it succeeds. Without this the check runs happily on a model whose
+    states are the *characters* of the intended one and reports nothing wrong, which is the worst
+    kind of wrong -- a green result for a question nobody asked."""
+    if isinstance(init, (str, bytes)):
+        return False
     return isinstance(init, (list, tuple, set, frozenset)) or (
         hasattr(init, "__iter__") and not hasattr(init, "__dataclass_fields__")
     )
@@ -295,6 +302,91 @@ def explore[S: Hashable](
         edges={s: tuple(out) for s, out in seen.items()},
         truncated=truncated,
     )
+
+
+def reaches[S: Hashable](graph: Graph[S], predicate: Callable[[S], bool]) -> frozenset[S]:
+    """The states of ``graph`` from which a ``predicate``-satisfying state is reachable (states
+    already satisfying it included) — plain reachability, by BFS over the reversed edges.
+
+    This is the *weaker* cousin of liveness: "can it still get there?", not "must it get there?".
+    ``reaches(g, p) == set(g.states)`` says the goal stays available from every reachable state
+    (in CTL terms: AG EF p) — e.g. "``fmi3FreeInstance`` is legal in every mode" — whereas
+    ``check_liveness(..., everywhere=True)`` demands every run *actually* reach it (AG AF p): a
+    cycle that forever declines an available exit toward p violates the latter, never the former.
+    The complement ``set(graph.states) - reaches(graph, p)`` is the trap — reachable states from
+    which p is already lost."""
+    rev: dict[S, list[S]] = {s: [] for s in graph.states}
+    for s in graph.states:
+        for _a, t in graph.edges[s]:
+            rev[t].append(s)
+    seen = {s for s in graph.states if predicate(s)}
+    frontier = list(seen)
+    head = 0
+    while head < len(frontier):
+        s = frontier[head]
+        head += 1
+        for p in rev[s]:
+            if p not in seen:
+                seen.add(p)
+                frontier.append(p)
+    return frozenset(seen)
+
+
+@dataclass(frozen=True, slots=True)
+class FixedPoints[S: Hashable]:
+    """Where the system settles: for each initial state, the distinct terminal states (no outgoing
+    edge) reachable from it. Built by ``fixed_points``; ``confluent`` is the headline question."""
+
+    by_init: Mapping[S, frozenset[S]]
+    truncated: bool = False
+
+    @property
+    def confluent(self) -> bool:
+        """True when every single initial state settles in at most one place — the fixed point does
+        not depend on the order actions fired. A start with an *empty* set never settles at all (it
+        can only loop); that is a liveness question, not a confluence one, and does not count
+        against confluence. False whenever ``truncated`` (inconclusive)."""
+        return not self.truncated and all(len(t) <= 1 for t in self.by_init.values())
+
+    def __str__(self) -> str:
+        if self.truncated:
+            return "FIXED POINTS INCONCLUSIVE (truncated at max_states)"
+        lines = [
+            f"  {init} settles in {len(terms)} place(s)" for init, terms in self.by_init.items()
+        ]
+        head = "CONFLUENT" if self.confluent else "NOT CONFLUENT (an initial state has a choice)"
+        return "\n".join([head, *lines])
+
+
+def fixed_points[S: Hashable](
+    model: Model[S],
+    *,
+    max_states: int = 1_000_000,
+    canonicalize: Callable[[S], S] | None = None,
+) -> FixedPoints[S]:
+    """From each initial state separately: in which distinct terminal states can the runs end?
+    One start that can settle in two different places means the outcome depends on the order
+    actions fired — the bug this exists to catch (e.g. event iteration whose fixed point depends
+    on which pending event is applied first). Per initial state on purpose: different starts are
+    *allowed* to settle differently (that is what a latch is for); ``confluent`` only demands each
+    single start settle in at most one place.
+
+    Terminal here is structural — no outgoing edge — independent of ``model.terminal``: the
+    question is where the dynamics stop, not which stops are declared legitimate. A start mapped
+    to an empty set never settles (every path loops); ask ``check_liveness`` about that instead.
+    ``canonicalize`` applies symmetry reduction (see ``check``). If any exploration hits
+    ``max_states`` the result is inconclusive: ``truncated`` is set and ``confluent`` is False."""
+    by_init: dict[S, frozenset[S]] = {}
+    truncated = False
+    for s0 in model.initial_states():
+        g = explore(
+            Model(init=(s0,), actions=model.actions),
+            max_states=max_states,
+            canonicalize=canonicalize,
+        )
+        truncated = truncated or g.truncated
+        by_init[g.initial[0]] = frozenset(s for s in g.states if not g.edges[s])
+    return FixedPoints(by_init=by_init, truncated=truncated)
 
 
 def symmetry_reduction_sound[S: Hashable](

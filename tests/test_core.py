@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from enum import StrEnum
 
 from musil import Action, Invariant, Model, check
 
@@ -61,6 +62,38 @@ def test_terminal_sink_is_not_a_deadlock() -> None:
         actions=[Action("off", lambda s: s.color == "red", lambda _s: Light("off"))],
         terminal=lambda s: s.color == "off",
     )
+    assert check(model).ok
+
+
+def test_a_string_state_is_one_state_not_its_characters() -> None:
+    """A ``str`` is iterable, so the "several initial states" heuristic used to take one apart.
+
+    That is the worst shape of bug a checker can have: it did not fail, it checked the model
+    whose states are ``"r"``, ``"e"``, ``"d"`` and reported OK. A ``StrEnum`` is the common way
+    to spell the states of a protocol, so this is not a corner.
+    """
+    colors = Model(
+        init="red",
+        actions=[Action("go", lambda s: s == "red", lambda _s: "green")],
+        terminal=lambda s: s == "green",
+    )
+    assert colors.initial_states() == ("red",)
+    result = check(colors)
+    assert result.ok
+    assert result.states_explored == 2
+
+
+def test_a_strenum_state_survives_being_an_enum_and_a_string() -> None:
+    class Light(StrEnum):
+        RED = "red"
+        GREEN = "green"
+
+    model = Model(
+        init=Light.RED,
+        actions=[Action("go", lambda s: s is Light.RED, lambda _s: Light.GREEN)],
+        terminal=lambda s: s is Light.GREEN,
+    )
+    assert model.initial_states() == (Light.RED,)
     assert check(model).ok
 
 
@@ -206,3 +239,105 @@ def test_invariant_from_violations_adapts_a_checker() -> None:
     )
     vs = reachable_violations(model)
     assert len(vs) == 1 and vs[0].reason == "rule:yellow-is-bad"
+
+
+def test_reaches_returns_states_that_can_still_get_to_goal() -> None:
+    from musil import explore, reaches
+
+    # red -> green -> yellow -> red cycle, plus a trap door: green -> off (absorbing).
+    model = Model(
+        init=Light("red"),
+        actions=[
+            Action("go", lambda s: s.color == "red", lambda _s: Light("green")),
+            Action("slow", lambda s: s.color == "green", lambda _s: Light("yellow")),
+            Action("stop", lambda s: s.color == "yellow", lambda _s: Light("red")),
+            Action("kill", lambda s: s.color == "green", lambda _s: Light("off")),
+        ],
+        terminal=lambda s: s.color == "off",
+    )
+    g = explore(model)
+    can = reaches(g, lambda s: s.color == "yellow")
+    assert can == {Light("red"), Light("green"), Light("yellow")}
+    # the complement is the trap: from off, yellow is lost forever.
+    assert set(g.states) - can == {Light("off")}
+
+
+def test_reaches_available_from_everywhere_idiom() -> None:
+    from musil import explore, reaches
+
+    # "the goal stays available from every reachable state" — the fmi3FreeInstance question.
+    model = Model(
+        init=Light("red"),
+        actions=[
+            Action("go", lambda s: s.color == "red", lambda _s: Light("green")),
+            Action("back", lambda s: s.color == "green", lambda _s: Light("red")),
+            Action("kill", lambda s: s.color != "off", lambda _s: Light("off")),
+        ],
+        terminal=lambda s: s.color == "off",
+    )
+    g = explore(model)
+    assert reaches(g, lambda s: s.color == "off") == set(g.states)
+
+
+def test_fixed_points_different_starts_may_settle_differently() -> None:
+    from musil import fixed_points
+
+    # a latch: two starts settle in different places, but each start deterministically.
+    model = Model(
+        init=[Light("red"), Light("green")],
+        actions=[
+            Action("r-done", lambda s: s.color == "red", lambda _s: Light("red-done")),
+            Action("g-done", lambda s: s.color == "green", lambda _s: Light("green-done")),
+        ],
+    )
+    fp = fixed_points(model)
+    assert fp.by_init == {
+        Light("red"): frozenset({Light("red-done")}),
+        Light("green"): frozenset({Light("green-done")}),
+    }
+    assert fp.confluent
+
+
+def test_fixed_points_detects_order_dependent_settlement() -> None:
+    from musil import fixed_points
+
+    # two racing steps from one start, each disabling the other: where it settles depends on
+    # which fired first — the confluence bug.
+    model = Model(
+        init=Light("red"),
+        actions=[
+            Action("a", lambda s: s.color == "red", lambda _s: Light("a-done")),
+            Action("b", lambda s: s.color == "red", lambda _s: Light("b-done")),
+        ],
+    )
+    fp = fixed_points(model)
+    assert fp.by_init[Light("red")] == {Light("a-done"), Light("b-done")}
+    assert not fp.confluent
+    assert "NOT CONFLUENT" in str(fp)
+
+
+def test_fixed_points_never_settling_start_is_liveness_not_confluence() -> None:
+    from musil import fixed_points
+
+    # a pure cycle has no terminal state: empty set, still confluent — never settling is a
+    # liveness question, not a confluence one.
+    model = Model(
+        init=Light("red"),
+        actions=[
+            Action("go", lambda s: s.color == "red", lambda _s: Light("green")),
+            Action("back", lambda s: s.color == "green", lambda _s: Light("red")),
+        ],
+    )
+    fp = fixed_points(model)
+    assert fp.by_init[Light("red")] == frozenset()
+    assert fp.confluent
+
+
+def test_fixed_points_truncated_is_inconclusive() -> None:
+    from musil import fixed_points
+
+    # an unbounded counter: truncation makes the terminal sets unreliable, so confluent is False.
+    model = Model(init=0, actions=[Action("inc", lambda _s: True, lambda s: s + 1)])
+    fp = fixed_points(model, max_states=3)
+    assert fp.truncated
+    assert not fp.confluent

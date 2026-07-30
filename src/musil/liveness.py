@@ -22,7 +22,7 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass
 
-from musil.core import Graph, Model, Step, explore, format_trace
+from musil.core import Model, Step, explore, format_trace, reaches
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,8 +73,12 @@ def check_liveness[S: Hashable](
     """Prove a liveness property and return a lasso counterexample if it fails.
 
     Default (``everywhere=False``) checks ``<>P`` — *eventually* P on every run from an initial
-    state. ``everywhere=True`` checks ``[]<>P`` — *always eventually* P, i.e. from EVERY reachable
-    state P is still eventually reached (the system always re-converges; no reachable stale cycle).
+    state. ``everywhere=True`` checks ``[]<>P`` — on every run, *always eventually* P: past any
+    point of any run, P must actually be reached again. This is NOT reachability: a reachable
+    cycle that forever declines to move toward P is a violation even when P stays reachable from
+    every state on it — declare the exit in ``fair=[...]`` if a fair scheduler would eventually
+    take it. For the weaker "P merely remains reachable from every state" (AG EF, no state is ever
+    *trapped*), use ``reaches``: ``reaches(g, goal) == set(g.states)`` with ``g = explore(model)``.
     Use ``everywhere=True`` for convergence/recurrence properties whose model may start already
     satisfying P.
 
@@ -124,7 +128,7 @@ def check_liveness[S: Hashable](
     bad_succ: dict[S, list[tuple[str, S]]] = {
         s: [(a, t) for (a, t) in g.edges[s] if t in reachable_bad] for s in reachable_bad
     }
-    can_reach_goal = _backward_reachable_to_goal(g, goal)
+    can_reach_goal = reaches(g, goal)
 
     # (1) a reachable ¬P state from which P can never be reached — unconditional violation.
     for s in order:  # BFS order → shortest stem
@@ -146,25 +150,6 @@ def check_liveness[S: Hashable](
             )
 
     return LivenessResult(ok=True, states_explored=len(g.states), goal=goal_name, truncated=g.truncated)
-
-
-def _backward_reachable_to_goal[S: Hashable](g: Graph[S], goal: Callable[[S], bool]) -> set[S]:
-    """States from which some goal state is reachable (goal states included)."""
-    rev: dict[S, list[S]] = {s: [] for s in g.states}
-    for s in g.states:
-        for _a, t in g.edges[s]:
-            rev[t].append(s)
-    seen = {s for s in g.states if goal(s)}
-    frontier = list(seen)
-    head = 0
-    while head < len(frontier):
-        s = frontier[head]
-        head += 1
-        for p in rev[s]:
-            if p not in seen:
-                seen.add(p)
-                frontier.append(p)
-    return seen
 
 
 def _has_internal_edge[S: Hashable](scc: set[S], succ: Mapping[S, list[tuple[str, S]]]) -> bool:

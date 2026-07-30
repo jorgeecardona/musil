@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from musil import (
     Model,
     check,
     declared_states,
+    explore,
     multi_status_field_actions,
+    protocol_actions,
+    protocol_operations,
     status_field_actions,
     terminal_states,
     transition_actions,
@@ -93,3 +97,66 @@ def test_multi_status_field_actions_drives_several_machines() -> None:
     assert result.ok
     # |reachable a| * |reachable b| = 2 (pending,active) * 3 (pending,on,off) = 6
     assert result.states_explored == 6
+
+
+# --- protocol tables: edges labelled by the operation, not just by the target ------------------
+
+
+class Handshake(StrEnum):
+    START = "start"
+    OFFERED = "offered"
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+PROTOCOL: dict[Handshake, dict[str, Handshake | None]] = {
+    Handshake.START: {"hello": Handshake.OFFERED, "log": None},
+    Handshake.OFFERED: {"accept": Handshake.OPEN, "reject": Handshake.CLOSED, "log": None},
+    Handshake.OPEN: {"send": None, "close": Handshake.CLOSED},
+    Handshake.CLOSED: {},
+}
+
+
+def _protocol_model() -> Model[Handshake]:
+    return Model(
+        init=[Handshake.START],
+        actions=protocol_actions(PROTOCOL, get=lambda s: s, with_state=lambda _s, t: t),
+        terminal=lambda s: s is Handshake.CLOSED,
+    )
+
+
+def test_protocol_actions_build_one_action_per_moving_operation() -> None:
+    names = {action.name for action in _protocol_model().actions}
+    assert names == {
+        "hello in start",
+        "accept in offered",
+        "reject in offered",
+        "close in open",
+    }, "operations that do not move must not become actions"
+
+
+def test_a_protocol_table_drives_a_check() -> None:
+    result = check(_protocol_model())
+    assert result.ok, str(result)
+    assert result.states_explored == len(Handshake)
+
+
+def test_a_state_nothing_can_enter_is_visible_in_the_reachable_set() -> None:
+    """The reason to check a transcribed specification at all: an unreachable state is a
+    transcription error, and reading the table will not show it to you."""
+    orphan = dict(PROTOCOL)
+    orphan[Handshake.OFFERED] = {"log": None}  # nothing accepts or rejects any more
+    model = Model(
+        init=[Handshake.START],
+        actions=protocol_actions(orphan, get=lambda s: s, with_state=lambda _s, t: t),
+        terminal=lambda s: s in {Handshake.CLOSED, Handshake.OFFERED},
+    )
+    reached = set(explore(model).states)
+    assert Handshake.OPEN not in reached
+    assert Handshake.CLOSED not in reached
+
+
+def test_protocol_operations_lists_what_a_guard_would_allow() -> None:
+    """Including the ones that do not move -- a guard has to know about those too."""
+    assert protocol_operations(PROTOCOL, Handshake.OPEN) == frozenset({"send", "close"})
+    assert protocol_operations(PROTOCOL, Handshake.CLOSED) == frozenset()

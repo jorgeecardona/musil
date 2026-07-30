@@ -4,6 +4,58 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `reaches` and `fixed_points`: reachability and confluence as first-class results
+
+- `reaches(graph, predicate)` — the states from which a matching state is still reachable (BFS
+  over the reversed edges), with the complement being the *trap*. The weaker cousin of liveness:
+  "can it still get there?" (AG EF) rather than "must it get there?" (AG AF). `reaches(g, p) ==
+  set(g.states)` says the goal stays available from every reachable state — e.g. "`fmi3FreeInstance`
+  is legal in every FMI mode". Users were hand-rolling exactly this reverse BFS; `check_liveness`
+  now uses it internally too.
+- `fixed_points(model)` — for each initial state *separately*, the distinct terminal states (no
+  outgoing edge) its runs can end in. `.confluent` asserts no single start can settle in two
+  different places, i.e. the fixed point does not depend on the order actions fired — validating,
+  e.g., that event iteration is order-independent when nothing chooses the order on purpose.
+  Per start deliberately: different starts settling differently is what a latch is for.
+- Both prompted by feedback from modelling the FMI 3.0 calling sequence and event iteration in
+  [pymodelica](https://gitlab.com/jorgeecardona/pymodelica).
+
+### Fixed — `everywhere=True` documentation described a different (weaker) property
+
+- README and the `check_liveness` docstring said "from any reachable state, P must always still be
+  *reachable*" — which reads as reachability (AG EF). The implementation checks *always eventually*
+  P (AG AF): a reachable cycle that never reaches P is a violation even when P stays reachable
+  from inside it, unless fairness rules the loop out. The checker was right and the prose was
+  wrong — a user modelling FMI wrote the wrong property from the old wording. The prose now states
+  the checked property and points to `reaches` for the weaker question.
+
+### Added — `protocol_actions`: transition tables whose edges are labelled by the call
+
+- `transition_actions` covers `{state: {states it may become}}`. A *published protocol* has a
+  different shape: `{state: {operation: where it leaves you}}`, where the edges are labelled by the
+  call and most calls are legal without moving at all. `protocol_actions` builds a model from that
+  table directly, and `protocol_operations(table, state)` lists what a runtime guard should allow.
+- The zero-drift argument, one level up: a protocol table is what a guard needs anyway — "is this
+  call legal here, and where does it leave me" — so pointing the checker at it means the sequence
+  being verified is the sequence being enforced, not a second description of it.
+- Motivated by the FMI 3.0 calling sequence in
+  [pymodelica](https://gitlab.com/jorgeecardona/pymodelica), where one table has to serve an
+  exported FMU's guard, an importer's driver and the checker. Its first useful answer there was
+  "this mode is unreachable" — a state transcribed from the specification into the wrong
+  interface's table, which reading it will not show you.
+
+### Fixed — a `str` (or `StrEnum`) state was taken apart into its characters
+
+- `Model(init="red", ...)` was read as *four* initial states — `"r"`, `"e"`, `"d"` — because the
+  "several initial states" heuristic accepted anything iterable that was not a dataclass. It did
+  not raise; it checked a different model and reported OK, which is the worst way for a checker to
+  be wrong. `str` and `bytes` are now always one state.
+- This bites hardest exactly where a plain-string state is most natural: a `StrEnum` naming the
+  states of a published protocol (`Instantiated`, `Event Mode`, …), which is a `str` subclass. Found
+  while modelling the FMI 3.0 calling sequence in
+  [pymodelica](https://gitlab.com/jorgeecardona/pymodelica), where every mode came back
+  "unreachable" and the states were single letters.
+
 ## [0.6.0] - 2026-06-28
 
 ### Added — leader-election and vote-tallying examples

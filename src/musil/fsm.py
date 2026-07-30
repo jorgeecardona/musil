@@ -73,6 +73,57 @@ def multi_status_field_actions(tables: Mapping[str, Table]) -> list[Action[Any]]
     return actions
 
 
+# A protocol table: state -> operation -> where that operation leaves you, or None for "legal
+# here and does not move". This is the shape a published calling sequence actually has (FMI's
+# `fmi3*`-per-mode tables, a TLS handshake, an HTTP upgrade dance): the edges are *labelled by
+# the call*, and most calls are legal without changing the state. `Table` cannot express that —
+# it only says which states follow which — so the two live side by side.
+type Protocol[T] = Mapping[T, Mapping[str, T | None]]
+
+
+def protocol_actions[S: Hashable, T](
+    table: Protocol[T],
+    *,
+    get: Callable[[S], T],
+    with_state: Callable[[S, T], S],
+    name: Callable[[T, str], str] = lambda state, operation: f"{operation} in {state}",
+) -> list[Action[S]]:
+    """One Action per ``(state, operation)`` that moves, from a table of legal operations.
+
+    The zero-drift argument, one level up from :func:`transition_actions`: a protocol table is
+    what a *guard* needs anyway — "is this call legal where I am, and where does it leave me" —
+    so pointing the checker at the same table means the sequence being verified is the sequence
+    being enforced, not a second description of it.
+
+    Operations mapped to ``None`` produce no action. They are legal and they stay put, so they
+    add nothing to the reachable state space; a guard still has to know about them, which is why
+    they belong in the table rather than being left out of it.
+
+    ``get`` reads the protocol state out of your state; ``with_state`` returns a new one with it
+    replaced. For a model whose state *is* the protocol state, those are ``lambda s: s`` and
+    ``lambda _s, t: t``.
+    """
+    actions: list[Action[S]] = []
+    for state, operations in table.items():
+        for operation, target in operations.items():
+            if target is None or target == state:
+                continue
+            actions.append(
+                Action(
+                    # default-arg capture pins state/target per loop iteration (late-binding).
+                    name=name(state, operation),
+                    enabled=lambda s, _f=state: get(s) == _f,
+                    apply=lambda s, _t=target: with_state(s, _t),
+                )
+            )
+    return actions
+
+
+def protocol_operations[T](table: Protocol[T], state: T) -> frozenset[str]:
+    """Every operation legal in ``state``, moving or not — what a guard checks against."""
+    return frozenset(table.get(state, {}))
+
+
 def declared_states(table: Table) -> set[str]:
     """Every state named in the table — sources (keys) plus every target."""
     return set(table) | {dst for dsts in table.values() for dst in dsts}
