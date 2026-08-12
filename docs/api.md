@@ -26,6 +26,14 @@ Model a message channel (reliable / lossy / duplicating; unordered, so reorderin
 
 ::: musil.channels
 
+## Clock — `bounded_clock`
+
+A discrete clock bounded at a declared horizon, so a timeout model stays finite by construction
+instead of by hitting `max_states` — and `binding()` says whether the bound was reached, i.e.
+whether a green result covers the whole model or only the first `horizon` ticks.
+
+::: musil.clock
+
 ## FSM bridge — `transition_actions`, `status_field_actions`
 
 Build a model straight from an allowed-transitions table, so it can't drift from the code.

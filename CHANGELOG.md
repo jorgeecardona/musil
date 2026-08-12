@@ -4,6 +4,30 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `bounded_clock`: timeouts in the explicit-state layer, finite by construction
+
+- `sim` has a virtual clock; `Model`/`Action` had none, so every timeout model (a wait with a
+  deadline, a retry ladder that gives up) hand-rolled a tick action plus a bound. The bound is the
+  easy thing to get wrong and getting it wrong is quiet: an unbounded clock does not fail, it hits
+  `max_states` and returns `Result(ok=True, truncated=True)` — which reads as success to `if result:`
+  and prints as `OK — 1000000 states, no violations (TRUNCATED at cap)`.
+- `bounded_clock(get=..., put=..., horizon=..., name="clock")` returns a `BoundedClock` with the tick
+  `action` (enabled exactly while `now < horizon`, so the clock adds `horizon + 1` values — linear,
+  and finite by construction), `now`, and `at_horizon`. Same `get`/`put` accessor style as the
+  channel kit; the clock lives in a field of your own state.
+- `clock.binding(graph)` answers the question a bound raises: **was the horizon reached?** False means
+  the model finished on its own and a green result is about the whole model. True means the green
+  result only says "no violation within `horizon` ticks" — a weaker claim that should not be quoted
+  as the stronger one. A test shows the case where no horizon is large enough, because the model can
+  always tick: the answer is to change the model, not the number.
+- Deadlines stay ordinary guards over `now` (`s.now >= armed_at + delay`); this supplies the time
+  they read and the bound that keeps them finite, not the timeout semantics.
+- `terminal=clock.at_horizon` is expected: at the bound the tick is disabled, so a state whose only
+  move was the tick has none left and `check` calls it a deadlock. Forgetting it therefore fails
+  loudly with a trace ending at the horizon rather than answering something wrong quietly, and a test
+  pins that behaviour.
+- Prompted by [issue #1](https://gitlab.com/jorgeecardona/musil/-/work_items/1), item 3.
+
 ### Added — `areplay` and `acheck_refinement`: hold an *async* implementation to the model
 
 - `areplay(traces, step_fn=..., project=..., start=...)` — `replay` for a real system that has to be

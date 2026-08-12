@@ -26,6 +26,7 @@ concurrent actors) for the first invariant violation or deadlock, with the short
 """
 
 from musil.channels import channel_actions, fifo_channel_actions, fifo_send, send
+from musil.clock import BoundedClock, bounded_clock
 from musil.compose import Composite, compose
 from musil.conformance import (
     ConformanceResult,
@@ -101,6 +102,7 @@ __all__ = [
     "AdversarialNode",
     "Assumption",
     "BaseNode",
+    "BoundedClock",
     "Composite",
     "ConformanceResult",
     "Context",
@@ -133,6 +135,7 @@ __all__ = [
     "acheck_refinement",
     "areplay",
     "assert_ok",
+    "bounded_clock",
     "channel_actions",
     "check",
     "check_liveness",
