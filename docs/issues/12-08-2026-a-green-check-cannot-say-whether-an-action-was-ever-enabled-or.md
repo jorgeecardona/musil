@@ -1,9 +1,10 @@
 ---
 title: A green check cannot say whether an action was ever enabled or an invariant ever exercised
-status: in-progress
+status: done
 area: metrics
 owner: sleek-ultron-08f00
 filed: 2026-08-12
+fixed_in: 79296a0
 scope: S
 verify: test
 ---
