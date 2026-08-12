@@ -96,6 +96,7 @@ from musil.sim import (
     Simulator,
     simulate,
 )
+from musil.symmetry import canonical_by_permutations, canonical_by_sorting
 
 __all__ = [
     "Action",
@@ -136,6 +137,8 @@ __all__ = [
     "areplay",
     "assert_ok",
     "bounded_clock",
+    "canonical_by_permutations",
+    "canonical_by_sorting",
     "channel_actions",
     "check",
     "check_liveness",

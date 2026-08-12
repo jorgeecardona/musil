@@ -8,6 +8,14 @@ The model definition and the safety/deadlock/reachability checker.
 
 ::: musil.core
 
+## Symmetry — `canonical_by_sorting`, `canonical_by_permutations`
+
+Build the `canonicalize` that `check`/`explore` take, instead of hand-writing it. Sort the slices
+when the components are anonymous; relabel the whole state under each permutation when something
+names one. Either way, `symmetry_reduction_sound` still has to pass on a small instance first.
+
+::: musil.symmetry
+
 ## Liveness — `check_liveness`
 
 Eventually (`<>P`) and always-eventually (`[]<>P`) under weak and strong fairness.

@@ -4,6 +4,32 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `canonical_by_sorting` / `canonical_by_permutations`: derive the symmetry reduction
+
+- `check(model, canonicalize=...)` has always accepted a symmetry reduction and
+  `symmetry_reduction_sound` has always been able to *grade* one. The step between was missing:
+  turning "these N components are interchangeable" into the function. Hand-writing it is where the
+  mistakes live, and an unsound canonicalizer silently drops reachable states.
+- `canonical_by_sorting(get=..., put=...)` sorts the per-component slices — O(N log N), the one that
+  scales. For N workers over 3 values it turns `3 ** N` states into the multisets of size N: 243 → 21
+  at N=5. Tested at N ∈ {3, 4, 5} against the exact combinatorial count, with
+  `symmetry_reduction_sound` asserted in the same test, because a reduction that shrinks and lies is
+  worthless.
+- `canonical_by_permutations(identities, relabel)` takes the orbit minimum under every permutation —
+  correct when something *names* a component (a leader index, an owner, a route id in a message),
+  where sorting breaks the reference while leaving the state well-formed. Factorial in the number of
+  identities, so `max_permutations` (default 5040 = 7!) makes that a loud error naming the sorting
+  alternative rather than a hang.
+- Three tests make the distinction concrete on one model whose `leader` field indexes the workers:
+  sorting *invents* a violation the real model never has (and the gate rejects it), a relabel that
+  moves the counts but forgets the leader fails the same way, and the full relabel is sound and
+  reduces.
+- Neither construction removes the obligation to run `symmetry_reduction_sound` on a small instance
+  first. A model that grows a `leader` field next year makes a previously-sound sort unsound, and
+  nothing about the sort itself changes to say so.
+- Prompted by [issue #1](https://gitlab.com/jorgeecardona/musil/-/work_items/1), item 2. Partial-order
+  reduction stays deferred (REDUCTION_NOTES.md); symmetry pays off sooner for these models.
+
 ### Added — `bounded_clock`: timeouts in the explicit-state layer, finite by construction
 
 - `sim` has a virtual clock; `Model`/`Action` had none, so every timeout model (a wait with a
