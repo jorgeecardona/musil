@@ -84,6 +84,14 @@ guarantees into the invariants. The result surface all `Assumption` objects that
 
 ::: musil.env
 
+## Metrics & coverage — `state_space_metrics`, `coverage`, `solution_cardinality`
+
+How big and how branchy a design's reachable behaviour is, how many reachable states satisfy a goal,
+and — because a green `check` does not say the behaviour you wrote was ever explored — which actions
+never fired, were always enabled, or only ever self-looped.
+
+::: musil.metrics
+
 ## Graph export — `to_dot`, `explore`
 
 The reachable state graph and its Graphviz DOT rendering.

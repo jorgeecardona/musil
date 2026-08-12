@@ -68,7 +68,10 @@ from musil.fsm import (
 from musil.graph import to_dot
 from musil.liveness import LivenessResult, check_liveness
 from musil.metrics import (
+    Coverage,
     StateSpaceMetrics,
+    coverage,
+    coverage_of,
     metrics_of,
     solution_cardinality,
     state_space_metrics,
@@ -107,6 +110,7 @@ __all__ = [
     "Composite",
     "ConformanceResult",
     "Context",
+    "Coverage",
     "Crash",
     "Divergence",
     "Envelope",
@@ -145,6 +149,8 @@ __all__ = [
     "check_open",
     "check_refinement",
     "compose",
+    "coverage",
+    "coverage_of",
     "declared_states",
     "explore",
     "fifo_channel_actions",

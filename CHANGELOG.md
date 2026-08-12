@@ -4,7 +4,29 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
-_Nothing yet._
+### Added — `coverage`: a green `check` does not say your behaviour was ever explored
+
+- `coverage(model)` / `coverage_of(graph, model)` report, over the reachable graph, the actions that
+  are **never enabled** (dead — a guard bug that silently removes an interleaving the author believed
+  was covered), **always enabled** (the guard never guards), and **only ever self-looping** (fires,
+  changes nothing). Sets of names, not accusations: an always-enabled `Idle` or adversarial `crash`
+  is legitimate, and only the author knows which.
+- Reads the graph's recorded edges rather than re-calling `enabled`, so it is O(edges) and stays
+  correct under symmetry reduction — a reduced graph stores canonical successors, so re-applying the
+  actions and comparing would misjudge which firings moved. A test pins that against
+  `canonical_by_sorting`.
+- Deliberately **not** a field on `Result`: `check` early-exits at the first violation, so the graph
+  it saw is partial and coverage computed from it would be wrong in the direction that matters —
+  actions look dead because the sweep stopped, not because they cannot fire.
+- Under `truncated`, `dead_actions` means only *not yet seen enabled*; the rendering says
+  `COVERAGE INCONCLUSIVE` rather than calling anything dead.
+- `musil.metrics` also reaches the API docs for the first time — it had no section in `api.md`, so
+  `state_space_metrics`, `metrics_of` and `solution_cardinality` were undocumented on the site too.
+- From [issue #2](https://gitlab.com/jorgeecardona/musil/-/work_items/2), item 1. The vacuity half of
+  that item was dropped with the reason recorded: it proposed flagging invariants that hold across
+  the whole reachable space, but in a passing model *every* invariant does — the signal would fire on
+  every healthy model. Real vacuity detection needs the invariant's antecedent, and musil invariants
+  are opaque callables.
 
 ## [0.11.0] - 2026-08-12
 
