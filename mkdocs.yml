@@ -39,6 +39,13 @@ markdown_extensions:
       base_path: [".", "docs"]
       check_paths: true
 
+# docs/issues/ is the follow-up register (`cabildo issues`), not published documentation: it lives
+# under docs/ to be read in the repo, and its links point at source files (../../src/musil/core.py)
+# that are not part of the site. Building it would fail --strict on every one of those, so it is
+# excluded here rather than having the register write links that resolve for mkdocs but not on disk.
+exclude_docs: |
+  issues/
+
 plugins:
   - search
   - mkdocstrings:
