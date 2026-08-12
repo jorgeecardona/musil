@@ -1,9 +1,10 @@
 ---
 title: "Symmetry reduction can be validated but not derived: no way to explore modulo a permutation group"
-status: open
+status: done
 area: core
-owner: null
+owner: sleek-ultron-08f00
 filed: 2026-08-12
+fixed_in: 2c1701a
 scope: L
 verify: test
 ---

@@ -1,9 +1,10 @@
 ---
 title: conformance.replay and RefinementMonitor are sync-only, so an async implementation cannot be driven
-status: open
+status: done
 area: conformance
-owner: null
+owner: sleek-ultron-08f00
 filed: 2026-08-12
+fixed_in: 0009b98
 scope: S
 verify: test
 ---

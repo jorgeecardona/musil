@@ -1,9 +1,10 @@
 ---
 title: "A failing check inside pytest elides the counterexample: assert renders Result's repr, not its trace"
-status: in-progress
+status: done
 area: core
 owner: sleek-ultron-08f00
 filed: 2026-08-12
+fixed_in: 133f59c
 scope: XS
 verify: test
 ---

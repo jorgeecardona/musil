@@ -1,9 +1,10 @@
 ---
 title: The explicit-state layer has no clock, so every timeout model hand-rolls a tick counter and a horizon
-status: open
+status: done
 area: core
-owner: null
+owner: sleek-ultron-08f00
 filed: 2026-08-12
+fixed_in: 95ebd5e
 scope: M
 verify: test
 ---

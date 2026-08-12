@@ -66,11 +66,7 @@ cabildo issues show <slug>
 <!-- BEGIN GENERATED INDEX — `cabildo issues reindex` -->
 | Issue | Area | Scope | Verify | Status | Waiting on |
 |---|---|---|---|---|---|
-| [conformance.replay and RefinementMonitor are sync-only, so an async implementation cannot be driven](12-08-2026-conformance-replay-and-refinementmonitor-are-sync-only-so-an-async-implementation-cannot.md) | conformance | S | test | open | — |
-| [A failing check inside pytest elides the counterexample: assert renders Result's repr, not its trace](12-08-2026-a-failing-check-inside-pytest-elides-the-counterexample-assert-renders-result-s.md) | core | XS | test | in-progress · @sleek-ultron-08f00 | — |
 | [Decide whether musil takes an optional Hypothesis dependency before building a strategy bridge](12-08-2026-decide-whether-musil-takes-an-optional-hypothesis-dependency-before-building-a-strategy.md) | core | M | inspect | open | — |
-| [Symmetry reduction can be validated but not derived: no way to explore modulo a permutation group](12-08-2026-symmetry-reduction-can-be-validated-but-not-derived-no-way-to-explore.md) | core | L | test | open | — |
-| [The explicit-state layer has no clock, so every timeout model hand-rolls a tick counter and a horizon](12-08-2026-the-explicit-state-layer-has-no-clock-so-every-timeout-model-hand.md) | core | M | test | open | — |
 
-_5 open — 4 open, 1 in-progress. Generated; edit the files, then `cabildo issues reindex`._
+_1 open — 1 open; 4 done. Generated; edit the files, then `cabildo issues reindex`._
 <!-- END GENERATED INDEX -->
