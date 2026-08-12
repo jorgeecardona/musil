@@ -398,6 +398,7 @@ def test_assert_ok_accepts_any_musil_result() -> None:
 
 def test_pytest_shows_the_whole_trace_through_assert_ok_and_elides_it_without() -> None:
     """The claim is about what the *runner* prints, so run pytest and read its output."""
+    import os
     import subprocess
     import sys
     import tempfile
@@ -434,9 +435,14 @@ def test_pytest_shows_the_whole_trace_through_assert_ok_and_elides_it_without() 
         proc = subprocess.run(
             [sys.executable, "-m", "pytest", str(path), "-p", "no:cacheprovider"],
             capture_output=True, text=True, cwd=Path(__file__).resolve().parent.parent,
+            env={**os.environ, "COLUMNS": "100"},  # pin the width; the summary is wrapped to it
         )
     out = proc.stdout
-    bare, via = out.split("_ test_via_assert_ok _", 1)
+    # the two FAILURES sections, without the trailing short-summary block -- that block repeats both
+    # failures on one line each, so leaving it in would put the bare test's repr inside `via`. It is
+    # also wrapped to the terminal width, which is how this first passed locally and failed in CI.
+    bare, rest = out.split("_ test_via_assert_ok _", 1)
+    via = rest.split("short test summary info", 1)[0]
 
     # bare assert: pytest renders the repr and elides its middle, losing the initial state
     assert "Step(action=" in bare
