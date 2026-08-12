@@ -341,3 +341,111 @@ def test_fixed_points_truncated_is_inconclusive() -> None:
     fp = fixed_points(model, max_states=3)
     assert fp.truncated
     assert not fp.confluent
+
+
+# --- assert_ok: the counterexample survives the test runner ------------------------------------
+
+
+def test_assert_ok_is_silent_on_a_passing_result() -> None:
+    from musil import assert_ok
+
+    assert assert_ok(check(_light_model())) is None
+
+
+def test_assert_ok_raises_with_the_rendered_trace_not_the_repr() -> None:
+    from musil import assert_ok
+
+    result = check(_light_model(invariant_ok=False))
+    try:
+        assert_ok(result)
+    except AssertionError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("assert_ok did not raise on a violated invariant")
+    assert message == str(result)
+    assert "INVARIANT VIOLATED: never-yellow" in message
+    assert "Init: Light(color='red')" in message  # the initial state, which the repr elides
+    assert "→ slow: Light(color='yellow')" in message
+    assert "Step(action=" not in message  # the raw repr form is gone
+
+
+def test_assert_ok_prefixes_a_caller_message() -> None:
+    from musil import assert_ok
+
+    try:
+        assert_ok(check(_light_model(invariant_ok=False)), "the 3-worker instance")
+    except AssertionError as exc:
+        assert str(exc).startswith("the 3-worker instance\nINVARIANT VIOLATED")
+    else:
+        raise AssertionError("assert_ok did not raise")
+
+
+def test_assert_ok_accepts_any_musil_result() -> None:
+    # Verdict is structural, so every result type satisfies it -- checked here against one from
+    # another module (a liveness result), not just core's Result.
+    from musil import assert_ok, check_liveness
+
+    live = check_liveness(_light_model(), goal=lambda s: s.color == "red")
+    assert assert_ok(live) is None
+    stuck = check_liveness(_light_model(), goal=lambda s: s.color == "blue")
+    try:
+        assert_ok(stuck)
+    except AssertionError as exc:
+        assert str(exc) == str(stuck)
+    else:
+        raise AssertionError("assert_ok did not raise on a liveness violation")
+
+
+def test_pytest_shows_the_whole_trace_through_assert_ok_and_elides_it_without() -> None:
+    """The claim is about what the *runner* prints, so run pytest and read its output."""
+    import subprocess
+    import sys
+    import tempfile
+    from pathlib import Path
+    from textwrap import dedent
+
+    source = dedent(
+        """
+        from dataclasses import dataclass
+
+        from musil import Action, Model, assert_ok, check
+
+        @dataclass(frozen=True)
+        class S:
+            n: int
+
+        MODEL = Model(
+            init=S(0),
+            actions=[Action("inc", lambda s: s.n < 5, lambda s: S(s.n + 1))],
+            invariants={"below-3": lambda s: s.n < 3},
+            terminal=lambda s: s.n >= 5,
+        )
+
+        def test_bare_assert() -> None:
+            assert check(MODEL)
+
+        def test_via_assert_ok() -> None:
+            assert_ok(check(MODEL))
+        """
+    )
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "test_generated.py"
+        path.write_text(source)
+        proc = subprocess.run(
+            [sys.executable, "-m", "pytest", str(path), "-p", "no:cacheprovider"],
+            capture_output=True, text=True, cwd=Path(__file__).resolve().parent.parent,
+        )
+    out = proc.stdout
+    bare, via = out.split("_ test_via_assert_ok _", 1)
+
+    # bare assert: pytest renders the repr and elides its middle, losing the initial state
+    assert "Step(action=" in bare
+    assert "..." in bare
+    assert "Init: S(n=0)" not in bare
+
+    # assert_ok: every step of the counterexample is there, and the Model repr is not
+    for line in ("INVARIANT VIOLATED: below-3", "Init: S(n=0)", "→ inc: S(n=1)", "→ inc: S(n=2)", "→ inc: S(n=3)"):
+        assert line in via, f"missing from pytest output: {line}"
+    assert "Step(action=" not in via
+    assert "<function <lambda>" not in via
+    assert "def assert_ok" not in via  # __tracebackhide__ keeps the helper's own frame out

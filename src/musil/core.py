@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import Protocol
 
 # A predicate that must hold in EVERY reachable state. Returns True when satisfied; False/None when
 # violated. May instead return a string, which signals a violation AND carries a human-readable
@@ -144,6 +145,40 @@ def format_trace[S: Hashable](trace: Iterable[Step[S]]) -> str:
         else:
             lines.append(f"  → {step.action}: {step.state}")
     return "\n".join(lines)
+
+
+class Verdict(Protocol):
+    """What ``assert_ok`` needs from a result: a boolean verdict and a renderer. Every musil result
+    type satisfies it structurally -- ``Result``, ``LivenessResult``, ``ConformanceResult``,
+    ``RefinementResult``, ``OpenResult``, ``SimReport``."""
+
+    @property
+    def ok(self) -> bool: ...
+
+    def __str__(self) -> str: ...
+
+
+def assert_ok(result: Verdict, message: str | None = None) -> None:
+    """Assert a result is OK, failing with its *rendered* form -- the counterexample, not the repr.
+
+    ``assert check(model)`` inside a test runner reports the result's **repr**, and pytest shortens a
+    long one by eliding its middle: the trace comes out as
+    ``trace=(Step(action='<init>', s...Step(action='inc', state=S(n=3)))``, with the initial state
+    cut, followed by the whole ``Model`` repr (lambda addresses included) as assertion context. The
+    counterexample is not merely ugly there, it is incomplete. This raises ``AssertionError(str(result))``
+    instead, so the failure message is the ``Init: ... -> action: ...`` rendering ``__str__`` already
+    produces. ``message`` is prefixed when the same assertion runs over several models.
+
+    Works on any musil result (they all carry ``ok`` and a meaningful ``__str__``), and needs no test
+    framework -- it is a plain ``AssertionError``, so ``unittest`` and bare ``assert`` get it too."""
+    # pytest hides a frame that sets this, which is the difference between a clean failure and one
+    # that reprints the elided repr as the helper's arguments. It is an ordinary local otherwise, so
+    # nothing here depends on pytest being installed.
+    __tracebackhide__ = True
+    if result.ok:
+        return
+    rendered = str(result)
+    raise AssertionError(f"{message}\n{rendered}" if message else rendered)
 
 
 def check[S: Hashable](

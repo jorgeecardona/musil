@@ -4,6 +4,24 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `assert_ok`: the counterexample survives the test runner
+
+- `assert_ok(result, message=None)` raises `AssertionError(str(result))`, so a failing check inside
+  a test reports the rendered trace (`INVARIANT VIOLATED: … / Init: … / → action: …`) instead of the
+  result's repr. `assert check(model)` reported the repr, and pytest shortens a long repr by eliding
+  its middle: the counterexample came out as `trace=(Step(action='<init>', s...Step(action='inc',
+  state=S(n=3)))` — the *initial state cut* — followed by the whole `Model` repr, lambda addresses
+  and all. The information was not merely ugly, it was incomplete.
+- Works on every musil result (`Result`, `LivenessResult`, `ConformanceResult`, `RefinementResult`,
+  `OpenResult`, `SimReport`) via the structural `Verdict` protocol, and sets `__tracebackhide__` so
+  pytest does not reprint the elided repr as the helper's own frame. Still no dependency: it raises
+  a plain `AssertionError`, so `unittest` and bare `assert` get the same message.
+- Prompted by feedback from adopting musil in a classifier workspace
+  ([issue #1](https://gitlab.com/jorgeecardona/musil/-/work_items/1), item 5). The pytest *plugin*
+  from that report was deliberately not built: an entry point would make pytest a packaging concern
+  of a package whose headline property is `dependencies = []`, and a plain function recovers the
+  elided trace, which was the entire measured defect.
+
 ### Added — `reaches` and `fixed_points`: reachability and confluence as first-class results
 
 - `reaches(graph, predicate)` — the states from which a matching state is still reachable (BFS
