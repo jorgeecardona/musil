@@ -8,9 +8,13 @@ refinement, and the oracle musil.sim uses to hold real code to a spec."""
 
 from __future__ import annotations
 
+import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 
-from musil import Action, Model, RefinementMonitor, check_refinement
+import pytest
+
+from musil import Action, Model, RefinementMonitor, acheck_refinement, check_refinement
 
 
 @dataclass(frozen=True)
@@ -76,3 +80,67 @@ def test_monitor_streams_one_observation_at_a_time() -> None:
     assert mon.observe(N(1)) is None
     v = mon.observe(N(0))  # 1 -> 0 is not a model edge
     assert v is not None and v.reason == "no-model-step"
+
+
+# --- async: an observation source that has to be awaited --------------------------------------
+
+
+async def _poll(values: list[int]) -> AsyncIterator[N]:
+    """An async source of observations -- a live service polled step by step, not a list collected
+    up front."""
+    for v in values:
+        await asyncio.sleep(0)
+        yield N(v)
+
+
+async def _aabstract(c: N) -> N:
+    """An abstraction that has to read the real system, so it awaits."""
+    await asyncio.sleep(0)
+    return c
+
+
+def test_acheck_refinement_accepts_a_faithful_async_run() -> None:
+    result = asyncio.run(acheck_refinement(_counter(), _poll([0, 1, 2]), _aabstract))
+    assert result.ok, str(result)
+    assert result.steps_checked == 3
+
+
+def test_acheck_refinement_catches_a_skipped_step() -> None:
+    result = asyncio.run(acheck_refinement(_counter(), _poll([0, 2]), _aabstract))
+    assert not result.ok
+    assert result.violation is not None
+    assert result.violation.reason == "no-model-step"
+
+
+def test_acheck_refinement_matches_the_sync_result() -> None:
+    observations = [0, 1, 1, 2]
+    sync = check_refinement(_counter(), [N(v) for v in observations], lambda c: c)
+    asyn = asyncio.run(acheck_refinement(_counter(), _poll(observations), _aabstract))
+    assert (sync.ok, sync.steps_checked) == (asyn.ok, asyn.steps_checked)
+
+
+def test_acheck_refinement_accepts_a_sync_abstraction() -> None:
+    result = asyncio.run(acheck_refinement(_counter(), _poll([0, 1, 2]), lambda c: c))
+    assert result.ok, str(result)
+
+
+def test_acheck_refinement_stops_polling_at_the_first_violation() -> None:
+    """The reason for streaming rather than collecting: a violation must stop the source, not be
+    found after the whole (possibly unbounded) run has been drained."""
+    polled: list[int] = []
+
+    async def source() -> AsyncIterator[N]:
+        for v in (0, 2, 1, 2):
+            polled.append(v)
+            await asyncio.sleep(0)
+            yield N(v)
+
+    result = asyncio.run(acheck_refinement(_counter(), source(), _aabstract))
+    assert not result.ok
+    assert polled == [0, 2]  # the source was never asked for the rest
+
+
+def test_observe_refuses_an_async_abstraction_instead_of_reporting_a_bogus_violation() -> None:
+    monitor: RefinementMonitor[N, N] = RefinementMonitor(_counter(), _aabstract)
+    with pytest.raises(TypeError, match="aobserve"):
+        monitor.observe(N(0))

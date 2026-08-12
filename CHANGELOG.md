@@ -4,6 +4,30 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `areplay` and `acheck_refinement`: hold an *async* implementation to the model
+
+- `areplay(traces, step_fn=..., project=..., start=...)` — `replay` for a real system that has to be
+  awaited. `step_fn` is awaited; `project` may be sync or a coroutine function (reading the real
+  system usually awaits too). Same arguments, same `ConformanceResult`, same divergence indices.
+- `RefinementMonitor.aobserve` and `acheck_refinement(model, observations, abstraction)` over an
+  `AsyncIterable` — for observations that are *produced* by awaiting (polling a live service, an
+  async generator) rather than collected into a list first. Streaming matters beyond convenience: a
+  violation stops the polling instead of being found after an unbounded run has been drained.
+- The abstraction may now be async; `RefinementMonitor.observe` raises `TypeError` pointing at
+  `aobserve` when handed one, rather than abstracting every observation to a coroutine object and
+  reporting a bogus `unknown-state` violation.
+- Why it was needed: the sync `replay` forces one `asyncio.run` per step. That cannot be called from
+  a running loop, so no `async def` test can use it — and it gives every step its own event loop, so
+  a connection pool or open transaction created in one step is dead in the next. A test asserts both
+  halves: the workaround raises `RuntimeError` inside a coroutine, and `areplay` runs a whole trace
+  on the loop that opened the connection.
+- `replay` and `areplay` drive one shared loop (`_drive`, a sans-io generator): the trace
+  bookkeeping, the step counters and the divergence report exist once and cannot drift apart. A test
+  asserts the two agree on `trace_index`, `step_index`, `action`, `expected`, `actual` and
+  `steps_run` for the same buggy implementation.
+- Still no dependency — `asyncio` is stdlib. Prompted by
+  [issue #1](https://gitlab.com/jorgeecardona/musil/-/work_items/1), item 1.
+
 ### Added — `assert_ok`: the counterexample survives the test runner
 
 - `assert_ok(result, message=None)` raises `AssertionError(str(result))`, so a failing check inside

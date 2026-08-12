@@ -16,8 +16,10 @@ Two pieces:
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Iterable, Sequence
+from collections.abc import Awaitable, Callable, Generator, Hashable, Iterable, Sequence
 from dataclasses import dataclass
+from inspect import isawaitable
+from typing import cast
 
 from musil.core import Graph, Model, Step, explore
 
@@ -115,6 +117,38 @@ def generate_traces[S: Hashable](
     return traces
 
 
+def _drive[S: Hashable](
+    traces: Iterable[Sequence[Step[S]]],
+) -> Generator[tuple[bool, str, S], S, ConformanceResult[S]]:
+    """The replay loop with the I/O taken out. It yields ``(restart, action, expected)`` -- "put the
+    real system back at ``start``" when ``restart``, else "apply ``action``" -- and is sent back the
+    projected model state. ``replay`` drives it with plain calls and ``areplay`` with awaits, so the
+    trace bookkeeping, the step counters and the divergence report are written once and cannot drift
+    between the two."""
+    steps_run = 0
+    traces_run = 0
+    for ti, trace in enumerate(traces):
+        traces_run += 1
+        if not trace:
+            continue
+        actual = yield (True, "<init>", trace[0].state)
+        if actual != trace[0].state:
+            return ConformanceResult(
+                ok=False, traces_run=traces_run, steps_run=steps_run,
+                divergence=Divergence(ti, 0, "<init>", trace[0].state, actual),
+            )
+        for si in range(1, len(trace)):
+            step = trace[si]
+            actual = yield (False, step.action, step.state)
+            steps_run += 1
+            if actual != step.state:
+                return ConformanceResult(
+                    ok=False, traces_run=traces_run, steps_run=steps_run,
+                    divergence=Divergence(ti, si, step.action, step.state, actual),
+                )
+    return ConformanceResult(ok=True, traces_run=traces_run, steps_run=steps_run)
+
+
 def replay[R, S: Hashable](
     traces: Iterable[Sequence[Step[S]]],
     *,
@@ -126,26 +160,45 @@ def replay[R, S: Hashable](
     initial state (its projection must equal the model's initial state); ``step_fn(real, action)``
     applies an action to the real system; ``project`` maps a real state back to a model state for
     comparison. Single-initial-state models; for multiple inits, project(start) must match each
-    trace's initial state."""
-    steps_run = 0
-    traces_run = 0
-    for ti, trace in enumerate(traces):
-        traces_run += 1
-        real = start
-        if not trace:
-            continue
-        if project(real) != trace[0].state:
-            return ConformanceResult(
-                ok=False, traces_run=traces_run, steps_run=steps_run,
-                divergence=Divergence(ti, 0, "<init>", trace[0].state, project(real)),
-            )
-        for si in range(1, len(trace)):
-            step = trace[si]
-            real = step_fn(real, step.action)
-            steps_run += 1
-            if project(real) != step.state:
-                return ConformanceResult(
-                    ok=False, traces_run=traces_run, steps_run=steps_run,
-                    divergence=Divergence(ti, si, step.action, step.state, project(real)),
-                )
-    return ConformanceResult(ok=True, traces_run=traces_run, steps_run=steps_run)
+    trace's initial state. Use ``areplay`` when the real system is async."""
+    driver = _drive(traces)
+    real = start
+    try:
+        restart, action, _expected = next(driver)
+        while True:
+            real = start if restart else step_fn(real, action)
+            restart, action, _expected = driver.send(project(real))
+    except StopIteration as stop:
+        result: ConformanceResult[S] = stop.value
+        return result
+
+
+async def areplay[R, S: Hashable](
+    traces: Iterable[Sequence[Step[S]]],
+    *,
+    step_fn: Callable[[R, str], Awaitable[R]],
+    project: Callable[[R], S] | Callable[[R], Awaitable[S]],
+    start: R,
+) -> ConformanceResult[S]:
+    """``replay`` for an async implementation: ``step_fn`` is awaited, and ``project`` may be either
+    sync or a coroutine function (awaited when it returns an awaitable). Same arguments, same
+    ``ConformanceResult``, same divergence indices -- it drives the same loop as ``replay``.
+
+    This exists because the sync ``replay`` forces one ``asyncio.run`` per step, which cannot be
+    called from a running loop (so no ``async def`` test can use it) and, worse, gives every step its
+    own event loop: a connection pool or an open transaction created in one step is dead in the next.
+    Awaiting inside one loop keeps that loop-scoped state alive across a whole trace."""
+    driver = _drive(traces)
+    real = start
+    try:
+        restart, action, _expected = next(driver)
+        while True:
+            real = start if restart else await step_fn(real, action)
+            # project may be sync or async; awaiting loses S through isawaitable's TypeGuard
+            # (Awaitable[Any]), so the cast restores what the signature already promised.
+            candidate = project(real)
+            projected = cast("S", await candidate) if isawaitable(candidate) else candidate
+            restart, action, _expected = driver.send(projected)
+    except StopIteration as stop:
+        result: ConformanceResult[S] = stop.value
+        return result

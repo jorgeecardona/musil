@@ -16,8 +16,10 @@ the real code drives itself and we watch where it goes."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import AsyncIterable, Awaitable, Callable, Coroutine, Hashable, Iterable
 from dataclasses import dataclass
+from inspect import isawaitable
+from typing import cast
 
 from musil.core import Model, explore
 
@@ -66,14 +68,18 @@ class RefinementMonitor[C, S: Hashable]:
     """Streaming refinement check. Construct with a model and an abstraction; feed observed concrete
     states one at a time to ``observe``, which returns a ``RefinementViolation`` the first time the
     run leaves the model (and ``None`` otherwise). The model is explored once, up front, so this is
-    for bounded models (the explicit-state regime musil lives in)."""
+    for bounded models (the explicit-state regime musil lives in).
+
+    ``abstraction`` may be async (it has to read the real system rather than a captured snapshot); in
+    that case feed observations through ``aobserve``, and ``observe`` raises ``TypeError`` rather than
+    silently abstracting everything to a coroutine object."""
 
     __slots__ = ("_abs", "_edges", "_index", "_inits", "_prev_abstract", "_prev_concrete", "_require_init", "_started", "_states")
 
     def __init__(
         self,
         model: Model[S],
-        abstraction: Callable[[C], S],
+        abstraction: Callable[[C], S] | Callable[[C], Awaitable[S]],
         *,
         require_init: bool = True,
         max_states: int = 1_000_000,
@@ -90,8 +96,29 @@ class RefinementMonitor[C, S: Hashable]:
         self._prev_abstract: S | None = None
 
     def observe(self, concrete: C) -> RefinementViolation[C, S] | None:
-        self._index += 1
         a = self._abs(concrete)
+        if isawaitable(a):
+            if isinstance(a, Coroutine):
+                a.close()  # never awaited; closing keeps Python from warning about it
+            raise TypeError(
+                "abstraction returned an awaitable: it is async, so use 'await monitor.aobserve(...)' "
+                "(or 'acheck_refinement'). Calling observe here would abstract every observation to a "
+                "coroutine object, which is in no model, and report a bogus 'unknown-state' violation."
+            )
+        return self._verdict(concrete, a)
+
+    async def aobserve(self, concrete: C) -> RefinementViolation[C, S] | None:
+        """``observe`` for an async abstraction -- one whose mapping to a model state has to await
+        (it reads the real system rather than a captured snapshot). A sync abstraction works here
+        too, so this is always the safe call inside a coroutine."""
+        a = self._abs(concrete)
+        resolved = cast("S", await a) if isawaitable(a) else a
+        return self._verdict(concrete, resolved)
+
+    def _verdict(self, concrete: C, a: S) -> RefinementViolation[C, S] | None:
+        """The refinement decision itself, shared by ``observe`` and ``aobserve``: only how the
+        abstract state is obtained differs between them, never what counts as a violation."""
+        self._index += 1
         if not self._started:
             self._started = True
             self._prev_concrete, self._prev_abstract = concrete, a
@@ -126,6 +153,32 @@ def check_refinement[C, S: Hashable](
     for obs in observations:
         checked += 1
         violation = monitor.observe(obs)
+        if violation is not None:
+            return RefinementResult(ok=False, steps_checked=checked, violation=violation)
+    return RefinementResult(ok=True, steps_checked=checked)
+
+
+async def acheck_refinement[C, S: Hashable](
+    model: Model[S],
+    observations: AsyncIterable[C],
+    abstraction: Callable[[C], S] | Callable[[C], Awaitable[S]],
+    *,
+    require_init: bool = True,
+    max_states: int = 1_000_000,
+) -> RefinementResult[C, S]:
+    """``check_refinement`` over an async source of observations, with an optionally async
+    ``abstraction``. Same result, same first-divergence semantics.
+
+    The point is that the observations can be *produced* by awaiting -- polling a live service,
+    reading a queue, draining an async generator -- without collecting the whole run into a list
+    first. Collecting is the workaround it replaces, and it is not equivalent: a long or unbounded
+    run has to be checked as it happens, and a violation should stop the polling rather than be found
+    afterwards."""
+    monitor = RefinementMonitor(model, abstraction, require_init=require_init, max_states=max_states)
+    checked = 0
+    async for obs in observations:
+        checked += 1
+        violation = await monitor.aobserve(obs)
         if violation is not None:
             return RefinementResult(ok=False, steps_checked=checked, violation=violation)
     return RefinementResult(ok=True, steps_checked=checked)

@@ -27,7 +27,13 @@ concurrent actors) for the first invariant violation or deadlock, with the short
 
 from musil.channels import channel_actions, fifo_channel_actions, fifo_send, send
 from musil.compose import Composite, compose
-from musil.conformance import ConformanceResult, Divergence, generate_traces, replay
+from musil.conformance import (
+    ConformanceResult,
+    Divergence,
+    areplay,
+    generate_traces,
+    replay,
+)
 from musil.core import (
     Action,
     FixedPoints,
@@ -70,6 +76,7 @@ from musil.refine import (
     RefinementMonitor,
     RefinementResult,
     RefinementViolation,
+    acheck_refinement,
     check_refinement,
 )
 from musil.sim import (
@@ -123,6 +130,8 @@ __all__ = [
     "StateViolation",
     "Step",
     "Verdict",
+    "acheck_refinement",
+    "areplay",
     "assert_ok",
     "channel_actions",
     "check",
