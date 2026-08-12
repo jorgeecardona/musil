@@ -4,6 +4,19 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+_Nothing yet._
+
+## [0.11.0] - 2026-08-12
+
+Four of the five additions from
+[issue #1](https://gitlab.com/jorgeecardona/musil/-/work_items/1), raised by adopting musil in a
+classifier workspace. All four are stdlib-only, so `pip install musil` still installs zero
+third-party packages. The fifth — a Hypothesis strategy bridge — is the one that cannot be built
+without a dependency and is left open as a decision rather than answered by writing the code.
+
+(Versions 0.8.0 through 0.10.0 are the per-feature bumps the pre-commit hook made as these landed;
+none was published, so everything below ships as 0.11.0.)
+
 ### Added — `canonical_by_sorting` / `canonical_by_permutations`: derive the symmetry reduction
 
 - `check(model, canonicalize=...)` has always accepted a symmetry reduction and
@@ -95,6 +108,11 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   from that report was deliberately not built: an entry point would make pytest a packaging concern
   of a package whose headline property is `dependencies = []`, and a plain function recovers the
   elided trace, which was the entire measured defect.
+
+## [0.7.0] - 2026-07-30
+
+Prompted by feedback from verifying the discrete half of a Modelica simulation engine in
+[pymodelica](https://gitlab.com/jorgeecardona/pymodelica) — see `IDEAS.md`.
 
 ### Added — `reaches` and `fixed_points`: reachability and confluence as first-class results
 
