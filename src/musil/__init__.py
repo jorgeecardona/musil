@@ -61,7 +61,7 @@ from musil.core import (
     reaches,
     symmetry_reduction_sound,
 )
-from musil.counterexample import minimize
+from musil.counterexample import as_regression_test, minimize, replay_actions
 from musil.env import Assumption, EnvironmentSpec, OpenResult, check_open
 from musil.fsm import (
     declared_states,
@@ -157,6 +157,7 @@ __all__ = [
     "Verdict",
     "acheck_refinement",
     "areplay",
+    "as_regression_test",
     "assert_ok",
     "bounded_clock",
     "canonical_by_fields",
@@ -196,6 +197,7 @@ __all__ = [
     "reachable_violations",
     "reaches",
     "replay",
+    "replay_actions",
     "send",
     "simulate",
     "solution_cardinality",

@@ -4,6 +4,17 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `as_regression_test` / `replay_actions`: pin a counterexample as a committable test
+
+- `as_regression_test(model, result)` emits pytest SOURCE that replays the (minimized) counterexample and
+  asserts the same invariant breaks — a fast, deterministic regression test that pins the exact
+  interleaving without re-running the exhaustive search. From
+  [issue #15](https://gitlab.com/jorgeecardona/musil/-/work_items/15); feeds from `minimize` (#12).
+- `replay_actions(model, names)` is the primitive it emits against: replay a fixed action-name sequence
+  from init, checking every invariant along the one path (no search), returning the `Result`. Raises if a
+  named action is no longer available/enabled, so a stale regression test fails loudly rather than
+  silently passing.
+
 ### Added — `minimize`: delta-debug a counterexample to its minimal failing subsequence
 
 - `minimize(model, result)` drops actions from a violating trace and re-checks that replaying the reduced

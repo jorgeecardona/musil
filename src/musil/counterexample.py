@@ -103,3 +103,79 @@ def minimize[S: Hashable](
     verdict = inv(states[-1])
     reason = verdict if isinstance(verdict, str) and verdict else result.reason
     return replace(result, trace=trace, reason=reason)
+
+
+def _first_violation[S: Hashable](model: Model[S], state: S) -> tuple[str, str | None] | None:
+    """The first invariant ``state`` violates, as ``(name, reason)``, or None if it satisfies them all."""
+    for name, inv in model.invariants.items():
+        verdict = inv(state)
+        if isinstance(verdict, str):
+            return (name, verdict or None)
+        if not verdict:
+            return (name, None)
+    return None
+
+
+def replay_actions[S: Hashable](
+    model: Model[S],
+    names: list[str],
+    *,
+    canonicalize: Callable[[S], S] | None = None,
+) -> Result[S]:
+    """Replay a fixed sequence of ACTION NAMES from the model's first initial state, checking every
+    invariant at each state, and return the ``Result`` (the first invariant violation reached, else OK).
+    Unlike ``check`` it explores exactly one path -- no search -- so it is a cheap, deterministic replay of
+    a known counterexample, which is what a generated regression test runs. Raises ``ValueError`` if a
+    named action is not available/enabled at its step (the sequence no longer fits the model -- a stale
+    regression test should fail loudly rather than silently pass)."""
+    canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
+    source = actions_source(model)
+    state = canon(model.initial_states()[0])
+    trace = [Step(action="<init>", state=state)]
+    hit = _first_violation(model, state)
+    if hit is not None:
+        return Result(ok=False, states_explored=1, kind="invariant", invariant=hit[0], reason=hit[1], trace=tuple(trace))
+    for name in names:
+        chosen = next((a for a in source(state) if a.name == name and a.enabled(state)), None)
+        if chosen is None:
+            raise ValueError(f"action {name!r} is not available/enabled at this step; the sequence does not replay on this model")
+        state = canon(chosen.apply(state))
+        trace.append(Step(action=name, state=state))
+        hit = _first_violation(model, state)
+        if hit is not None:
+            return Result(
+                ok=False, states_explored=len(trace), kind="invariant",
+                invariant=hit[0], reason=hit[1], trace=tuple(trace),
+            )
+    return Result(ok=True, states_explored=len(trace), trace=tuple(trace))
+
+
+def as_regression_test[S: Hashable](
+    model: Model[S],
+    result: Result[S],
+    *,
+    test_name: str = "regression",
+    model_import: str = "from your_module import model  # <-- point this at your Model",
+    minimize_first: bool = True,
+) -> str:
+    """Emit committable pytest SOURCE that replays this counterexample and asserts the same invariant
+    breaks -- a fast, deterministic regression test that pins the exact interleaving without re-running the
+    exhaustive search. By default the trace is ``minimize``d first, so the emitted sequence is the minimal
+    reproducer. ``model_import`` is the line the test uses to obtain the ``Model`` (edit it to your module);
+    ``test_name`` names the function. Raises ``ValueError`` unless ``result`` is an invariant
+    counterexample -- there is nothing to pin otherwise."""
+    if result.ok or result.kind != "invariant" or result.invariant is None:
+        raise ValueError("as_regression_test needs an invariant counterexample (a failing Result with .invariant set)")
+    reduced = minimize(model, result) if minimize_first else result
+    names = [step.action for step in reduced.trace[1:]]
+    lines = [
+        f"def test_{test_name}():",
+        f"    {model_import}",
+        "    from musil import replay_actions",
+        "",
+        f"    result = replay_actions(model, {names!r})",
+        "    assert not result.ok",
+        f"    assert result.invariant == {reduced.invariant!r}",
+        "",
+    ]
+    return "\n".join(lines)
