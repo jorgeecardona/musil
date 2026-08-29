@@ -17,10 +17,10 @@ Deliberately NOT a single fabricated "determinism score" — these are honest co
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable
+from collections.abc import Callable, Hashable, Mapping
 from dataclasses import dataclass
 
-from musil.core import Graph, Model, explore
+from musil.core import Graph, Invariant, Model, explore
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,3 +176,110 @@ def solution_cardinality[S: Hashable](
     for a goal that *should* be reached one way is a redundancy/ambiguity smell; for a recovery goal,
     more satisfying states can mean more resilience. Interpret in context."""
     return sum(1 for s in explore(model, max_states=max_states).states if predicate(s))
+
+
+def _violates[S: Hashable](inv: Invariant[S], state: S) -> bool:
+    """Whether ``inv`` is violated at ``state``, with ``check``'s semantics: a string return is a
+    violation (carrying a reason), and otherwise falsy (``False``/``None``/``""``) is a violation.
+    (Written without the ``not inv(state)`` footgun that would read a truthy reason string as 'holds'.)"""
+    verdict = inv(state)
+    return isinstance(verdict, str) or not verdict
+
+
+@dataclass(frozen=True, slots=True)
+class InvariantCoverage:
+    """Which invariants are doing work — the dual of :class:`Coverage` (which is about actions).
+
+    A green ``check`` says every invariant held; it does not say any invariant was ever *at risk*. Over
+    the reachable space, each invariant is one of:
+
+    - ``load_bearing``: some GUARDED-OFF action, applied to a reachable state, WOULD violate it — a guard
+      is what keeps it true. This is the spec constraining real behaviour: the near-miss the checker
+      exists to certify. ``threats`` maps each such invariant to the actions that would break it.
+    - ``candidate_vacuous``: NO guarded-off action ever produces a state that violates it, and no
+      reachable state does either — it holds by CONSTRUCTION, so a passing check tells you nothing about
+      it. A signal, not an accusation: an invariant true by construction can be intentional documentation.
+
+    This is the practical form of the vacuity idea that ``coverage`` deliberately dropped as too naive:
+    reachability + near-misses over the graph, rather than reasoning about opaque invariant antecedents.
+    It analyses the STATIC ``model.actions`` (it needs guarded-off actions to apply; an ``actions_fn`` that
+    only offers enabled actions exposes none, so those invariants read as candidate-vacuous by default).
+    Actions whose ``apply`` is partial — it relies on the guard and raises without it — are skipped for
+    the action that raised, since a state that cannot exist cannot witness a violation. ``truncated``
+    carries over from the graph: under a cap, ``candidate_vacuous`` only means 'not yet threatened'."""
+
+    load_bearing: tuple[str, ...]
+    candidate_vacuous: tuple[str, ...]
+    threats: Mapping[str, tuple[str, ...]]
+    invariants_total: int
+    truncated: bool
+
+    @property
+    def ok(self) -> bool:
+        """True when no invariant is candidate-vacuous. Not a verdict — an invariant true by construction
+        may be intended — but a useful gate that every spec'd invariant is actually exercised."""
+        return not self.candidate_vacuous
+
+    def __str__(self) -> str:
+        if self.truncated:
+            head = "INVARIANT COVERAGE INCONCLUSIVE (truncated — 'candidate-vacuous' only means not yet threatened)"
+        elif self.ok:
+            head = f"INVARIANT COVERAGE — all {self.invariants_total} invariants are load-bearing"
+        else:
+            head = f"INVARIANT COVERAGE — of {self.invariants_total} invariants:"
+        lines = [head]
+        if self.candidate_vacuous:
+            lines.append(f"  candidate-vacuous (nothing ever threatens them): {', '.join(self.candidate_vacuous)}")
+        for name in self.load_bearing:
+            lines.append(f"  {name}: guarded off by {', '.join(self.threats.get(name, ()))}")
+        return "\n".join(lines)
+
+
+def invariant_coverage_of[S: Hashable](graph: Graph[S], model: Model[S]) -> InvariantCoverage:
+    """Compute :class:`InvariantCoverage` from an already-explored :class:`~musil.core.Graph`.
+
+    For every reachable state and every STATIC ``model.actions`` that is GUARDED OFF there, it applies the
+    action anyway and asks whether the result violates each invariant — a guarded-off action that would
+    break an invariant is the guard doing its job, and marks that invariant load-bearing. An invariant no
+    guarded-off action ever threatens (and that no reachable state itself violates) is candidate-vacuous.
+    Enabled actions add no information here: their successors are already reachable, so in a passing model
+    they never violate. Cost is O(states x actions x invariants), so run it as an audit, next to ``check``,
+    not inside it."""
+    inv_items = tuple(model.invariants.items())
+    actions = tuple(model.actions)
+    threats: dict[str, set[str]] = {name: set() for name, _ in inv_items}
+    for s in graph.states:
+        # A reachable state that itself violates an invariant makes it load-bearing (it is catching a
+        # real bug); in a passing model this never fires, but it keeps the report honest on a failing one.
+        for name, inv in inv_items:
+            if _violates(inv, s):
+                threats[name].add("<reachable>")
+        for a in actions:
+            if a.enabled(s):
+                continue  # enabled ⇒ successor already reachable ⇒ no new information
+            # A partial apply that relies on its guard can raise when applied guarded-off; a state that
+            # cannot exist cannot witness a violation, so that action is simply skipped here.
+            try:
+                t = a.apply(s)
+            except Exception:
+                continue
+            for name, inv in inv_items:
+                if _violates(inv, t):
+                    threats[name].add(a.name)
+    load_bearing = tuple(name for name, _ in inv_items if threats[name])
+    candidate_vacuous = tuple(name for name, _ in inv_items if not threats[name])
+    return InvariantCoverage(
+        load_bearing=load_bearing,
+        candidate_vacuous=candidate_vacuous,
+        threats={n: tuple(sorted(v)) for n, v in threats.items() if v},
+        invariants_total=len(inv_items),
+        truncated=graph.truncated,
+    )
+
+
+def invariant_coverage[S: Hashable](model: Model[S], *, max_states: int = 1_000_000) -> InvariantCoverage:
+    """Explore ``model`` and report which of its invariants are load-bearing vs candidate-vacuous (see
+    :class:`InvariantCoverage`). Like ``coverage``, kept separate from ``check`` and run over the whole
+    space: ``check`` early-exits at the first violation, so its graph is partial and this would misjudge
+    which invariants were ever threatened."""
+    return invariant_coverage_of(explore(model, max_states=max_states), model)

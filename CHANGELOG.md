@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `invariant_coverage`: which invariants are load-bearing vs candidate-vacuous
+
+- `invariant_coverage(model)` / `invariant_coverage_of(graph, model)` are the dual of `coverage` (which is
+  about actions). Over the reachable space each invariant is `load_bearing` — some GUARDED-OFF action,
+  applied to a reachable state, WOULD violate it, so a guard is what keeps it true — or `candidate_vacuous`
+  — nothing ever threatens it, so it holds by construction and a green check says nothing about it.
+  `threats` maps each load-bearing invariant to the actions that would break it. From
+  [issue #9](https://gitlab.com/jorgeecardona/musil/-/work_items/9): telling `unique-ids` (holds by
+  construction) from `kpi-never-resized` (enforced only because a guard never offers resize).
+- The practical form of the vacuity idea `coverage` dropped as too naive: reachability + near-misses over
+  the graph, not reasoning about opaque invariant antecedents. It applies guarded-off actions to reachable
+  states and asks whether the result violates each invariant; a partial `apply` that relies on its guard
+  (and raises without it) is skipped rather than crashing the analysis. Analyses the static `model.actions`
+  and costs O(states x actions x invariants), so run it as an audit next to `check`, not inside it.
+
 ### Added — `profile`: where a slow `check` spends its time
 
 - `profile(model)` runs the same reachable sweep as `check`, timed, and returns a `Profile`: time split
