@@ -88,6 +88,7 @@ from musil.metrics import (
     solution_cardinality,
     state_space_metrics,
 )
+from musil.patterns import absent, always, eventually, recurs, responds
 from musil.profiling import ActionCost, Phase, Profile, profile
 from musil.refine import (
     RefinementMonitor,
@@ -158,7 +159,9 @@ __all__ = [
     "StateViolation",
     "Step",
     "Verdict",
+    "absent",
     "acheck_refinement",
+    "always",
     "areplay",
     "as_regression_test",
     "assert_ok",
@@ -181,6 +184,7 @@ __all__ = [
     "declared_states",
     "diff",
     "enumerate_actions",
+    "eventually",
     "explore",
     "fifo_channel_actions",
     "fifo_send",
@@ -201,8 +205,10 @@ __all__ = [
     "protocol_operations",
     "reachable_violations",
     "reaches",
+    "recurs",
     "replay",
     "replay_actions",
+    "responds",
     "send",
     "simulate",
     "solution_cardinality",

@@ -4,6 +4,19 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.patterns`: the Dwyer specification patterns as one-call helpers
+
+- `always(p)` (universality), `absent(p)` (absence), `eventually(p)` (existence `<>p`), `recurs(p)`
+  (recurrence `[]<>p`), and `responds(trigger, response)` (response `[](trigger -> <>response)`) name the
+  common temporal properties and lower each onto the existing `check`/`check_liveness`, so a team picks the
+  pattern instead of hand-encoding the temporal logic. From
+  [issue #16](https://gitlab.com/jorgeecardona/musil/-/work_items/16). Each returns its underlying result
+  (`Result` for the safety patterns, `LivenessResult` for the liveness ones); both are `Verdict`s, so
+  `assert_ok` works uniformly.
+- Scope: this v1 is the GLOBAL-scope family. The scoped variants (after / between / until a delimiter) and
+  the precedence family (which need the state to carry history) are deliberately deferred and noted on the
+  issue.
+
 ### Added — `diff`: the behavioral delta between two model versions
 
 - `diff(model_a, model_b, *, canonicalize=...)` explores both and reports states reachable in only one,
