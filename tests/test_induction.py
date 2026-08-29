@@ -49,7 +49,9 @@ def test_step_counterexample_from_an_unreachable_state():
 def test_k_induction_proves_what_1_induction_could_not():
     # The same n != 3 IS 2-inductive: any path of length 2 whose first two states satisfy I never lands
     # on n=3 (the only way into 3 is from 1, and 1->3 already breaks the length-2 antecedent).
-    inv = lambda s: s.n != 3  # noqa: E731
+    def inv(s: C) -> bool:
+        return s.n != 3
+
     assert not check_inductive(_add2_model(), inv, DOMAIN, k=1).proven
     assert check_inductive(_add2_model(), inv, DOMAIN, k=2).proven
 
