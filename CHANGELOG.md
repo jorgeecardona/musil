@@ -4,6 +4,13 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-29
+
+Twelve features driven by the adoption issues (#5–#16) plus a coverage fix (#18), all stdlib-only so
+`pip install musil` still installs zero third-party packages. Versions 0.13.0 through 0.24.0 are the
+per-feature bumps the pre-commit hook made as these landed; none was published, so everything below ships
+as 0.25.0.
+
 ### Fixed — `coverage()` is no longer blind for `actions_fn` models
 
 - `coverage(model)` reported "all 0 actions fire and move" for a model whose action space comes from
@@ -14,12 +21,6 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   `actions_fn` model whose per-state actions carry unique names (e.g. `add_filter{field='op_area'}`) reports
   usefully with `key=lambda name: name.split('{')[0]`. Static-`actions` models are unchanged when no key is
   given.
-
-## [0.24.0] - 2026-08-29
-
-Twelve features driven by the adoption issues (#5–#16), all stdlib-only so `pip install musil` still
-installs zero third-party packages. Versions 0.13.0 through 0.23.0 are the per-feature bumps the
-pre-commit hook made as these landed; none was published, so everything below ships as 0.24.0.
 
 ### Added — `musil.patterns`: the Dwyer specification patterns as one-call helpers
 
