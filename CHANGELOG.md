@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `check_cached`: content-addressed verdict caching for CI
+
+- `check_cached(model, version=...)` returns a cached verdict when the model and options are unchanged,
+  else runs `check`, stores the `Result`, and returns it — so an unchanged model is not re-checked on
+  every CI run ([issue #10](https://gitlab.com/jorgeecardona/musil/-/work_items/10): a ~5-20s exhaustive
+  check running on every pipeline even when nothing changed). `clear_verdict_cache(cache_dir)` empties it.
+- `version` is REQUIRED and is the caller's soundness obligation: actions, invariants and `terminal` are
+  opaque callables, and a function's `repr` carries a per-run address, so the LOGIC identity has to be an
+  explicit string the caller bumps when a body changes. The digest additionally folds in what CAN be read
+  stably — action/invariant names, initial-state reprs, options, and which opaque hooks are present — so a
+  structural edit invalidates the cache automatically; only a changed body under an unchanged name needs
+  the bump. The cache is a directory of pickle files (holds the full trace with live states); load only a
+  cache you produced, and writing is best-effort so a read-only dir just runs the check.
+
 ### Added — `canonical_by_fields`: declarative symmetry reduction
 
 - `canonical_by_fields(*fields, key=...)` derives a `canonicalize` by SORTING each named field (each of

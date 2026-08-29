@@ -25,6 +25,7 @@ concurrent actors) for the first invariant violation or deadlock, with the short
     assert check(model).ok
 """
 
+from musil.cache import check_cached, clear_verdict_cache
 from musil.channels import channel_actions, fifo_channel_actions, fifo_send, send
 from musil.clock import BoundedClock, bounded_clock
 from musil.compose import Composite, compose
@@ -161,9 +162,11 @@ __all__ = [
     "channel_actions",
     "check",
     "check_all",
+    "check_cached",
     "check_liveness",
     "check_open",
     "check_refinement",
+    "clear_verdict_cache",
     "compose",
     "coverage",
     "coverage_of",
