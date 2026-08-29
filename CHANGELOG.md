@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `profile`: where a slow `check` spends its time
+
+- `profile(model)` runs the same reachable sweep as `check`, timed, and returns a `Profile`: time split
+  by PHASE (invariants, enumeration, enablement, `apply`, `canonicalize`, visited-set), the hottest
+  ACTIONS by cumulative `enabled` + `apply` time and call count, states/second, and the dominant phase.
+  From [issue #8](https://gitlab.com/jorgeecardona/musil/-/work_items/8): a check ran ~120s under CI
+  coverage and diagnosing it meant reverse-engineering that a guard rebuilt an expensive menu ~100k
+  times — a profiler shows that in one run.
+- Separate from `check` (not a `check(profile=True)` flag that would change the return type), matching
+  `coverage`/`state_space_metrics`. Profiles the FULL sweep, not `check`'s early exit — a passing-but-slow
+  check is what you profile. Accepts `canonicalize` and `key` like `check`. An instrumented sibling of
+  `check`'s BFS: timing every call adds overhead, so the RELATIVE phase split is the signal, not the
+  absolute seconds.
+
 ### Added — `Model.footprint`: memoize an expensive `actions_fn` across states
 
 - `Model.footprint` is a `state -> hashable` projection of the sub-state `actions_fn` reads. When set,

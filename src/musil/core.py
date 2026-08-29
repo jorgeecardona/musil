@@ -293,7 +293,7 @@ def assert_ok(result: Verdict, message: str | None = None) -> None:
     raise AssertionError(f"{message}\n{rendered}" if message else rendered)
 
 
-def _actions_source[S: Hashable](model: Model[S]) -> Callable[[S], Iterable[Action[S]]]:
+def actions_source[S: Hashable](model: Model[S]) -> Callable[[S], Iterable[Action[S]]]:
     """The per-state action list the BFS loops iterate. With a ``Model.footprint`` and an ``actions_fn``
     the enumerated list is MEMOIZED on ``footprint(state)`` — states sharing a footprint reuse the tuple
     instead of re-running ``actions_fn`` — so an expensive enumerator runs once per footprint, not once
@@ -352,7 +352,7 @@ def check[S: Hashable](
     require hashable states.) The model's ``actions_fn`` (if set) supplies the per-state action list;
     otherwise the static ``actions`` are used."""
     starts = model.initial_states()
-    source = _actions_source(model)
+    source = actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)
 
@@ -455,7 +455,7 @@ def check_all[S: Hashable](
     (symmetry reduction), ``key`` (hashable identity for non-hashable states — must be INJECTIVE over reachable
     states; see ``check`` for the full contract), and the model's ``actions_fn``."""
     starts = model.initial_states()
-    source = _actions_source(model)
+    source = actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)
     bucket = _bucketer(distinct_by)
@@ -569,7 +569,7 @@ def explore[S: Hashable](
     list) when set. States must be HASHABLE here (they key the graph); ``check``/``check_all`` accept a
     ``key`` for non-hashable states, but the graph tools do not."""
     starts = model.initial_states()
-    source = _actions_source(model)
+    source = actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     seen: dict[S, list[tuple[str, S]]] = {}
     frontier: list[S] = []

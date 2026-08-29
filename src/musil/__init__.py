@@ -81,6 +81,7 @@ from musil.metrics import (
     solution_cardinality,
     state_space_metrics,
 )
+from musil.profiling import ActionCost, Phase, Profile, profile
 from musil.refine import (
     RefinementMonitor,
     RefinementResult,
@@ -108,6 +109,7 @@ from musil.symmetry import canonical_by_permutations, canonical_by_sorting
 
 __all__ = [
     "Action",
+    "ActionCost",
     "ActionSchema",
     "AdversarialNode",
     "Assumption",
@@ -131,6 +133,8 @@ __all__ = [
     "Node",
     "OpenResult",
     "Partition",
+    "Phase",
+    "Profile",
     "RefinementMonitor",
     "RefinementResult",
     "RefinementViolation",
@@ -171,6 +175,7 @@ __all__ = [
     "invariant_from_violations",
     "metrics_of",
     "multi_status_field_actions",
+    "profile",
     "protocol_actions",
     "protocol_operations",
     "reachable_violations",
