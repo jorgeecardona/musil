@@ -4,6 +4,26 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `Model.footprint`: memoize an expensive `actions_fn` across states
+
+- `Model.footprint` is a `state -> hashable` projection of the sub-state `actions_fn` reads. When set,
+  `check` / `check_all` / `explore` cache the enumerated action list on `footprint(state)` and reuse it
+  for every state that shares a footprint, so an expensive menu builder runs once per footprint instead
+  of once per state. The framework-level version of the `lru_cache` such callers hand-write. Real case
+  (from [issue #7](https://gitlab.com/jorgeecardona/musil/-/work_items/7)): a reducer whose per-tile
+  menu depends on one tile but recurs across ~40 distinct tiles over ~2600 states — ~40 builds instead
+  of ~7800.
+- `footprint_sound(model, states)` is the gate. Unlike `canonicalize`, a footprint does NOT quotient the
+  space, so an unsound one does not shrink the sweep — it hands a state the WRONG memoized menu, so
+  successors go wrong and reachable states (and the violations only they reach) can be missed. The
+  validator groups the sampled states by footprint and returns False if any group's `actions_fn` menus
+  differ (by action name). Pass `explore(model).states` for a hashable model, or a representative sample
+  for a non-hashable one (footprint's target case, checked via `key=`); like any sampling gate it can
+  only disprove soundness on the states it sees.
+- Supersedes [issue #5](https://gitlab.com/jorgeecardona/musil/-/work_items/5): the guard-memoization
+  ask there was first answered by `actions_fn` (0.13.0); `footprint` closes the residual "still
+  recomputed once per state" gap.
+
 ### Added — `coverage`: a green `check` does not say your behaviour was ever explored
 
 - `coverage(model)` / `coverage_of(graph, model)` report, over the reachable graph, the actions that

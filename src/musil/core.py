@@ -86,13 +86,25 @@ class Model[S: Hashable]:
     action space — e.g. a ``possibleActions(state)`` / offered-menu enumerator, or a parameterized
     bounded-action algebra whose enabled bindings depend on the state — instead of hand-guarding a large
     static product. Each returned Action's own ``enabled`` still applies (return already-enabled actions,
-    or let their guards filter)."""
+    or let their guards filter).
+
+    ``footprint``, if given, is a ``state -> hashable`` PROJECTION of the sub-state that ``actions_fn``
+    reads, and turns on MEMOIZATION: the enumerated action list is cached on ``footprint(state)`` and
+    reused across every state that shares a footprint. Use it when ``actions_fn`` is expensive (a menu
+    builder that constructs objects per call) but depends on only part of the state — the framework-level
+    version of the ``lru_cache`` such callers hand-write. It has effect only with ``actions_fn`` (there is
+    nothing to recompute for the static ``actions``). Unlike ``canonicalize`` it does NOT quotient the
+    space, so an unsound footprint does not shrink the sweep — it feeds a state the WRONG memoized menu, so
+    successors go wrong and reachable states (and the violations only they reach) can be missed. The
+    obligation is that ``actions_fn`` yields the SAME menu for any two states with equal footprint; gate it
+    with ``footprint_sound`` before trusting it."""
 
     init: S | Iterable[S]
     actions: Iterable[Action[S]] = ()
     invariants: Mapping[str, Invariant[S]] = field(default_factory=dict[str, Invariant[S]])
     terminal: Callable[[S], bool] = _never
     actions_fn: Callable[[S], Iterable[Action[S]]] | None = None
+    footprint: Callable[[S], Hashable] | None = None
 
     def initial_states(self) -> tuple[S, ...]:
         init = self.init
@@ -281,6 +293,33 @@ def assert_ok(result: Verdict, message: str | None = None) -> None:
     raise AssertionError(f"{message}\n{rendered}" if message else rendered)
 
 
+def _actions_source[S: Hashable](model: Model[S]) -> Callable[[S], Iterable[Action[S]]]:
+    """The per-state action list the BFS loops iterate. With a ``Model.footprint`` and an ``actions_fn``
+    the enumerated list is MEMOIZED on ``footprint(state)`` — states sharing a footprint reuse the tuple
+    instead of re-running ``actions_fn`` — so an expensive enumerator runs once per footprint, not once
+    per state (``footprint_sound`` is the obligation). Without a footprint it is ``actions_fn`` itself;
+    with only static ``actions`` it is a constant. ``cache.get`` is disambiguated with ``is None`` so a
+    genuinely empty menu (``()``) is a hit, not re-enumerated."""
+    actions_fn = model.actions_fn
+    if actions_fn is None:
+        static_actions = tuple(model.actions)
+        return lambda _state: static_actions
+    footprint = model.footprint
+    if footprint is None:
+        return actions_fn
+    cache: dict[Hashable, tuple[Action[S], ...]] = {}
+
+    def source(state: S) -> Iterable[Action[S]]:
+        fp = footprint(state)
+        got = cache.get(fp)
+        if got is None:
+            got = tuple(actions_fn(state))
+            cache[fp] = got
+        return got
+
+    return source
+
+
 def check[S: Hashable](
     model: Model[S],
     *,
@@ -313,8 +352,7 @@ def check[S: Hashable](
     require hashable states.) The model's ``actions_fn`` (if set) supplies the per-state action list;
     otherwise the static ``actions`` are used."""
     starts = model.initial_states()
-    actions_fn = model.actions_fn
-    static_actions = tuple(model.actions) if actions_fn is None else ()
+    source = _actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)
 
@@ -355,7 +393,7 @@ def check[S: Hashable](
                 )
 
         fired = False
-        for action in (actions_fn(state) if actions_fn is not None else static_actions):
+        for action in source(state):
             if not action.enabled(state):
                 continue
             fired = True
@@ -417,8 +455,7 @@ def check_all[S: Hashable](
     (symmetry reduction), ``key`` (hashable identity for non-hashable states — must be INJECTIVE over reachable
     states; see ``check`` for the full contract), and the model's ``actions_fn``."""
     starts = model.initial_states()
-    actions_fn = model.actions_fn
-    static_actions = tuple(model.actions) if actions_fn is None else ()
+    source = _actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)
     bucket = _bucketer(distinct_by)
@@ -457,7 +494,7 @@ def check_all[S: Hashable](
                 )
 
         fired = False
-        for action in (actions_fn(state) if actions_fn is not None else static_actions):
+        for action in source(state):
             if not action.enabled(state):
                 continue
             fired = True
@@ -532,8 +569,7 @@ def explore[S: Hashable](
     list) when set. States must be HASHABLE here (they key the graph); ``check``/``check_all`` accept a
     ``key`` for non-hashable states, but the graph tools do not."""
     starts = model.initial_states()
-    actions_fn = model.actions_fn
-    static_actions = tuple(model.actions) if actions_fn is None else ()
+    source = _actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     seen: dict[S, list[tuple[str, S]]] = {}
     frontier: list[S] = []
@@ -549,7 +585,7 @@ def explore[S: Hashable](
         state = frontier[head]
         head += 1
         out: list[tuple[str, S]] = []
-        for action in (actions_fn(state) if actions_fn is not None else static_actions):
+        for action in source(state):
             if not action.enabled(state):
                 continue
             nxt = canon(action.apply(state))
@@ -690,6 +726,40 @@ def symmetry_reduction_sound[S: Hashable](
         for v in reachable_violations(model, max_states=max_states, canonicalize=canonicalize)
     }
     return coverage and full_violated == reduced_violated
+
+
+def footprint_sound[S: Hashable](model: Model[S], states: Iterable[S]) -> bool:
+    """Sample-check a ``Model.footprint`` over the given ``states`` — the gate to pass before trusting
+    the footprint memoization (see ``Model.footprint``).
+
+    ``footprint`` is a performance cache, not a quotient: it does not change WHICH states are explored,
+    only avoids re-running ``actions_fn`` for states that share a footprint. That makes it soundness-
+    critical the other way round from ``canonicalize`` — an unsound footprint does not shrink the space,
+    it hands a state the WRONG memoized menu, so the sweep follows wrong successors and can miss states
+    (and the violations only they reach). The obligation is that ``actions_fn`` yields the SAME menu for
+    any two states with equal ``footprint``.
+
+    This groups ``states`` by ``footprint`` and returns False if any group holds two states whose
+    ``actions_fn`` menus differ, compared by the MULTISET OF ACTION NAMES (so a footprint that changes an
+    action's behaviour while keeping its name is out of scope — keep the name a faithful label). Returns
+    False if the model has no ``actions_fn`` or ``footprint`` to validate. Pass a representative sample:
+    for a hashable model, ``explore(model).states``; for a non-hashable one (a pydantic state checked via
+    ``key=``, exactly footprint's target case), a hand-picked or generated set. Like every sampling gate
+    it can only DISPROVE soundness on the states it sees, never prove it universally."""
+    actions_fn = model.actions_fn
+    footprint = model.footprint
+    if actions_fn is None or footprint is None:
+        return False
+    menus: dict[Hashable, tuple[str, ...]] = {}
+    for s in states:
+        menu = tuple(sorted(a.name for a in actions_fn(s)))
+        fp = footprint(s)
+        if fp in menus:
+            if menus[fp] != menu:
+                return False
+        else:
+            menus[fp] = menu
+    return True
 
 
 @dataclass(frozen=True, slots=True)
