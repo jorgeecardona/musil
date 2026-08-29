@@ -13,9 +13,11 @@ This module is dependency-free and knows nothing about any particular domain."""
 
 from __future__ import annotations
 
+import itertools
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
-from typing import Protocol
+from dataclasses import dataclass, field, is_dataclass, replace
+from dataclasses import fields as _dc_fields
+from typing import Protocol, cast
 
 # A predicate that must hold in EVERY reachable state. Returns True when satisfied; False/None when
 # violated. May instead return a string, which signals a violation AND carries a human-readable
@@ -74,15 +76,23 @@ class Step[S: Hashable]:
 class Model[S: Hashable]:
     """What to check: where to start, what can happen, and what must always hold.
 
-    ``init`` is one state or several. ``actions`` are the (possibly multi-actor) transitions.
-    ``invariants`` map a name → predicate that must hold in every reachable state. ``terminal``
+    ``init`` is one state or several. ``actions`` are the (possibly multi-actor) transitions — a STATIC
+    list. ``invariants`` map a name → predicate that must hold in every reachable state. ``terminal``
     marks states allowed to have no enabled action (an absorbing sink like ``deleted``); any other
-    dead end is reported as a deadlock."""
+    dead end is reported as a deadlock.
+
+    ``actions_fn``, if given, supplies the actions available IN A GIVEN STATE (``actions_fn(state) ->
+    Iterable[Action]``) and takes precedence over the static ``actions``. Use it for a STATE-DEPENDENT
+    action space — e.g. a ``possibleActions(state)`` / offered-menu enumerator, or a parameterized
+    bounded-action algebra whose enabled bindings depend on the state — instead of hand-guarding a large
+    static product. Each returned Action's own ``enabled`` still applies (return already-enabled actions,
+    or let their guards filter)."""
 
     init: S | Iterable[S]
-    actions: Iterable[Action[S]]
+    actions: Iterable[Action[S]] = ()
     invariants: Mapping[str, Invariant[S]] = field(default_factory=dict[str, Invariant[S]])
     terminal: Callable[[S], bool] = _never
+    actions_fn: Callable[[S], Iterable[Action[S]]] | None = None
 
     def initial_states(self) -> tuple[S, ...]:
         init = self.init
@@ -92,8 +102,10 @@ class Model[S: Hashable]:
 
 
 def _is_state_collection(init: object) -> bool:
-    """A list/tuple/set/generator of states means 'several initial states'. A frozen dataclass (the
-    usual single state) is not treated as a collection even though some are technically iterable.
+    """A list/tuple/set/generator of states means 'several initial states'. A single RICH state is never a
+    collection even when it is technically iterable — this covers a frozen dataclass AND a pydantic model
+    (pydantic v2 BaseModel is iterable, yielding (field, value) pairs; without this guard a single pydantic
+    state would be shredded into field tuples by ``initial_states``).
 
     A ``str`` (so also a ``StrEnum`` member, and ``bytes``) is one state and never a collection of
     them, even though iterating it succeeds. Without this the check runs happily on a model whose
@@ -101,9 +113,59 @@ def _is_state_collection(init: object) -> bool:
     kind of wrong -- a green result for a question nobody asked."""
     if isinstance(init, (str, bytes)):
         return False
-    return isinstance(init, (list, tuple, set, frozenset)) or (
-        hasattr(init, "__iter__") and not hasattr(init, "__dataclass_fields__")
-    )
+    if isinstance(init, (list, tuple, set, frozenset)):
+        return True
+    if hasattr(init, "__dataclass_fields__") or hasattr(init, "model_fields"):
+        return False  # a dataclass instance or a pydantic model = ONE state
+    return hasattr(init, "__iter__")
+
+
+def _schema_always_enabled(_state: object, **_kw: object) -> bool:
+    """Default ``ActionSchema.enabled``: the schema's actions are always firable (guards, if any, live
+    in the concrete ``Action`` or the ``actions_fn`` that bounds the domains)."""
+    return True
+
+
+@dataclass(frozen=True, slots=True)
+class ActionSchema[S: Hashable]:
+    """A PARAMETERIZED action: a ``name``, typed parameter slots each with a BOUNDED domain, and pure
+    ``apply``/``enabled`` that take those parameters as keyword arguments. ``enumerate_actions`` expands it
+    into one concrete ``Action`` per binding in the cartesian product of the domains.
+
+    This makes the bounded-action-algebra pattern first-class: a closed union whose members declare typed
+    parameter slots with bounded domains, from which consumers construct concrete actions (the shape THE
+    ACTION LAW describes). ``params`` maps slot name → its finite domain; ``apply(state, **params) -> state``
+    and ``enabled(state, **params) -> bool`` receive the bound arguments. A schema with no params yields a
+    single concrete action."""
+
+    name: str
+    apply: Callable[..., S]
+    params: Mapping[str, Iterable[object]] = field(default_factory=dict[str, Iterable[object]])
+    enabled: Callable[..., bool] = _schema_always_enabled
+
+
+def enumerate_actions[S: Hashable](schemas: Iterable[ActionSchema[S]]) -> list[Action[S]]:
+    """Expand parameterized ``ActionSchema``s into concrete musil ``Action``s — the cartesian product over
+    each schema's bounded parameter domains, one Action per binding (a zero-param schema → one Action). Each
+    argument tuple is bound BY VALUE so the generated closures don't capture the loop variable. The concrete
+    action's name encodes its binding (e.g. ``add_filter{field='op_area', value='cabin'}``) so counterexample
+    traces read as filled actions. Pair with a static ``Model(actions=enumerate_actions(...))`` for a bounded
+    parameterized algebra, or call it inside ``actions_fn`` to bound the domains per state."""
+    out: list[Action[S]] = []
+    for sch in schemas:
+        names = list(sch.params.keys())
+        domains = [list(sch.params[n]) for n in names]
+        for combo in (itertools.product(*domains) if names else [()]):
+            binding = dict(zip(names, combo, strict=True))
+            label = sch.name if not binding else sch.name + "{" + ", ".join(f"{k}={v!r}" for k, v in binding.items()) + "}"
+            out.append(
+                Action(
+                    name=label,
+                    enabled=(lambda state, _s=sch, _b=binding: _s.enabled(state, **_b)),
+                    apply=(lambda state, _s=sch, _b=binding: _s.apply(state, **_b)),
+                )
+            )
+    return out
 
 
 @dataclass(frozen=True, slots=True)
@@ -136,14 +198,52 @@ class Result[S: Hashable]:
         return f"{head}\n{format_trace(self.trace)}\n({self.states_explored} states explored)"
 
 
-def format_trace[S: Hashable](trace: Iterable[Step[S]]) -> str:
-    """Render a counterexample as ``Init: <state>`` then ``→ <action>  <state>`` per step."""
+def format_trace[S: Hashable](trace: Iterable[Step[S]], *, render: Callable[[S], str] | None = None) -> str:
+    """Render a counterexample as ``Init: <state>`` then ``→ <action>  <state>`` per step. ``render`` customises
+    how each state is shown (default ``str``) — useful for rich states whose full repr is noisy."""
+    show = render if render is not None else str
     lines: list[str] = []
     for i, step in enumerate(trace):
+        lines.append(f"  Init: {show(step.state)}" if i == 0 else f"  → {step.action}: {show(step.state)}")
+    return "\n".join(lines)
+
+
+def _state_fields(state: object) -> dict[str, object] | None:
+    """The named fields of a state as a dict, for diffing — pydantic (``model_dump``), dataclass, or Mapping.
+    Returns None for states that can't be introspected (the diff renderer then falls back to the full repr)."""
+    dump = getattr(state, "model_dump", None)
+    if callable(dump):
+        try:
+            return dict(cast("Mapping[str, object]", dump()))
+        except Exception:  # a state that won't dump just isn't diffable
+            return None
+    if is_dataclass(state) and not isinstance(state, type):
+        return {f.name: getattr(state, f.name) for f in _dc_fields(state)}
+    if isinstance(state, Mapping):
+        return dict(cast("Mapping[str, object]", state))
+    return None
+
+
+def format_trace_diff[S: Hashable](trace: Iterable[Step[S]], *, render: Callable[[object], str] = repr) -> str:
+    """Like ``format_trace`` but shows only the FIELDS THAT CHANGED between consecutive states — the init in
+    full, then per step the ``field=new`` deltas. Far more readable for rich states (dataclass / pydantic /
+    Mapping) where a full dump per step drowns the one thing the action changed. Falls back to the full state
+    repr for any state whose fields can't be introspected."""
+    lines: list[str] = []
+    prev: dict[str, object] | None = None
+    for i, step in enumerate(trace):
+        cur = _state_fields(step.state)
         if i == 0:
-            lines.append(f"  Init: {step.state}")
+            body = render(step.state) if cur is None else ", ".join(f"{k}={render(v)}" for k, v in cur.items())
+            lines.append(f"  Init: {body}")
+        elif cur is None or prev is None:
+            lines.append(f"  → {step.action}: {render(step.state)}")
         else:
-            lines.append(f"  → {step.action}: {step.state}")
+            delta = {k: v for k, v in cur.items() if prev.get(k) != v}
+            body = ", ".join(f"{k}={render(v)}" for k, v in delta.items()) or "(no field change)"
+            lines.append(f"  → {step.action}: {body}")
+        if cur is not None:
+            prev = cur
     return "\n".join(lines)
 
 
@@ -186,6 +286,7 @@ def check[S: Hashable](
     *,
     max_states: int = 1_000_000,
     canonicalize: Callable[[S], S] | None = None,
+    key: Callable[[S], Hashable] | None = None,
 ) -> Result[S]:
     """Breadth-first sweep of every reachable state. Returns the first invariant violation or
     deadlock found (shortest trace, because BFS visits by increasing depth), else OK once the whole
@@ -198,26 +299,45 @@ def check[S: Hashable](
     the model: every action commutes with it and every invariant is constant across each class.
     Getting that wrong silently drops reachable states (misses bugs), so VALIDATE it on small
     instances with ``symmetry_reduction_sound`` before trusting it on large ones. Counterexample
-    traces are then witnesses *up to symmetry* (each step a real action followed by a renaming)."""
-    starts = model.initial_states()
-    actions = tuple(model.actions)
-    canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
+    traces are then witnesses *up to symmetry* (each step a real action followed by a renaming).
 
-    # parent[state] = (previous_state, action_name) — for reconstructing the shortest trace.
-    parent: dict[S, tuple[S, str] | None] = {}
-    seen: set[S] = set()
+    ``key`` maps a state to a HASHABLE identity used ONLY for the visited-set + trace bookkeeping. Supply
+    it when the state itself is NOT hashable (e.g. a pydantic model or a dataclass with ``list`` fields) so
+    it can be checked directly, with no wrapper type. Its result need not be a state — the rich states are
+    kept for the trace. It carries no SYMMETRY obligation (it does not quotient the space), but it DOES carry
+    an INJECTIVITY obligation: distinct reachable states (post-``canonicalize``) must map to distinct keys. A
+    collision prunes the second state AND all its successors from the sweep — silently dropping reachable
+    states and any violations only they reach, exactly the unsoundness ``canonicalize`` warns about, but with
+    no validator. When unsure, make ``key`` a lossless encoding of the whole state (e.g. every field). Unlike
+    ``canonicalize``, a NON-injective ``key`` is never sound. (``explore`` and the tools built on it still
+    require hashable states.) The model's ``actions_fn`` (if set) supplies the per-state action list;
+    otherwise the static ``actions`` are used."""
+    starts = model.initial_states()
+    actions_fn = model.actions_fn
+    static_actions = tuple(model.actions) if actions_fn is None else ()
+    canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
+    ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)
+
+    # Keyed by state IDENTITY (``ident``): parent[id] = (prev_id, action); states_by_id keeps the rich state
+    # for trace reconstruction. With no ``key`` the identity IS the state (today's behaviour).
+    parent: dict[Hashable, tuple[Hashable, str] | None] = {}
+    states_by_id: dict[Hashable, S] = {}
+    seen: set[Hashable] = set()
     frontier: list[S] = []
     for s0 in starts:
         s = canon(s0)
-        if s not in seen:
-            seen.add(s)
-            parent[s] = None
+        sid = ident(s)
+        if sid not in seen:
+            seen.add(sid)
+            parent[sid] = None
+            states_by_id[sid] = s
             frontier.append(s)
 
     head = 0  # index into frontier instead of pop(0), so it behaves as a real FIFO queue
     while head < len(frontier):
         state = frontier[head]
         head += 1
+        sid = ident(state)
 
         for name, inv in model.invariants.items():
             verdict = inv(state)
@@ -226,23 +346,25 @@ def check[S: Hashable](
             if isinstance(verdict, str):
                 return Result(
                     ok=False, states_explored=len(seen), kind="invariant", invariant=name,
-                    reason=verdict or None, trace=_trace_to(parent, state),
+                    reason=verdict or None, trace=_trace_to(parent, states_by_id, sid),
                 )
             if not verdict:
                 return Result(
                     ok=False, states_explored=len(seen), kind="invariant", invariant=name,
-                    trace=_trace_to(parent, state),
+                    trace=_trace_to(parent, states_by_id, sid),
                 )
 
         fired = False
-        for action in actions:
+        for action in (actions_fn(state) if actions_fn is not None else static_actions):
             if not action.enabled(state):
                 continue
             fired = True
             nxt = canon(action.apply(state))
-            if nxt not in seen:
-                seen.add(nxt)
-                parent[nxt] = (state, action.name)
+            nid = ident(nxt)
+            if nid not in seen:
+                seen.add(nid)
+                parent[nid] = (sid, action.name)
+                states_by_id[nid] = nxt
                 frontier.append(nxt)
                 if len(seen) >= max_states:
                     return Result(ok=True, states_explored=len(seen), truncated=True)
@@ -252,25 +374,133 @@ def check[S: Hashable](
                 ok=False,
                 states_explored=len(seen),
                 kind="deadlock",
-                trace=_trace_to(parent, state),
+                trace=_trace_to(parent, states_by_id, sid),
             )
 
     return Result(ok=True, states_explored=len(seen))
 
 
+_DEADLOCK = object()  # dedup sentinel for the (single) deadlock entry in check_all — never a violation key
+
+
+def _bucketer(distinct_by: str | Callable[[str, str | None], Hashable]) -> Callable[[str, str | None], Hashable]:
+    """Normalise ``check_all``'s ``distinct_by`` into a ``(invariant_name, reason) -> key`` function."""
+    if callable(distinct_by):
+        return distinct_by
+    if distinct_by == "reason":
+        return lambda name, reason: (name, reason)
+    return lambda name, reason: name
+
+
+def check_all[S: Hashable](
+    model: Model[S],
+    *,
+    max_states: int = 1_000_000,
+    canonicalize: Callable[[S], S] | None = None,
+    key: Callable[[S], Hashable] | None = None,
+    distinct_by: str | Callable[[str, str | None], Hashable] = "invariant",
+) -> list[Result[S]]:
+    """Exhaustive ``check``: instead of stopping at the FIRST problem, sweep the WHOLE reachable space and
+    return the SHORTEST witnessing trace for EACH DISTINCT violation (plus deadlock, once). For a review/audit
+    pass where you want the full list of what is broken, not one counterexample at a time.
+
+    ``distinct_by`` controls how violations are bucketed:
+      - ``"invariant"`` (default) — one entry per broken invariant NAME;
+      - ``"reason"`` — one entry per ``(invariant, reason)`` pair (finer);
+      - a CALLABLE ``(invariant_name, reason) -> hashable`` — bucket by a caller-defined CLASS. Use this when
+        the reason embeds variable detail (ids, counts) that would otherwise explode into many spurious
+        "distinct" entries: return e.g. the failure category so all instances collapse to one witness.
+    Results are ordered shortest-trace-first (BFS visits by increasing depth), so the most easily-triggered
+    problems lead. An EMPTY list means the model is fully correct (the analog of ``check(...).ok`` being True).
+    Unlike ``reachable_violations`` (one ``StateViolation`` per offending state, no path), each entry here is a
+    full ``Result`` with a reproducible ``trace``. Shares ``check``'s invariant semantics, ``canonicalize``
+    (symmetry reduction), ``key`` (hashable identity for non-hashable states — must be INJECTIVE over reachable
+    states; see ``check`` for the full contract), and the model's ``actions_fn``."""
+    starts = model.initial_states()
+    actions_fn = model.actions_fn
+    static_actions = tuple(model.actions) if actions_fn is None else ()
+    canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
+    ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)
+    bucket = _bucketer(distinct_by)
+
+    parent: dict[Hashable, tuple[Hashable, str] | None] = {}
+    states_by_id: dict[Hashable, S] = {}
+    seen: set[Hashable] = set()
+    frontier: list[S] = []
+    for s0 in starts:
+        s = canon(s0)
+        sid = ident(s)
+        if sid not in seen:
+            seen.add(sid)
+            parent[sid] = None
+            states_by_id[sid] = s
+            frontier.append(s)
+
+    found: dict[object, Result[S]] = {}  # bucket key → first (⇒ shortest, BFS) witnessing Result
+    truncated = False
+    head = 0
+    while head < len(frontier):
+        state = frontier[head]
+        head += 1
+        sid = ident(state)
+
+        for name, inv in model.invariants.items():
+            verdict = inv(state)
+            reason = verdict if isinstance(verdict, str) else None
+            if not (isinstance(verdict, str) or not verdict):
+                continue  # holds
+            bkey = bucket(name, reason)
+            if bkey not in found:
+                found[bkey] = Result(
+                    ok=False, states_explored=len(seen), kind="invariant",
+                    invariant=name, reason=reason or None, trace=_trace_to(parent, states_by_id, sid),
+                )
+
+        fired = False
+        for action in (actions_fn(state) if actions_fn is not None else static_actions):
+            if not action.enabled(state):
+                continue
+            fired = True
+            nxt = canon(action.apply(state))
+            nid = ident(nxt)
+            if nid not in seen:
+                seen.add(nid)
+                parent[nid] = (sid, action.name)
+                states_by_id[nid] = nxt
+                frontier.append(nxt)
+                if len(seen) >= max_states:
+                    truncated = True
+                    break
+        if not fired and not model.terminal(state) and _DEADLOCK not in found:
+            found[_DEADLOCK] = Result(
+                ok=False, states_explored=len(seen), kind="deadlock", trace=_trace_to(parent, states_by_id, sid),
+            )
+        if truncated:
+            break
+
+    results = sorted(found.values(), key=lambda r: len(r.trace))
+    if truncated:
+        results = [replace(r, truncated=True) for r in results]
+    return results
+
+
 def _trace_to[S: Hashable](
-    parent: Mapping[S, tuple[S, str] | None], state: S
+    parent: Mapping[Hashable, tuple[Hashable, str] | None],
+    states_by_id: Mapping[Hashable, S],
+    sid: Hashable,
 ) -> tuple[Step[S], ...]:
-    """Walk the parent chain back to an initial state, then return it forward as Steps."""
+    """Walk the parent chain (by state IDENTITY) back to an initial state, then return it forward as Steps —
+    each Step carrying the RICH state (looked up in ``states_by_id``), so a ``key`` identity never leaks in."""
     chain: list[Step[S]] = []
-    cur: S | None = state
+    cur: Hashable | None = sid
     while cur is not None:
         entry = parent.get(cur)
+        state = states_by_id[cur]
         if entry is None:
-            chain.append(Step(action="<init>", state=cur))
+            chain.append(Step(action="<init>", state=state))
             break
         prev, action = entry
-        chain.append(Step(action=action, state=cur))
+        chain.append(Step(action=action, state=state))
         cur = prev
     chain.reverse()
     return tuple(chain)
@@ -298,9 +528,12 @@ def explore[S: Hashable](
     """Build the whole reachable state graph (no invariant checks). The shared exploration primitive
     behind liveness and graph export; ``check`` stays separate so it can early-exit with the shortest
     counterexample. ``canonicalize`` enables symmetry reduction (see ``check``); validate it with
-    ``symmetry_reduction_sound`` before trusting it."""
+    ``symmetry_reduction_sound`` before trusting it. Honours the model's ``actions_fn`` (per-state action
+    list) when set. States must be HASHABLE here (they key the graph); ``check``/``check_all`` accept a
+    ``key`` for non-hashable states, but the graph tools do not."""
     starts = model.initial_states()
-    actions = tuple(model.actions)
+    actions_fn = model.actions_fn
+    static_actions = tuple(model.actions) if actions_fn is None else ()
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     seen: dict[S, list[tuple[str, S]]] = {}
     frontier: list[S] = []
@@ -316,7 +549,7 @@ def explore[S: Hashable](
         state = frontier[head]
         head += 1
         out: list[tuple[str, S]] = []
-        for action in actions:
+        for action in (actions_fn(state) if actions_fn is not None else static_actions):
             if not action.enabled(state):
                 continue
             nxt = canon(action.apply(state))

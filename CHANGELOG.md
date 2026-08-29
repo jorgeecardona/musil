@@ -28,6 +28,39 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   every healthy model. Real vacuity detection needs the invariant's antecedent, and musil invariants
   are opaque callables.
 
+### Added — checking ergonomics for rich, real-world state machines
+
+- **`key=` on `check` / `check_all`** — a `state -> hashable` identity used only for the visited-set +
+  trace bookkeeping, so states that are NOT themselves hashable (a pydantic model, a dataclass with
+  `list` fields) can be checked directly, with no wrapper type. Distinct from `canonicalize`: no symmetry
+  obligation, and the rich states are kept for the trace. Must be INJECTIVE over reachable states, though:
+  a collision prunes a state and all its successors, silently dropping reachable states (there is no
+  validator, unlike `canonicalize`). (`explore` and its tools still need hashable
+  states.)
+- **`Model.actions_fn`** — a `state -> Iterable[Action]` that supplies the actions available IN a state,
+  for a STATE-DEPENDENT action space (a `possibleActions(state)`/offered-menu enumerator, or a bounded
+  parameterized algebra whose enabled bindings depend on the state) instead of hand-guarding a large
+  static product. Honoured by `check`, `check_all`, and `explore`.
+- **`check_all(distinct_by=...)` accepts a callable** `(invariant_name, reason) -> hashable` to bucket
+  violations by a caller-defined CLASS — for when the reason embeds variable detail (ids, counts) that
+  would otherwise explode into many spurious "distinct" entries.
+- **`ActionSchema` + `enumerate_actions`** — declare a parameterized action (name, typed parameter slots
+  with BOUNDED domains, `apply`/`enabled` taking those params as kwargs); `enumerate_actions` expands the
+  cartesian product into concrete `Action`s (bound by value; the binding is encoded in each action's
+  name). Makes the bounded-action-algebra pattern first-class.
+- **`format_trace(render=...)` and `format_trace_diff`** — customise per-state rendering; the diff variant
+  shows only the FIELDS THAT CHANGED between consecutive states (dataclass / pydantic / Mapping), so a
+  counterexample over rich states reads as deltas instead of full dumps.
+
+### Fixed
+
+- **`check` now canonicalizes SUCCESSOR states**, not only the initial states (`nxt = canon(action.apply
+  (state))`), matching `explore`. Previously `canonicalize=` was effectively a no-op in `check` (symmetry
+  reduction never kicked in on successors).
+- **A single pydantic model is no longer mistaken for a collection of initial states.** `_is_state_collection`
+  now treats any dataclass instance or pydantic model (which is iterable in v2) as ONE state, so
+  `Model(init=SomePydanticModel(...))` is not shredded into `(field, value)` tuples.
+
 ## [0.11.0] - 2026-08-12
 
 Four of the five additions from
