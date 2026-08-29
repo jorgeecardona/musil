@@ -26,10 +26,11 @@ previously-sound sort unsound, and nothing about the sort itself changes to say 
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
+from dataclasses import is_dataclass, replace
 from itertools import permutations
 from math import factorial
-from typing import Any
+from typing import Any, cast
 
 # A stable total order for picking an orbit's representative. Any fixed one is canonical; repr is
 # used because model states are arbitrary hashable values and need not be comparable with <.
@@ -104,5 +105,48 @@ def canonical_by_permutations[S: Hashable, I](
 
     def canonicalize(state: S) -> S:
         return min((relabel(state, p) for p in perms), key=order)
+
+    return canonicalize
+
+
+def _read_field(state: object, name: str) -> Iterable[Any]:
+    """Read one named field off a dataclass or pydantic state (both expose it as an attribute)."""
+    return cast("Iterable[Any]", getattr(state, name))
+
+
+def _with_fields[S](state: S, updates: Mapping[str, object]) -> S:
+    """Return a copy of ``state`` with the given named fields replaced — pydantic (``model_copy``) or
+    frozen dataclass (``replace``). The write half of ``canonical_by_fields``. (Mapping states are not
+    supported: a plain dict is unhashable, so it could not be a ``check`` state to begin with.)"""
+    copy = getattr(state, "model_copy", None)
+    if callable(copy):
+        return cast("S", copy(update=dict(updates)))
+    if is_dataclass(state) and not isinstance(state, type):
+        return cast("S", replace(state, **updates))
+    raise TypeError(
+        f"canonical_by_fields needs a frozen dataclass or pydantic model state; got {type(state).__name__}"
+    )
+
+
+def canonical_by_fields[S: Hashable](*fields: str, key: Callable[[Any], Any] | None = None) -> Callable[[S], S]:
+    """Declarative symmetry reduction: canonicalize by SORTING each named field -- each of which must hold
+    a collection of INTERCHANGEABLE items -- into a fixed order. The same thing ``canonical_by_sorting``
+    builds, without hand-writing ``get``/``put``, for the common case where the interchangeable components
+    already live in one field: a tuple of per-worker slices, a multiset of ids, a pool of domain values.
+    Works on frozen dataclass and pydantic v2 states; ``key`` orders items not comparable with ``<``.
+
+    This is the ``symmetric_fields=`` declaration from the request, expressed as a ``canonicalize`` you
+    pass to ``check``/``explore`` -- the same shape as the other two constructions, rather than a new
+    ``Model`` field, so the soundness obligation stays visible at the call site.
+
+    SOUND ONLY IF nothing outside those fields names a component by position or id -- a ``leader: int``
+    indexing into a sorted field, an id referenced elsewhere -- exactly as for ``canonical_by_sorting``
+    (use ``canonical_by_permutations`` there). Declarative does NOT mean automatically sound: it removes
+    the boilerplate, not the obligation, so validate with ``symmetry_reduction_sound`` on a small instance
+    before trusting it on a large one."""
+
+    def canonicalize(state: S) -> S:
+        updates = {name: tuple(sorted(_read_field(state, name), key=key)) for name in fields}
+        return _with_fields(state, updates)
 
     return canonicalize

@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `canonical_by_fields`: declarative symmetry reduction
+
+- `canonical_by_fields(*fields, key=...)` derives a `canonicalize` by SORTING each named field (each of
+  which holds a collection of interchangeable items) into a canonical order — the same thing
+  `canonical_by_sorting` builds, without hand-writing the `get`/`put` accessors, for the common case where
+  the interchangeable components already live in one field (a tuple of per-worker slices, a multiset of
+  ids, a pool of domain values). Works on frozen dataclass and pydantic v2 states. From
+  [issue #11](https://gitlab.com/jorgeecardona/musil/-/work_items/11): a reducer with 5 interchangeable
+  dimensions where hand-writing the relabelling was fiddly enough that the test scoped down to 2 instead.
+- Expressed as a `canonicalize` you pass to `check`/`explore` (the same shape as the other two
+  constructions), not a new `Model` field, so the soundness obligation stays visible at the call site.
+  Declarative does NOT mean automatically sound: it removes the boilerplate, not the obligation — an
+  order-sensitive invariant or a field that names a component still makes the sort unsound, and
+  `symmetry_reduction_sound` still has to pass on a small instance first.
+
 ### Added — `invariant_coverage`: which invariants are load-bearing vs candidate-vacuous
 
 - `invariant_coverage(model)` / `invariant_coverage_of(graph, model)` are the dual of `coverage` (which is
