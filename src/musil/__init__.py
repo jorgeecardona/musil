@@ -112,6 +112,7 @@ from musil.sim import (
     simulate,
 )
 from musil.symmetry import canonical_by_fields, canonical_by_permutations, canonical_by_sorting
+from musil.tracing import no_trace
 
 __all__ = [
     "Action",
@@ -191,6 +192,7 @@ __all__ = [
     "metrics_of",
     "minimize",
     "multi_status_field_actions",
+    "no_trace",
     "profile",
     "protocol_actions",
     "protocol_operations",

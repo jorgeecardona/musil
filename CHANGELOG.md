@@ -4,6 +4,16 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `no_trace`: spare musil's hot loop from coverage/tracing overhead
+
+- `no_trace()` is a context manager that pauses the current thread's trace function (coverage, or any
+  `sys.settrace` line-tracer) for its block and restores it after — a no-op when nothing is tracing, so it
+  costs nothing outside coverage/debug runs. From
+  [issue #13](https://gitlab.com/jorgeecardona/musil/-/work_items/13): a check that ran ~10s bare took
+  ~120s under CI coverage because line-tracing the engine's hot loop is pure waste (nobody measures
+  musil's own coverage). Wrap only the check; the docstring also documents the coarser
+  `[tool.coverage.run] omit` route. Dependency-free (just `sys`).
+
 ### Added — `as_regression_test` / `replay_actions`: pin a counterexample as a committable test
 
 - `as_regression_test(model, result)` emits pytest SOURCE that replays the (minimized) counterexample and
