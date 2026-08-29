@@ -4,6 +4,17 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Fixed — `coverage()` is no longer blind for `actions_fn` models
+
+- `coverage(model)` reported "all 0 actions fire and move" for a model whose action space comes from
+  `Model.actions_fn`, because it enumerated the empty static `model.actions`
+  ([issue #18](https://gitlab.com/jorgeecardona/musil/-/work_items/18)). It now derives the action universe
+  from the names `actions_fn` offers across the reachable states (so a never-enabled kind is still counted).
+- `coverage(model, key=...)` / `coverage_of(graph, model, key=...)` take a `name -> kind` bucketer: an
+  `actions_fn` model whose per-state actions carry unique names (e.g. `add_filter{field='op_area'}`) reports
+  usefully with `key=lambda name: name.split('{')[0]`. Static-`actions` models are unchanged when no key is
+  given.
+
 ## [0.24.0] - 2026-08-29
 
 Twelve features driven by the adoption issues (#5–#16), all stdlib-only so `pip install musil` still

@@ -20,7 +20,7 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Mapping
 from dataclasses import dataclass
 
-from musil.core import Graph, Invariant, Model, explore
+from musil.core import Graph, Invariant, Model, actions_source, explore
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +93,10 @@ class Coverage:
       from. The action fires and changes nothing.
 
     ``truncated`` carries over from the graph and changes what ``dead_actions`` means: under a cap,
-    an action is only *not yet seen enabled*, which is a weaker claim than dead."""
+    an action is only *not yet seen enabled*, which is a weaker claim than dead.
+
+    The names are action names for a static-``actions`` model, or the ``key`` buckets ("kinds") for an
+    ``actions_fn`` model (see ``coverage``/``coverage_of``)."""
 
     dead_actions: tuple[str, ...]
     always_enabled_actions: tuple[str, ...]
@@ -125,47 +128,65 @@ class Coverage:
         return "\n".join(lines)
 
 
-def coverage_of[S: Hashable](graph: Graph[S], model: Model[S]) -> Coverage:
+def coverage_of[S: Hashable](
+    graph: Graph[S], model: Model[S], *, key: Callable[[str], str] | None = None
+) -> Coverage:
     """Compute coverage from an already-explored :class:`~musil.core.Graph`.
 
-    Reads the graph's recorded edges only — ``enabled`` is never called again, so this is O(edges)
-    and, unlike re-applying the actions, it stays correct under symmetry reduction (the edges are
-    already canonical). ``model`` is needed for one thing: the full list of action names, since an
-    action that never fired leaves no trace in the graph to be counted."""
-    names = [a.name for a in model.actions]
+    Reads the graph's recorded edges only — ``enabled`` is never called again, so this is O(edges) and,
+    unlike re-applying the actions, it stays correct under symmetry reduction (the edges are already
+    canonical). The report is over an "action universe": for a STATIC ``model.actions`` it is the declared
+    action names (in order); for an ``actions_fn`` model it is every action NAME the enumerator offers
+    across the reachable states (so a never-enabled kind is still counted, since it left no edge).
+
+    ``key`` maps an action NAME to a bucket ("kind") and coverage is reported over the buckets. This is how
+    ``actions_fn`` models report usefully: their per-state actions typically carry per-state unique names
+    (e.g. ``add_filter{field='op_area'}``), so ``key=lambda name: name.split('{')[0]`` collapses them to
+    the kind. Without a key, names are used as-is (right for static models and for ``actions_fn`` models
+    whose action names are already a fixed set)."""
+    kind: Callable[[str], str] = key if key is not None else (lambda name: name)
+    if model.actions_fn is None:
+        universe = list(dict.fromkeys(kind(a.name) for a in model.actions))  # declared order, deduped by kind
+    else:
+        source = actions_source(model)
+        universe = sorted({kind(a.name) for s in graph.states for a in source(s)})  # offered kinds, incl. never-enabled
     fired: set[str] = set()
     moved: set[str] = set()
-    enabled_in: dict[str, int] = dict.fromkeys(names, 0)
+    enabled_in: dict[str, int] = dict.fromkeys(universe, 0)
     for s in graph.states:
         seen_here: set[str] = set()
         for action, nxt in graph.edges.get(s, ()):
-            fired.add(action)
+            bucket = kind(action)
+            fired.add(bucket)
             if nxt != s:
-                moved.add(action)
-            seen_here.add(action)
-        for action in seen_here:
-            enabled_in[action] = enabled_in.get(action, 0) + 1
+                moved.add(bucket)
+            seen_here.add(bucket)
+        for bucket in seen_here:
+            enabled_in[bucket] = enabled_in.get(bucket, 0) + 1
     total_states = len(graph.states)
     return Coverage(
-        dead_actions=tuple(n for n in names if n not in fired),
+        dead_actions=tuple(k for k in universe if k not in fired),
         always_enabled_actions=tuple(
-            n for n in names if total_states and enabled_in.get(n, 0) == total_states
+            k for k in universe if total_states and enabled_in.get(k, 0) == total_states
         ),
-        stutter_only_actions=tuple(n for n in names if n in fired and n not in moved),
-        actions_total=len(names),
+        stutter_only_actions=tuple(k for k in universe if k in fired and k not in moved),
+        actions_total=len(universe),
         truncated=graph.truncated,
     )
 
 
-def coverage[S: Hashable](model: Model[S], *, max_states: int = 1_000_000) -> Coverage:
+def coverage[S: Hashable](
+    model: Model[S], *, key: Callable[[str], str] | None = None, max_states: int = 1_000_000
+) -> Coverage:
     """Explore ``model`` and report which of its actions ever fired, always could, or never moved
-    (see :class:`Coverage`).
+    (see :class:`Coverage`). ``key`` buckets action names into kinds — pass it for an ``actions_fn`` model
+    whose per-state action names are not a fixed set (see ``coverage_of``).
 
     Deliberately separate from ``check`` rather than a field on ``Result``: ``check`` early-exits at
     the first violation, so the graph it saw is partial and a coverage answer computed from it would
     be wrong in the direction that matters — actions look dead because the sweep stopped, not because
     they cannot fire. Run this on the whole space, next to ``check``, not inside it."""
-    return coverage_of(explore(model, max_states=max_states), model)
+    return coverage_of(explore(model, max_states=max_states), model, key=key)
 
 
 def solution_cardinality[S: Hashable](
