@@ -4,6 +4,18 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `minimize`: delta-debug a counterexample to its minimal failing subsequence
+
+- `minimize(model, result)` drops actions from a violating trace and re-checks that replaying the reduced
+  sequence from init still breaks the SAME invariant, returning a new `Result` with the minimal action
+  sequence (greedy 1-minimization). From [issue #12](https://gitlab.com/jorgeecardona/musil/-/work_items/12).
+- Honest scope: a `check`/`check_all` counterexample is already BFS-shortest, so no strict subsequence of
+  it can violate and `minimize` returns it unchanged. Its value is on traces that are NOT step-minimal — a
+  long simulation (VOPR) run, an externally assembled sequence, or any trace carrying actions irrelevant
+  to the violation — and as the seed for a committable regression test (#15). Only invariant
+  counterexamples are minimized (an `ok` result or a deadlock passes through); if the trace cannot be
+  replayed deterministically it is returned unchanged rather than risking a wrong reduction.
+
 ### Added — `check_inductive`: prove an invariant by k-induction over a finite domain
 
 - `check_inductive(model, invariant, domain, *, k=1)` proves an invariant INDUCTIVELY — base (`I` holds

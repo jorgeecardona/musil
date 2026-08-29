@@ -61,6 +61,7 @@ from musil.core import (
     reaches,
     symmetry_reduction_sound,
 )
+from musil.counterexample import minimize
 from musil.env import Assumption, EnvironmentSpec, OpenResult, check_open
 from musil.fsm import (
     declared_states,
@@ -187,6 +188,7 @@ __all__ = [
     "invariant_coverage_of",
     "invariant_from_violations",
     "metrics_of",
+    "minimize",
     "multi_status_field_actions",
     "profile",
     "protocol_actions",
