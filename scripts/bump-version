@@ -33,7 +33,12 @@ case "$BUMP_TYPE" in
 esac
 
 NEW="${MAJOR}.${MINOR}.${PATCH}"
-sed -i -E "s/^version = \"${CURRENT}\"/version = \"${NEW}\"/" pyproject.toml
+# Rewrite via a temp file rather than `sed -i`: GNU takes no suffix, BSD/macOS
+# requires one and would otherwise consume `-E` as the backup suffix, leaving a
+# stray `pyproject.toml-E`. A temp file + mv is portable and leaves no backup.
+TMP=$(mktemp)
+sed -E "s/^version = \"${CURRENT}\"/version = \"${NEW}\"/" pyproject.toml > "$TMP"
+mv "$TMP" pyproject.toml
 
 # Keep uv.lock's pinned musil version in sync so the working tree stays clean
 # (offline + cached = fast; online fallback for a cold cache).
