@@ -4,6 +4,23 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `check_inductive`: prove an invariant by k-induction over a finite domain
+
+- `check_inductive(model, invariant, domain, *, k=1)` proves an invariant INDUCTIVELY — base (`I` holds
+  within `k-1` steps of init) plus step (along every path whose first `k` states satisfy `I`, the next
+  does) — and on failure returns a **counterexample-to-induction**: a state satisfying `I` with a successor
+  that breaks it, so the author strengthens `I` instead of widening the scope. From
+  [issue #6](https://gitlab.com/jorgeecardona/musil/-/work_items/6).
+- The "for all states s" is made concrete WITHOUT an SMT solver by quantifying over a caller-supplied
+  finite `domain` (every assignment of the state's bounded variables) — the enumerable fragment, where
+  exhaustion is a complete, sound decision procedure. The `domain` MUST include unreachable states:
+  1-induction over only the reachable set is trivially true for a passing model, so the unreachable states
+  are exactly where a counterexample-to-induction lives. `k > 1` proves invariants that are true but not
+  1-inductive. The step only follows enabled transitions, so a guarded partial `apply` stays in bounds.
+- Honest boundary (see `INDUCTION_NOTES.md`): with no finite domain to enumerate — an infinite value range,
+  or an unbounded number of components — this is a bounded refutation, not a proof; closing that needs a
+  symbolic engine (an optional `z3` extra) kept out of the dependency-free core.
+
 ### Added — `check_cached`: content-addressed verdict caching for CI
 
 - `check_cached(model, version=...)` returns a cached verdict when the model and options are unchanged,

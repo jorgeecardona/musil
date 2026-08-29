@@ -1,67 +1,53 @@
-# Inductive invariants / k-induction — designed, deliberately deferred
+# Inductive invariants / k-induction — what musil does, and where it stops
 
-`check` is exhaustive **up to a scope** (`max_states`, a small `init`). For a system with unbounded
-state — an arbitrary number of tiles, components, or processes — a passing check proves the invariant
-only within the modelled scope, and the honest residual doubt is "is the scope enough?". The standard
-answer is an **inductive** proof that discharges the invariant without enumerating the reachable set:
+`check` is exhaustive **up to a scope** (`max_states`, a small `init`); a passing run proves the
+invariant only within that scope. An **inductive** proof discharges it without reference to reachability:
 
-- **base**: `I(init)` holds, and
-- **step**: for every action `a` and every state `s`, `I(s) ∧ enabled(a, s) ⇒ I(apply(a, s))`.
+- **base**: no reachable state violates `I` within the first `k-1` steps, and
+- **step** (k-induction): along every path `s0 -> ... -> sk` whose first `k` states satisfy `I`, the
+  `(k+1)`-th satisfies `I` too.
 
-If both hold, `I` is invariant for **all** reachable states at **any** scope. `k`-induction generalises
-the step to `k` consecutive transitions for when 1-induction is too weak.
+If both hold, `I` holds for every reachable state at any scope. A failing step yields a
+**counterexample-to-induction**: a state satisfying `I` with a successor that breaks it, so the author
+strengthens `I` rather than widening the scope.
 
-This note records the design and, more importantly, **why it is not shipped** — the same discipline
-`REDUCTION_NOTES.md` applies to partial-order reduction.
+## What ships: `check_inductive` over a finite domain
 
-## Why it does not fit musil's roadmap
+`musil.induction.check_inductive(model, invariant, domain, *, k=1)` implements exactly this, for the part
+of the problem that is **decidable by enumeration**. An SMT solver makes "for all states `s`" tractable by
+symbolic reasoning; we make it tractable, soundly, by quantifying over a **caller-supplied finite
+`domain`** — every assignment of the state's bounded variables. Enumeration is a complete decision
+procedure for that fragment: "no state in the domain falsifies the step" is a real proof, and any failure
+is a concrete counterexample. This is the same "prove ∀ = fail to refute ∃¬" a solver runs, minus the
+theory reasoning that handles infinite domains.
 
-The step quantifies over **every state `s` satisfying `I`** — not the reachable ones, *all* of them,
-the unreachable included. That is the whole point of induction: it never builds the reachable set. But
-musil is an **explicit-state** checker: it *enumerates reachable states one at a time*. It has no way to
-range over "all `s` such that `I(s)`" because it has no symbolic representation of a state set and no
-decision procedure to discharge the implication over one. States are opaque Python values and `I`,
-`enabled`, `apply` are opaque Python callables; the only thing musil can do with them is *evaluate* them
-at a concrete state, which is enumeration, which is exactly what induction exists to avoid.
+Two things make it more than `check`:
 
-Doing the step **soundly** therefore needs a symbolic state/predicate language and an SMT/SAT solver to
-prove `I(s) ∧ enabled(a, s) ⇒ I(apply(a, s))` as a formula. That breaks two roadmap constraints at once:
+- The `domain` **must include unreachable states**. 1-induction over only the reachable set is trivially
+  true for any model that already passes `check` (a reachable state's successors are reachable, hence
+  satisfy `I`), so it proves nothing new. Quantifying over the full bounded space is what turns it into an
+  inductive proof, and it is what surfaces a counterexample-to-induction sitting on an unreachable state.
+- `k > 1` proves invariants that are true but not 1-inductive, exactly when the 1-step counterexample is a
+  spurious unreachable state that `k` consecutive `I`-states rule out.
 
-1. **dependency-free / pure standard library** — a real discharge needs z3 or equivalent;
-2. **explicit-state** — the identity of the tool; a symbolic engine is a different tool.
+The step only ever follows **enabled** transitions, so a partial `apply` protected by its guard is never
+called out of bounds (the same care `invariant_coverage` takes when it deliberately applies guarded-off
+actions).
 
-## The tempting shortcut is unsound, so it is worse than nothing
+## Where it stops, and why that boundary is honest
 
-It is easy to write a `check_inductive` that enumerates the reachable (or scope-bounded) states and
-checks the step only over *those*. That does **not** prove the unbounded property. It proves "no
-reachable state has an `I`-violating successor" — which, for a passing model, is precisely what `check`
-already established within the scope. Returning `PROVEN` from it would claim an unbounded guarantee the
-enumeration cannot support: a green answer for a question nobody asked, the exact failure mode musil
-rejects everywhere else (the `str`/`bytes` guard, the `canonicalize`/`footprint` soundness gates). A
-verification tool that overclaims is worse than one that is merely bounded.
+`check_inductive` needs a finite `domain` to enumerate. It does **not**, on its own:
 
-## What WOULD be required to ship it
+- prove an **infinite value domain** (an unbounded integer counter) — there is nothing finite to
+  enumerate; a sound proof there needs a symbolic decision procedure (a real SMT solver over integer
+  arithmetic), which musil does not embed and will not hand-roll (a subtly-unsound solver would "prove"
+  false things, the failure mode this codebase refuses);
+- prove an **unbounded number of components** (arbitrary N tiles/processes) — that is parameterized
+  verification, needing a cutoff theorem or symbolic reasoning about N, again beyond enumeration.
 
-- a symbolic encoding of states and of `I`/`enabled`/`apply` (an AST or an SMT theory), not opaque
-  callables;
-- a decision procedure to discharge the step (an optional `z3`-backed extra, clearly separated from the
-  dependency-free core);
-- on failure, a **counterexample-to-induction** — a state satisfying `I` whose successor violates it —
-  so the author *strengthens* `I` rather than trusting a bare `False`;
-- output that claims no more than the solver proved (1-induction vs `k`-induction vs bounded).
-
-If built, it is a sibling engine, not a change to the explicit-state core.
-
-## What already fits and attacks the same doubt
-
-The "is the scope enough?" worry has partial, sound answers that ship today:
-
-- **bounded exhaustive `check`** up to a deliberately chosen scope finds shallow bugs fast;
-- **`state_space_metrics` / `solution_cardinality`** measure the shape of the explored space so the
-  scope choice is informed, not guessed;
-- **symmetry reduction** (`canonical_by_sorting` / `canonical_by_permutations` / `canonical_by_fields`,
-  each gated by `symmetry_reduction_sound`) pushes the affordable scope far higher by collapsing
-  interchangeable identities — often turning "argue by symmetry about N" into "check the quotient".
-
-These do not *close* the unbounded gap; they narrow it honestly. Closing it is the inductive engine
-above, and it waits until it can be built without overclaiming.
+For those, the enumerable `check_inductive` is a bounded refutation: run it over as large a finite domain
+as is affordable to *find* counterexamples-to-induction, but it proves the invariant only over the domain
+you enumerate. Reasoning past that boundary is a separate, optional symbolic engine (a `z3`-backed extra),
+kept out of the dependency-free core. Until then the sound partial answers remain: bounded `check`,
+`state_space_metrics` / `solution_cardinality` to judge scope adequacy, and symmetry reduction
+(`canonical_by_*`, gated by `symmetry_reduction_sound`) to push the affordable domain higher.

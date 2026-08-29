@@ -72,6 +72,7 @@ from musil.fsm import (
     transition_actions,
 )
 from musil.graph import to_dot
+from musil.induction import InductionResult, check_inductive
 from musil.liveness import LivenessResult, check_liveness
 from musil.metrics import (
     Coverage,
@@ -130,6 +131,7 @@ __all__ = [
     "FaultSchedule",
     "FixedPoints",
     "Graph",
+    "InductionResult",
     "Invariant",
     "InvariantCoverage",
     "LivenessResult",
@@ -163,6 +165,7 @@ __all__ = [
     "check",
     "check_all",
     "check_cached",
+    "check_inductive",
     "check_liveness",
     "check_open",
     "check_refinement",
