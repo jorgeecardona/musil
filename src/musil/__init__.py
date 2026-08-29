@@ -62,6 +62,7 @@ from musil.core import (
     symmetry_reduction_sound,
 )
 from musil.counterexample import as_regression_test, minimize, replay_actions
+from musil.diffing import ModelDiff, diff
 from musil.env import Assumption, EnvironmentSpec, OpenResult, check_open
 from musil.fsm import (
     declared_states,
@@ -138,6 +139,7 @@ __all__ = [
     "InvariantCoverage",
     "LivenessResult",
     "Model",
+    "ModelDiff",
     "NetworkModel",
     "Node",
     "OpenResult",
@@ -177,6 +179,7 @@ __all__ = [
     "coverage",
     "coverage_of",
     "declared_states",
+    "diff",
     "enumerate_actions",
     "explore",
     "fifo_channel_actions",

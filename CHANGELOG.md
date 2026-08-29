@@ -4,6 +4,15 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `diff`: the behavioral delta between two model versions
+
+- `diff(model_a, model_b, *, canonicalize=...)` explores both and reports states reachable in only one,
+  transitions present in only one, and invariant outcomes that flipped on the shared states (a
+  `ModelDiff` with `.equivalent`). From
+  [issue #14](https://gitlab.com/jorgeecardona/musil/-/work_items/14): makes a refactor reviewable as a
+  behavioral delta ("same reachable states and validity") rather than a leap of faith. Reads only the two
+  reachable graphs, so it is O(states + transitions); states must be hashable (it runs `explore`).
+
 ### Added — `no_trace`: spare musil's hot loop from coverage/tracing overhead
 
 - `no_trace()` is a context manager that pauses the current thread's trace function (coverage, or any
