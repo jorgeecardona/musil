@@ -111,6 +111,19 @@ real proof obligation regardless.
 Net revised plan: `reduce=True` = **source-set DPOR + full-cycle proviso + acyclic/depth guard, for
 safety runs only**; keep the differential test; keep liveness on the fairness engine.
 
+## Status (shipped vs deferred)
+
+- **Shipped** (`musil.por`): the MECHANISM (`explore_por` fires a caller-supplied ample set per state) and
+  the GATE (`por_sound` validates that an ample choice preserves the violable-invariant set against the
+  full exploration — the same discipline as `symmetry_reduction_sound`), plus `independent`, the concrete
+  per-state independence test. A caller can supply an ample and validate it today.
+- **Deferred**: the AUTOMATIC ample-set (persistent/source-set) computation. musil's actions are opaque
+  Python callables, so there is no static dependency relation and no enabling relation to compute a
+  persistent set from, and C1 needs full-graph lookahead. A sound automatic computation therefore needs
+  either a caller-DECLARED static independence + enabling relation, or dynamic (DPOR) machinery whose
+  soundness over cyclic state spaces needs the full-cycle proviso. Until one is built and gated, POR is
+  "supply an ample, validate with `por_sound`". `independent` gives the concrete relation to build on.
+
 ## References
 
 - Flanagan & Godefroid, "Dynamic Partial-Order Reduction for Model Checking Software" (POPL 2005) —

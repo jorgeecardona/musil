@@ -9,6 +9,7 @@ correctness, not merely "unchanged"."""
 from __future__ import annotations
 
 from dataclasses import dataclass
+from fractions import Fraction
 
 from musil import (
     Action,
@@ -26,6 +27,7 @@ from musil import (
     explore_por,
     por_sound,
     profile,
+    reach_probability,
 )
 
 # --------------------------------------------------------------------------------------------------
@@ -216,6 +218,35 @@ def test_por_trivial_ample_matches_explore_and_is_sound():
     # the trivial ample (fire everything) reduces nothing: same reachable set as explore, and sound.
     assert len(explore_por(m, ample=lambda state, enabled: enabled).states) == 20
     assert por_sound(m, lambda state, enabled: enabled)
+
+
+# --------------------------------------------------------------------------------------------------
+# 5. Gambler's ruin (fair symmetric random walk) — exact reachability probability, known closed form
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Walk:
+    pos: int
+
+
+def walk_model(start: int, n: int) -> Model[Walk]:
+    return Model(
+        init=Walk(start),
+        actions=[
+            Action("up", enabled=lambda s: 0 < s.pos < n, apply=lambda s: Walk(s.pos + 1)),
+            Action("down", enabled=lambda s: 0 < s.pos < n, apply=lambda s: Walk(s.pos - 1)),
+        ],
+        terminal=lambda s: s.pos in (0, n),
+    )
+
+
+def test_fair_walk_reach_probability_is_i_over_n():
+    # Theory (gambler's ruin, fair game): P(reach N before 0 | start i) = i/N, exactly. Pinned as a
+    # known-verdict oracle for the exact DTMC solver, independent of musil's implementation.
+    n = 5
+    for i in range(n + 1):
+        assert reach_probability(walk_model(i, n), lambda s: s.pos == n) == Fraction(i, n)
 
 
 def test_profile_explores_the_same_reachable_set():

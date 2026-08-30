@@ -138,6 +138,17 @@ the global-scope family; the scoped and precedence patterns are not yet here.
 
 ::: musil.patterns
 
+## Probabilistic — `reach_probability`
+
+The exact probability of eventually reaching a target set, treating the reachable graph as a
+discrete-time Markov chain (each state's enabled actions carry a relative `weight` that normalises into a
+distribution over successors). Solved by Gaussian elimination over `fractions.Fraction`, so the answer is
+exact with no floating-point error and no dependency: target states have probability 1, states that cannot
+reach the target have probability 0, and the rest solve `x_s = sum_s' P(s, s') x_s'` (the standard
+three-way split, Baier & Katoen ch. 10). MDP min/max value iteration is the next layer on top of this.
+
+::: musil.probabilistic
+
 ## Counterexamples — `minimize`, `as_regression_test`, `replay_actions`
 
 Turn a raw counterexample into a debugging artifact: `minimize` delta-debugs a violating trace to its

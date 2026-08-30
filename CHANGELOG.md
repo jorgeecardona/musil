@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.probabilistic`: exact DTMC reachability probability
+
+- `reach_probability(model, target, weight=...)` returns the EXACT probability of eventually reaching a
+  target set, treating the reachable graph as a discrete-time Markov chain: each state's enabled actions
+  carry a relative `weight(name, state)` (default `1`, i.e. uniform) that normalises into a distribution
+  over successors. The answer is a `fractions.Fraction` — no floating-point error, no dependency (numpy
+  stays an optional accelerator only).
+- The standard three-way split (Baier & Katoen, *Principles of Model Checking*, ch. 10): target states have
+  probability 1; states that cannot reach the target (found via `reaches`) have probability 0; the rest
+  solve the linear system `x_s = sum_s' P(s, s') x_s'` by Gauss-Jordan elimination over the rationals.
+  Truncated exploration raises rather than returning an inconclusive number.
+- Corpus pins the fair symmetric random walk (gambler's ruin): `reach_probability` on 0..N equals the
+  theory closed form `i/N` for every start `i`, a known-verdict oracle independent of musil. This layer is
+  the base for MDP min/max value iteration (the next step).
+
 ### Added — `musil.por`: partial-order reduction mechanism + soundness gate
 
 - POR fires only an *ample set* of actions per state instead of every interleaving. This first layer ships
