@@ -50,6 +50,11 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   `has_accepting_run`). Terminal/deadlock states are stutter-extended so their finite runs get the right
   infinite-run semantics. The engine path returns a `Result` (`kind="ltl"` on violation); a counterexample
   lasso from the engine is still to come. Corpus pins general-LTL verdicts (`X`, `U`) on the traffic light.
+- `GeneralizedBuchi.accepting_lasso(graph)` extracts a concrete counterexample from an accepting run: a
+  stem to the accepting SCC plus a cycle visiting every acceptance set, mapped back to model states.
+  `check_ltl`'s engine path now returns it as the `Result.trace` (starting `<init>`, then the stem, then
+  one iteration of the repeating cycle), so a general-LTL violation carries a real witness, not just a
+  verdict.
 
 ### Internal — `check`/`check_all`/`explore` share one successor kernel
 

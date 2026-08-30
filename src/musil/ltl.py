@@ -23,11 +23,12 @@ as sugar over ``check_ltl``. See ``LTL_NOTES.md``.
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from itertools import count
 
-from musil.core import Graph, Model, Result, check, explore
+from musil.core import Graph, Model, Result, Step, check, explore
 from musil.liveness import LivenessResult, check_liveness, has_internal_edge, tarjan
 
 
@@ -268,12 +269,13 @@ def check_ltl[S: Hashable](
     # General engine: model |= phi iff the automaton for Not(phi) has no accepting run over the
     # (stutter-extended) reachable graph. Covers Until/Release/Next/arbitrary nesting.
     graph = _stutter(explore(model, max_states=max_states))
-    violated = GeneralizedBuchi[S].from_ltl(Not(formula)).has_accepting_run(graph)
+    lasso = GeneralizedBuchi[S].from_ltl(Not(formula)).accepting_lasso(graph)
     return Result(
-        ok=not violated,
+        ok=lasso is None,
         states_explored=len(graph.states),
-        kind="ltl" if violated else None,
-        reason=str(formula) if violated else None,
+        kind="ltl" if lasso is not None else None,
+        reason=str(formula) if lasso is not None else None,
+        trace=lasso or (),
         truncated=graph.truncated,
     )
 
@@ -310,6 +312,42 @@ def _product[S: Hashable](
                         prod[nxt] = []
                         frontier.append(nxt)
     return prod
+
+
+def _bfs_path[S: Hashable](
+    prod: Mapping[tuple[S, int], list[tuple[str, tuple[S, int]]]],
+    sources: set[tuple[S, int]],
+    is_target: Callable[[tuple[S, int]], bool],
+    allowed: set[tuple[S, int]] | None,
+) -> tuple[list[tuple[str, tuple[S, int]]], tuple[S, int]] | None:
+    """Shortest path in the product from any ``sources`` state to the first ``is_target`` state, staying
+    within ``allowed`` (whole product if None). Returns ``(edges, source)`` where ``edges`` is the
+    ``(action, next_state)`` list (empty if a source is already a target) and ``source`` is where it
+    started, or None if no target is reachable."""
+    parent: dict[tuple[S, int], tuple[tuple[S, int], str] | None] = {}
+    queue: deque[tuple[S, int]] = deque()
+    for s in sources:
+        if s not in parent:
+            parent[s] = None
+            queue.append(s)
+    while queue:
+        u = queue.popleft()
+        if is_target(u):
+            edges: list[tuple[str, tuple[S, int]]] = []
+            cur = u
+            step = parent[cur]
+            while step is not None:
+                prev, action = step
+                edges.append((action, cur))
+                cur = prev
+                step = parent[cur]
+            edges.reverse()
+            return edges, cur
+        for action, v in prod.get(u, ()):
+            if v not in parent and (allowed is None or v in allowed):
+                parent[v] = (u, action)
+                queue.append(v)
+    return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -363,6 +401,46 @@ class GeneralizedBuchi[S: Hashable]:
             and all(any(q in acc for _m, q in scc) for acc in self.accepting_sets)
             for scc in tarjan(set(prod), prod)
         )
+
+    def accepting_lasso(self, graph: Graph[S]) -> tuple[Step[S], ...] | None:
+        """A concrete witness of an accepting run, as a lasso trace ``<init> -> ...(stem)... -> ...(cycle)``
+        where the cycle repeats forever and visits every acceptance set. Returns None when there is no
+        accepting run. Product states are mapped back to model states (the automaton component dropped); the
+        looping cycle is appended once."""
+        prod = _product(graph, self.initial, self.transitions)
+        target: set[tuple[S, int]] | None = None
+        for scc in tarjan(set(prod), prod):
+            if has_internal_edge(scc, prod) and all(any(q in acc for _m, q in scc) for acc in self.accepting_sets):
+                target = scc
+                break
+        if target is None:
+            return None
+        initial_prod = {(m0, q0) for m0 in graph.initial for q0 in self.initial if (m0, q0) in prod}
+        found = _bfs_path(prod, initial_prod, lambda s: s in target, None)
+        if found is None:
+            return None
+        stem, source = found
+        entry = stem[-1][1] if stem else source
+        cycle: list[tuple[str, tuple[S, int]]] = []
+        current = entry
+        for acc in self.accepting_sets:
+            seg = _bfs_path(prod, {current}, lambda s, a=acc: s[1] in a, target)
+            if seg is not None and seg[0]:
+                cycle += seg[0]
+                current = seg[0][-1][1]
+        back = _bfs_path(prod, {current}, lambda s: s == entry, target)
+        if back is not None:
+            cycle += back[0]
+        if not cycle:  # empty acceptance sets, or all already at entry: force one loop through the SCC
+            for action, nxt in prod[entry]:
+                if nxt in target:
+                    ret = _bfs_path(prod, {nxt}, lambda s: s == entry, target)
+                    cycle = [(action, nxt), *(ret[0] if ret is not None else [])]
+                    break
+        steps: list[Step[S]] = [Step(action="<init>", state=source[0])]
+        steps += [Step(action=a, state=m) for a, (m, _q) in stem]
+        steps += [Step(action=a, state=m) for a, (m, _q) in cycle]
+        return tuple(steps)
 
     @classmethod
     def from_ltl(cls, formula: LTL[S]) -> GeneralizedBuchi[S]:

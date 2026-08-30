@@ -18,6 +18,7 @@ from musil import (
     Next,
     Not,
     Or,
+    Result,
     Until,
     check_ltl,
     explore,
@@ -185,6 +186,22 @@ def test_general_engine_handles_the_previously_refused_fragment():
     # a bare state formula is evaluated at time 0: the init is red, not green -> green fails at time 0.
     assert not check_ltl(m, _GREEN).ok
     assert check_ltl(m, _RED).ok  # the init IS red
+
+
+def test_engine_returns_a_counterexample_lasso():
+    m = _light()
+    r = check_ltl(m, Next(_RED))  # X red fails: from red, step 1 is green (engine path -> a Result)
+    assert isinstance(r, Result)
+    assert not r.ok
+    assert r.kind == "ltl"
+    assert r.trace[0].action == "<init>"
+    assert r.trace[0].state == Light("red")  # the counterexample starts at the initial state
+    assert r.trace[1].state == Light("green")  # step 1 is green, witnessing X red is false
+    # a holding formula yields no counterexample (empty trace)
+    ok = check_ltl(m, Next(_GREEN))
+    assert isinstance(ok, Result)
+    assert ok.ok
+    assert ok.trace == ()
 
 
 def test_general_engine_stutters_terminal_states():

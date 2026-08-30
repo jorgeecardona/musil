@@ -42,9 +42,12 @@ the same AST, dependency-free (per the dependency policy: no z3, build it oursel
       reducible-fragment reductions + hand-verified `Until`/`Next`/nested cases.
 - [x] Wire `check_ltl` to `from_ltl(Not(phi)).has_accepting_run(_stutter(explore(model)))` for the
       irreducible fragment; terminal states are stutter-extended. General-LTL corpus entries pinned.
-- [ ] Counterexample lasso from the engine (stem + cycle) so the engine path returns a real trace, not
-      just a verdict.
+- [x] Counterexample lasso from the engine (`GeneralizedBuchi.accepting_lasso`): a stem to the accepting
+      SCC plus a cycle visiting every acceptance set, mapped to model states; `check_ltl`'s engine path now
+      returns it as the `Result.trace`.
 - [ ] Re-express the fixed liveness forms and `musil.patterns` as sugar over `check_ltl`.
+- [ ] Mark the loop start in the trace (the trace is stem + one cycle iteration; there is no explicit
+      "cycle repeats from here" marker on `Result` yet).
 
 ## Terminal states (must handle when wiring check_ltl)
 
