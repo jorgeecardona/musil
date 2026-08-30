@@ -320,6 +320,61 @@ def actions_source[S: Hashable](model: Model[S]) -> Callable[[S], Iterable[Actio
     return source
 
 
+def _seed_frontier[S: Hashable](
+    starts: tuple[S, ...], canon: Callable[[S], S], ident: Callable[[S], Hashable]
+) -> tuple[set[Hashable], dict[Hashable, tuple[Hashable, str] | None], dict[Hashable, S], list[S]]:
+    """Seed the BFS bookkeeping from the initial states — shared by ``check``/``check_all`` so the two
+    cannot drift in how they start the sweep (canonicalize, identity dedup, ``parent=None`` roots)."""
+    seen: set[Hashable] = set()
+    parent: dict[Hashable, tuple[Hashable, str] | None] = {}
+    states_by_id: dict[Hashable, S] = {}
+    frontier: list[S] = []
+    for s0 in starts:
+        s = canon(s0)
+        sid = ident(s)
+        if sid not in seen:
+            seen.add(sid)
+            parent[sid] = None
+            states_by_id[sid] = s
+            frontier.append(s)
+    return seen, parent, states_by_id, frontier
+
+
+def _expand[S: Hashable](
+    state: S,
+    sid: Hashable,
+    source: Callable[[S], Iterable[Action[S]]],
+    canon: Callable[[S], S],
+    ident: Callable[[S], Hashable],
+    seen: set[Hashable],
+    parent: dict[Hashable, tuple[Hashable, str] | None],
+    states_by_id: dict[Hashable, S],
+    frontier: list[S],
+    max_states: int,
+) -> tuple[bool, bool]:
+    """Fire every enabled action from ``state``, adding each new CANONICAL successor to the frontier and
+    recording its parent edge. Returns ``(fired, truncated)``: ``fired`` whether any action was enabled
+    (for deadlock detection), ``truncated`` whether the ``max_states`` cap was hit while adding a
+    successor. This is the single successor-expansion shared by ``check``/``check_all`` — the exact spot
+    that drifted in the 089aed0 bug (successors canonicalized in one but not the other), now in one place
+    so it cannot diverge again."""
+    fired = False
+    for action in source(state):
+        if not action.enabled(state):
+            continue
+        fired = True
+        nxt = canon(action.apply(state))
+        nid = ident(nxt)
+        if nid not in seen:
+            seen.add(nid)
+            parent[nid] = (sid, action.name)
+            states_by_id[nid] = nxt
+            frontier.append(nxt)
+            if len(seen) >= max_states:
+                return fired, True
+    return fired, False
+
+
 def check[S: Hashable](
     model: Model[S],
     *,
@@ -351,25 +406,13 @@ def check[S: Hashable](
     ``canonicalize``, a NON-injective ``key`` is never sound. (``explore`` and the tools built on it still
     require hashable states.) The model's ``actions_fn`` (if set) supplies the per-state action list;
     otherwise the static ``actions`` are used."""
-    starts = model.initial_states()
     source = actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)
 
     # Keyed by state IDENTITY (``ident``): parent[id] = (prev_id, action); states_by_id keeps the rich state
     # for trace reconstruction. With no ``key`` the identity IS the state (today's behaviour).
-    parent: dict[Hashable, tuple[Hashable, str] | None] = {}
-    states_by_id: dict[Hashable, S] = {}
-    seen: set[Hashable] = set()
-    frontier: list[S] = []
-    for s0 in starts:
-        s = canon(s0)
-        sid = ident(s)
-        if sid not in seen:
-            seen.add(sid)
-            parent[sid] = None
-            states_by_id[sid] = s
-            frontier.append(s)
+    seen, parent, states_by_id, frontier = _seed_frontier(model.initial_states(), canon, ident)
 
     head = 0  # index into frontier instead of pop(0), so it behaves as a real FIFO queue
     while head < len(frontier):
@@ -392,21 +435,9 @@ def check[S: Hashable](
                     trace=_trace_to(parent, states_by_id, sid),
                 )
 
-        fired = False
-        for action in source(state):
-            if not action.enabled(state):
-                continue
-            fired = True
-            nxt = canon(action.apply(state))
-            nid = ident(nxt)
-            if nid not in seen:
-                seen.add(nid)
-                parent[nid] = (sid, action.name)
-                states_by_id[nid] = nxt
-                frontier.append(nxt)
-                if len(seen) >= max_states:
-                    return Result(ok=True, states_explored=len(seen), truncated=True)
-
+        fired, truncated = _expand(state, sid, source, canon, ident, seen, parent, states_by_id, frontier, max_states)
+        if truncated:
+            return Result(ok=True, states_explored=len(seen), truncated=True)
         if not fired and not model.terminal(state):
             return Result(
                 ok=False,
@@ -454,24 +485,12 @@ def check_all[S: Hashable](
     full ``Result`` with a reproducible ``trace``. Shares ``check``'s invariant semantics, ``canonicalize``
     (symmetry reduction), ``key`` (hashable identity for non-hashable states — must be INJECTIVE over reachable
     states; see ``check`` for the full contract), and the model's ``actions_fn``."""
-    starts = model.initial_states()
     source = actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)
     bucket = _bucketer(distinct_by)
 
-    parent: dict[Hashable, tuple[Hashable, str] | None] = {}
-    states_by_id: dict[Hashable, S] = {}
-    seen: set[Hashable] = set()
-    frontier: list[S] = []
-    for s0 in starts:
-        s = canon(s0)
-        sid = ident(s)
-        if sid not in seen:
-            seen.add(sid)
-            parent[sid] = None
-            states_by_id[sid] = s
-            frontier.append(s)
+    seen, parent, states_by_id, frontier = _seed_frontier(model.initial_states(), canon, ident)
 
     found: dict[object, Result[S]] = {}  # bucket key → first (⇒ shortest, BFS) witnessing Result
     truncated = False
@@ -493,21 +512,7 @@ def check_all[S: Hashable](
                     invariant=name, reason=reason or None, trace=_trace_to(parent, states_by_id, sid),
                 )
 
-        fired = False
-        for action in source(state):
-            if not action.enabled(state):
-                continue
-            fired = True
-            nxt = canon(action.apply(state))
-            nid = ident(nxt)
-            if nid not in seen:
-                seen.add(nid)
-                parent[nid] = (sid, action.name)
-                states_by_id[nid] = nxt
-                frontier.append(nxt)
-                if len(seen) >= max_states:
-                    truncated = True
-                    break
+        fired, truncated = _expand(state, sid, source, canon, ident, seen, parent, states_by_id, frontier, max_states)
         if not fired and not model.terminal(state) and _DEADLOCK not in found:
             found[_DEADLOCK] = Result(
                 ok=False, states_explored=len(seen), kind="deadlock", trace=_trace_to(parent, states_by_id, sid),

@@ -4,6 +4,15 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Internal — `check`/`check_all` share one BFS successor-expansion
+
+- `check` and `check_all` now seed the frontier and expand successors through two shared helpers
+  (`_seed_frontier`, `_expand`) instead of two hand-copied BFS loops. The successor-expansion — the exact
+  spot that drifted in the 089aed0 bug (successors canonicalized in one path but not the other) — lives in
+  one place so it cannot diverge again. No behavior change: the known-verdict corpus (`tests/test_corpus.py`)
+  pins identical reachable-state counts and verdicts across the refactor. First step of unifying the four
+  BFS loops (`explore` and `profile` follow).
+
 ### Docs — genericize examples to invented / commonly-known systems
 
 - Doc examples and docstrings now use invented or widely-known systems only (a generic control plane,
