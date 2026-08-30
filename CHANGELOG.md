@@ -4,6 +4,25 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — negative-side assertion helpers: `assert_violates`, `.action_names`, `.witness` (#32)
+
+- `assert_violates(result, kind=..., invariant=..., via=[...], where=lambda s: ...)` — the red-side
+  counterpart to `assert_ok`: asserts a check FOUND a violation, optionally pinning the verdict kind, the
+  broken invariant, actions that must appear in the counterexample, and a predicate on the offending state,
+  rendering the full counterexample on any mismatch. Works on `Result` and `LivenessResult` alike.
+- `Result.action_names` / `LivenessResult.action_names` — the action names along the counterexample,
+  excluding the synthetic `<init>` step (for `LivenessResult`, the stem then the cycle). `Result.witness` /
+  `LivenessResult.witness` — the offending state (the last state of the trace / stem). These replace the
+  hand-rolled `[step.action for step in result.trace ...]` and `result.trace[-1].state` idioms.
+
+### Changed — `assert_ok` rejects a truncated green by default (`truncated="fail"`)
+
+- `assert_ok(result)` now FAILS when the result passed but the sweep TRUNCATED at `max_states` — a truncated
+  green proves nothing about the unexplored part, so treating it as a proof was a quiet soundness hole in
+  test suites. Pass `truncated="ok"` to accept an inconclusive pass. This is a behaviour change: a test that
+  asserted `assert_ok` on a truncated result now fails (correctly); raise `max_states` or opt out
+  explicitly. Consistent with musil's exact-only stance (a clean `check` is a proof, a truncated one is not).
+
 ### Added — witness API: `path_to`, `witness`, `states_where` (positive witnesses over a graph)
 
 - musil could produce counterexamples (paths to a *bad* state) but had no first-class way to get a positive

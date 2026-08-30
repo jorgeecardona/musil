@@ -17,7 +17,7 @@ import itertools
 from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as _dc_fields
-from typing import Protocol, cast
+from typing import Any, Literal, NoReturn, Protocol, cast
 
 # A predicate that must hold in EVERY reachable state. Returns True when satisfied; False/None when
 # violated. May instead return a string, which signals a violation AND carries a human-readable
@@ -197,6 +197,18 @@ class Result[S: Hashable]:
     # state reached, then repeated forever. None for a finite counterexample (invariant/deadlock) or ok.
     loop: int | None = None
 
+    @property
+    def action_names(self) -> tuple[str, ...]:
+        """The action names along the counterexample ``trace``, excluding the synthetic ``<init>`` step —
+        the sequence of steps that reproduces the violation (empty on success)."""
+        return tuple(step.action for step in self.trace if step.action != "<init>")
+
+    @property
+    def witness(self) -> S | None:
+        """The offending state — the last state of the counterexample ``trace`` (the one that breaks the
+        invariant or deadlocks) — or None on success / an empty trace."""
+        return self.trace[-1].state if self.trace else None
+
     def __bool__(self) -> bool:
         return self.ok
 
@@ -281,7 +293,7 @@ class Verdict(Protocol):
     def __str__(self) -> str: ...
 
 
-def assert_ok(result: Verdict, message: str | None = None) -> None:
+def assert_ok(result: Verdict, message: str | None = None, *, truncated: Literal["fail", "ok"] = "fail") -> None:
     """Assert a result is OK, failing with its *rendered* form -- the counterexample, not the repr.
 
     ``assert check(model)`` inside a test runner reports the result's **repr**, and pytest shortens a
@@ -292,16 +304,67 @@ def assert_ok(result: Verdict, message: str | None = None) -> None:
     instead, so the failure message is the ``Init: ... -> action: ...`` rendering ``__str__`` already
     produces. ``message`` is prefixed when the same assertion runs over several models.
 
+    ``truncated`` governs a passing-but-TRUNCATED result — the ``max_states`` cap stopped the sweep before
+    the space was exhausted, so a green verdict proves nothing about the unexplored part. The default
+    ``"fail"`` rejects it (raise ``max_states``, or pass ``truncated="ok"`` to accept an inconclusive pass);
+    this closes the quiet hole of a truncated green being read as proof.
+
     Works on any musil result (they all carry ``ok`` and a meaningful ``__str__``), and needs no test
     framework -- it is a plain ``AssertionError``, so ``unittest`` and bare ``assert`` get it too."""
     # pytest hides a frame that sets this, which is the difference between a clean failure and one
     # that reprints the elided repr as the helper's arguments. It is an ordinary local otherwise, so
     # nothing here depends on pytest being installed.
     __tracebackhide__ = True
+    if not result.ok:
+        rendered = str(result)
+        raise AssertionError(f"{message}\n{rendered}" if message else rendered)
+    if truncated == "fail" and getattr(result, "truncated", False):
+        head = "check passed but TRUNCATED at max_states -- a truncated green proves nothing; raise max_states or pass truncated='ok'"
+        rendered = f"{head}\n{result}"
+        raise AssertionError(f"{message}\n{rendered}" if message else rendered)
+
+
+def assert_violates(
+    result: Verdict,
+    message: str | None = None,
+    *,
+    kind: str | None = None,
+    invariant: str | None = None,
+    via: Iterable[str] | None = None,
+    where: Callable[[Any], bool] | None = None,
+) -> None:
+    """Assert a check FOUND a violation — the red-side counterpart to ``assert_ok`` — optionally pinning the
+    details, rendering the full counterexample on any mismatch.
+
+    Fails if ``result.ok`` (no violation was found). Then, for each given constraint: ``kind`` must equal the
+    verdict kind (``"invariant"`` / ``"deadlock"`` / ``"p-unreachable"`` / ``"fair-cycle"`` / ``"ltl"``);
+    ``invariant`` must equal the broken invariant name; every name in ``via`` must appear among the
+    counterexample's ``action_names``; and ``where`` must hold on the ``witness`` (the offending state).
+    Works on ``Result`` and ``LivenessResult`` alike (both expose ``kind`` / ``action_names`` / ``witness``);
+    ``message`` is prefixed as in ``assert_ok``."""
+    __tracebackhide__ = True
+
+    def fail(reason: str) -> NoReturn:
+        rendered = f"{reason}\n{result}"
+        raise AssertionError(f"{message}\n{rendered}" if message else rendered)
+
     if result.ok:
-        return
-    rendered = str(result)
-    raise AssertionError(f"{message}\n{rendered}" if message else rendered)
+        fail("expected a violation, but the check passed")
+    got_kind = getattr(result, "kind", None)
+    if kind is not None and got_kind != kind:
+        fail(f"expected kind {kind!r}, got {got_kind!r}")
+    got_inv = getattr(result, "invariant", None)
+    if invariant is not None and got_inv != invariant:
+        fail(f"expected broken invariant {invariant!r}, got {got_inv!r}")
+    if via is not None:
+        names: tuple[str, ...] = getattr(result, "action_names", ())
+        missing = [a for a in via if a not in names]
+        if missing:
+            fail(f"expected actions {missing!r} in the counterexample, but its actions were {list(names)!r}")
+    if where is not None:
+        w = getattr(result, "witness", None)
+        if w is None or not where(w):
+            fail(f"the witness state {w!r} did not satisfy `where`")
 
 
 def actions_source[S: Hashable](model: Model[S]) -> Callable[[S], Iterable[Action[S]]]:

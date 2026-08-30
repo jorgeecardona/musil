@@ -44,6 +44,18 @@ class LivenessResult[S: Hashable]:
     cycle: tuple[Step[S], ...] = ()
     truncated: bool = False
 
+    @property
+    def action_names(self) -> tuple[str, ...]:
+        """The action names along the counterexample — the ``stem`` into the offending state then the
+        ``cycle`` it loops on — excluding the synthetic ``<init>`` step (empty on success)."""
+        return tuple(step.action for step in (*self.stem, *self.cycle) if step.action != "<init>")
+
+    @property
+    def witness(self) -> S | None:
+        """The offending state — the last state of the ``stem`` (the P-unreachable trap, or the entry of the
+        fair cycle) — or None on success / an empty stem."""
+        return self.stem[-1].state if self.stem else None
+
     def __bool__(self) -> bool:
         return self.ok
 

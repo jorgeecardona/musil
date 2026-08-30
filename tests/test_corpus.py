@@ -12,6 +12,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
+import pytest
+
 from musil import (
     Action,
     Always,
@@ -22,6 +24,8 @@ from musil import (
     Next,
     Result,
     Until,
+    assert_ok,
+    assert_violates,
     check,
     check_liveness,
     check_ltl,
@@ -530,3 +534,51 @@ def test_witness_and_path_to_return_shortest_paths():
     # unreachable target / unsatisfiable predicate -> None.
     assert path_to(g, Counter(9)) is None
     assert witness(g, lambda s: s.n == 9) is None
+
+
+# --------------------------------------------------------------------------------------------------
+# 12. Negative-side assertion helpers — action_names / witness / assert_violates / truncated (#32)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Acct:
+    bal: int
+
+
+def overdraw_model() -> Model[Acct]:
+    # "overdraw" is always enabled and drives the balance negative in one step, so the non-neg invariant
+    # breaks at bal=-1, one step from init: a deterministic, known counterexample.
+    return Model(
+        init=Acct(0),
+        actions=[Action("overdraw", enabled=lambda s: True, apply=lambda s: Acct(s.bal - 1))],
+        invariants={"non-neg": lambda s: s.bal >= 0},
+        terminal=lambda s: False,
+    )
+
+
+def test_negative_assertion_helpers_pin_the_counterexample():
+    r = check(overdraw_model())
+    assert r.action_names == ("overdraw",)  # trace action names, the synthetic <init> step excluded
+    assert r.witness == Acct(-1)  # the offending state (last of the trace)
+    # assert_violates matches the full shape...
+    assert_violates(r, kind="invariant", invariant="non-neg", via=["overdraw"], where=lambda s: s.bal < 0)
+    # ...and raises when any constraint is wrong, or when the check actually passed.
+    with pytest.raises(AssertionError):
+        assert_violates(r, kind="deadlock")
+    with pytest.raises(AssertionError):
+        assert_violates(check(counter_model(5)))
+
+
+def test_assert_ok_rejects_a_truncated_green_by_default():
+    # An unbounded upward counter truncates at the cap: ok=True but inconclusive (the space wasn't swept).
+    m = Model(
+        init=Acct(0),
+        actions=[Action("up", enabled=lambda s: True, apply=lambda s: Acct(s.bal + 1))],
+        terminal=lambda s: False,
+    )
+    r = check(m, max_states=5)
+    assert r.ok and r.truncated
+    with pytest.raises(AssertionError):
+        assert_ok(r)  # a truncated green proves nothing -> fail by default
+    assert_ok(r, truncated="ok")  # explicit opt-in accepts an inconclusive pass
