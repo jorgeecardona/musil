@@ -12,6 +12,7 @@ from musil import (
     Always,
     And,
     Atom,
+    Buchi,
     Eventually,
     Implies,
     Model,
@@ -20,6 +21,7 @@ from musil import (
     Or,
     Until,
     check_ltl,
+    explore,
 )
 
 
@@ -106,6 +108,48 @@ def test_conjunction_splits_into_independent_checks():
     # a conjunction with an irreducible conjunct propagates the refusal
     with pytest.raises(NotImplementedError, match="outside the fragment"):
         check_ltl(m, And(Always(_KNOWN), Until(_YELLOW, _RED)))
+
+
+def test_buchi_product_emptiness_detects_the_accepting_cycle():
+    # Buchi for ¬(G green) = F(¬green): reach a non-green state and loop. Non-green IS reachable, so an
+    # accepting cycle exists -> the product is non-empty -> G green is FALSE on the light.
+    g = explore(_light())
+    f_not_green = Buchi[Light](
+        initial=frozenset({0}),
+        accepting=frozenset({1}),
+        transitions={
+            0: ((lambda s: True, 0), (lambda s: s.color != "green", 1)),
+            1: ((lambda s: True, 1),),
+        },
+    )
+    assert f_not_green.has_accepting_run(g)  # G green is violated
+
+
+def test_buchi_product_emptiness_reports_none_when_the_bad_state_is_unreachable():
+    # Buchi for ¬(G known) = F(¬known): a non-known color is NEVER reachable, so no accepting run ->
+    # the product is empty -> G known-color HOLDS.
+    g = explore(_light())
+    f_not_known = Buchi[Light](
+        initial=frozenset({0}),
+        accepting=frozenset({1}),
+        transitions={
+            0: ((lambda s: True, 0), (lambda s: s.color not in {"red", "green", "yellow"}, 1)),
+            1: ((lambda s: True, 1),),
+        },
+    )
+    assert not f_not_known.has_accepting_run(g)  # G known-color holds
+
+
+def test_buchi_product_blocks_a_run_the_guard_forbids():
+    # Buchi for ¬(F green) = G(¬green): stay only while non-green. The light forces green every cycle, so
+    # no infinite non-green run exists -> no accepting cycle -> F green HOLDS (every run reaches green).
+    g = explore(_light())
+    g_not_green = Buchi[Light](
+        initial=frozenset({0}),
+        accepting=frozenset({0}),
+        transitions={0: ((lambda s: s.color != "green", 0),)},
+    )
+    assert not g_not_green.has_accepting_run(g)  # F green holds
 
 
 def test_out_of_fragment_refuses_rather_than_guessing():

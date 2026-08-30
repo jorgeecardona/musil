@@ -139,8 +139,8 @@ def check_liveness[S: Hashable](
             )
 
     # (2) a weakly-fair recurring cycle of ¬P states.
-    for scc in _tarjan(reachable_bad, bad_succ):
-        if not _has_internal_edge(scc, bad_succ):
+    for scc in tarjan(reachable_bad, bad_succ):
+        if not has_internal_edge(scc, bad_succ):
             continue
         if _fair_admissible(scc, g.edges, fairset, strongset):
             entry = next(s for s in order if s in scc)  # shortest-stem entry
@@ -152,7 +152,7 @@ def check_liveness[S: Hashable](
     return LivenessResult(ok=True, states_explored=len(g.states), goal=goal_name, truncated=g.truncated)
 
 
-def _has_internal_edge[S: Hashable](scc: set[S], succ: Mapping[S, list[tuple[str, S]]]) -> bool:
+def has_internal_edge[S: Hashable](scc: set[S], succ: Mapping[S, list[tuple[str, S]]]) -> bool:
     """A non-trivial recurring set: >1 node, or a single node with a self-loop."""
     if len(scc) > 1:
         return True
@@ -185,7 +185,7 @@ def _fair_admissible[S: Hashable](
     return True
 
 
-def _tarjan[S: Hashable](nodes: set[S], succ: Mapping[S, list[tuple[str, S]]]) -> list[set[S]]:
+def tarjan[S: Hashable](nodes: set[S], succ: Mapping[S, list[tuple[str, S]]]) -> list[set[S]]:
     """Iterative Tarjan SCC over the subgraph induced by ``nodes`` (successors outside ``nodes`` are
     ignored). Iterative to avoid Python recursion limits on deep graphs."""
     index: dict[S, int] = {}

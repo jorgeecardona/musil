@@ -20,11 +20,11 @@ become sugar over it.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Iterable
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass, replace
 
-from musil.core import Model, Result, check
-from musil.liveness import LivenessResult, check_liveness
+from musil.core import Graph, Model, Result, check
+from musil.liveness import LivenessResult, check_liveness, has_internal_edge, tarjan
 
 
 class LTL[S: Hashable]:
@@ -254,3 +254,56 @@ def check_ltl[S: Hashable](
         "engine that covers Until/Release/Next/arbitrary nesting lands in a later step; until then this "
         "refuses rather than returning a guessed verdict."
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Buchi[S: Hashable]:
+    """A Büchi automaton over the alphabet of MODEL states — the sound back half of LTL model checking.
+
+    Automaton states are ``int``s. ``transitions[q]`` is the tuple of ``(guard, q')`` edges out of ``q``,
+    where ``guard(model_state)`` decides whether the edge fires from the model state currently being read
+    (the SOURCE of each model step). A run of the automaton over a model run is ACCEPTING iff it visits an
+    ``accepting`` automaton state infinitely often.
+
+    Built by hand today (for testing the emptiness check); constructed from ``Not(formula)`` by the GPVW
+    translation in a later step, at which point ``check_ltl`` runs it against ``explore(model)`` and an
+    accepting run is a counterexample to the formula. See ``LTL_NOTES.md``."""
+
+    initial: frozenset[int]
+    accepting: frozenset[int]
+    transitions: Mapping[int, tuple[tuple[Callable[[S], bool], int], ...]]
+
+    def has_accepting_run(self, graph: Graph[S]) -> bool:
+        """True iff the product of ``graph`` and this automaton has an accepting run: a cycle reachable
+        from an initial product state that passes through an accepting automaton state. Emptiness via SCC
+        (musil's proven ``tarjan``/``has_internal_edge``, as ``check_liveness`` uses): an accepting run
+        exists iff some reachable non-trivial SCC of the product contains a product state whose automaton
+        component is accepting. The product state is ``(model_state, automaton_state)``; a product edge
+        ``(m, q) -> (m', q')`` exists for each model edge ``m -> m'`` and automaton edge ``(guard, q')``
+        out of ``q`` with ``guard(m)`` true."""
+        prod: dict[tuple[S, int], list[tuple[str, tuple[S, int]]]] = {}
+        frontier: list[tuple[S, int]] = []
+        for m0 in graph.initial:
+            for q0 in self.initial:
+                start = (m0, q0)
+                if start not in prod:
+                    prod[start] = []
+                    frontier.append(start)
+        head = 0
+        while head < len(frontier):
+            m, q = frontier[head]
+            head += 1
+            outs = prod[(m, q)]
+            edges = self.transitions.get(q, ())
+            for action, m2 in graph.edges.get(m, ()):
+                for guard, q2 in edges:
+                    if guard(m):
+                        nxt = (m2, q2)
+                        outs.append((action, nxt))
+                        if nxt not in prod:
+                            prod[nxt] = []
+                            frontier.append(nxt)
+        for scc in tarjan(set(prod), prod):
+            if has_internal_edge(scc, prod) and any(q in self.accepting for _m, q in scc):
+                return True
+        return False

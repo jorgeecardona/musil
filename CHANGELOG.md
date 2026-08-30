@@ -25,6 +25,13 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   specs like `G(safety) & G F(progress)` reduce (each conjunct independently; a failing conjunct's result
   is returned, an irreducible conjunct propagates the refusal). `LTL_NOTES.md` records the plan for the
   general Büchi + nested-DFS engine that will replace the remaining `NotImplementedError`s.
+- `Buchi`: a Büchi automaton over model states (guards are predicates on the model state), with
+  `has_accepting_run(graph)` — the emptiness check at the heart of LTL model checking: the product of the
+  reachable graph and the automaton has an accepting run iff some reachable non-trivial SCC contains an
+  accepting automaton state. Reuses musil's proven `tarjan`/`has_internal_edge` (the SCC machinery
+  `check_liveness` already uses, now package-internal). This is the sound "back half" of the engine, built
+  and validated first (hand-built automata for `F(!green)`, `F(!known)`, `G(!green)` on the traffic light);
+  the GPVW `Not(formula) -> Buchi` front half and the wiring into `check_ltl` follow.
 
 ### Internal — `check`/`check_all`/`explore` share one successor kernel
 
