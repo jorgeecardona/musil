@@ -256,6 +256,40 @@ def check_ltl[S: Hashable](
     )
 
 
+def _product[S: Hashable](
+    graph: Graph[S],
+    initial: frozenset[int],
+    transitions: Mapping[int, tuple[tuple[Callable[[S], bool], int], ...]],
+) -> dict[tuple[S, int], list[tuple[str, tuple[S, int]]]]:
+    """The reachable product of ``graph`` and an automaton (its ``initial`` states + guarded
+    ``transitions``), as an adjacency map ``(m, q) -> [(action, (m', q')), ...]``. A product edge exists
+    for each model edge ``m -> m'`` and automaton edge ``(guard, q')`` out of ``q`` with ``guard(m)`` true
+    (the guard reads the SOURCE model state). Shared by ``Buchi`` and ``GeneralizedBuchi``."""
+    prod: dict[tuple[S, int], list[tuple[str, tuple[S, int]]]] = {}
+    frontier: list[tuple[S, int]] = []
+    for m0 in graph.initial:
+        for q0 in initial:
+            start = (m0, q0)
+            if start not in prod:
+                prod[start] = []
+                frontier.append(start)
+    head = 0
+    while head < len(frontier):
+        m, q = frontier[head]
+        head += 1
+        outs = prod[(m, q)]
+        edges = transitions.get(q, ())
+        for action, m2 in graph.edges.get(m, ()):
+            for guard, q2 in edges:
+                if guard(m):
+                    nxt = (m2, q2)
+                    outs.append((action, nxt))
+                    if nxt not in prod:
+                        prod[nxt] = []
+                        frontier.append(nxt)
+    return prod
+
+
 @dataclass(frozen=True, slots=True)
 class Buchi[S: Hashable]:
     """A Büchi automaton over the alphabet of MODEL states — the sound back half of LTL model checking.
@@ -276,34 +310,34 @@ class Buchi[S: Hashable]:
     def has_accepting_run(self, graph: Graph[S]) -> bool:
         """True iff the product of ``graph`` and this automaton has an accepting run: a cycle reachable
         from an initial product state that passes through an accepting automaton state. Emptiness via SCC
-        (musil's proven ``tarjan``/``has_internal_edge``, as ``check_liveness`` uses): an accepting run
-        exists iff some reachable non-trivial SCC of the product contains a product state whose automaton
-        component is accepting. The product state is ``(model_state, automaton_state)``; a product edge
-        ``(m, q) -> (m', q')`` exists for each model edge ``m -> m'`` and automaton edge ``(guard, q')``
-        out of ``q`` with ``guard(m)`` true."""
-        prod: dict[tuple[S, int], list[tuple[str, tuple[S, int]]]] = {}
-        frontier: list[tuple[S, int]] = []
-        for m0 in graph.initial:
-            for q0 in self.initial:
-                start = (m0, q0)
-                if start not in prod:
-                    prod[start] = []
-                    frontier.append(start)
-        head = 0
-        while head < len(frontier):
-            m, q = frontier[head]
-            head += 1
-            outs = prod[(m, q)]
-            edges = self.transitions.get(q, ())
-            for action, m2 in graph.edges.get(m, ()):
-                for guard, q2 in edges:
-                    if guard(m):
-                        nxt = (m2, q2)
-                        outs.append((action, nxt))
-                        if nxt not in prod:
-                            prod[nxt] = []
-                            frontier.append(nxt)
-        for scc in tarjan(set(prod), prod):
-            if has_internal_edge(scc, prod) and any(q in self.accepting for _m, q in scc):
-                return True
-        return False
+        (musil's proven ``tarjan``/``has_internal_edge``): an accepting run exists iff some reachable
+        non-trivial SCC of the product contains a product state whose automaton component is accepting."""
+        prod = _product(graph, self.initial, self.transitions)
+        return any(
+            has_internal_edge(scc, prod) and any(q in self.accepting for _m, q in scc)
+            for scc in tarjan(set(prod), prod)
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class GeneralizedBuchi[S: Hashable]:
+    """A GENERALIZED Büchi automaton: like ``Buchi`` but with SEVERAL acceptance sets. A run is accepting
+    iff it visits EACH set in ``accepting_sets`` infinitely often. This is exactly the shape the GPVW
+    construction produces from an LTL formula (one acceptance set per ``Until`` subformula), so the engine
+    can run it directly without degeneralizing to a single-set ``Buchi``."""
+
+    initial: frozenset[int]
+    accepting_sets: tuple[frozenset[int], ...]
+    transitions: Mapping[int, tuple[tuple[Callable[[S], bool], int], ...]]
+
+    def has_accepting_run(self, graph: Graph[S]) -> bool:
+        """True iff the product has a run visiting every acceptance set infinitely often. Emptiness via
+        SCC: a reachable non-trivial SCC that intersects EVERY acceptance set contains such a run (being
+        strongly connected, one cycle can visit all sets). With no acceptance sets, any non-trivial
+        reachable SCC accepts (an unconstrained infinite run)."""
+        prod = _product(graph, self.initial, self.transitions)
+        return any(
+            has_internal_edge(scc, prod)
+            and all(any(q in acc for _m, q in scc) for acc in self.accepting_sets)
+            for scc in tarjan(set(prod), prod)
+        )

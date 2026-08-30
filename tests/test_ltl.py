@@ -14,6 +14,7 @@ from musil import (
     Atom,
     Buchi,
     Eventually,
+    GeneralizedBuchi,
     Implies,
     Model,
     Next,
@@ -150,6 +151,30 @@ def test_buchi_product_blocks_a_run_the_guard_forbids():
         transitions={0: ((lambda s: s.color != "green", 0),)},
     )
     assert not g_not_green.has_accepting_run(g)  # F green holds
+
+
+def test_generalized_buchi_requires_every_acceptance_set():
+    g = explore(_light())
+    # automaton alternates q0 <-> q1 each step; two acceptance sets {0} and {1}. The product is one big
+    # reachable cycle visiting both q0 and q1 infinitely -> intersects every set -> accepting.
+    alternate: dict[int, tuple[tuple[Callable[[Light], bool], int], ...]] = {
+        0: ((lambda s: True, 1),),
+        1: ((lambda s: True, 0),),
+    }
+    gba_ok = GeneralizedBuchi[Light](
+        initial=frozenset({0}), accepting_sets=(frozenset({0}), frozenset({1})), transitions=alternate
+    )
+    assert gba_ok.has_accepting_run(g)
+    # add a third acceptance set {2} that no automaton state is in -> no SCC can intersect it -> rejected.
+    gba_bad = GeneralizedBuchi[Light](
+        initial=frozenset({0}),
+        accepting_sets=(frozenset({0}), frozenset({1}), frozenset({2})),
+        transitions=alternate,
+    )
+    assert not gba_bad.has_accepting_run(g)
+    # no acceptance sets at all -> any non-trivial reachable SCC accepts (unconstrained infinite run)
+    gba_empty = GeneralizedBuchi[Light](initial=frozenset({0}), accepting_sets=(), transitions=alternate)
+    assert gba_empty.has_accepting_run(g)
 
 
 def test_out_of_fragment_refuses_rather_than_guessing():

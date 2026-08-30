@@ -32,6 +32,11 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   `check_liveness` already uses, now package-internal). This is the sound "back half" of the engine, built
   and validated first (hand-built automata for `F(!green)`, `F(!known)`, `G(!green)` on the traffic light);
   the GPVW `Not(formula) -> Buchi` front half and the wiring into `check_ltl` follow.
+- `GeneralizedBuchi`: several acceptance sets (a run must visit EACH infinitely often) — the exact shape
+  the GPVW construction produces (one acceptance set per `Until`), so the engine runs it directly without
+  degeneralizing. `has_accepting_run` finds a reachable non-trivial SCC that intersects every acceptance
+  set (empty sets accept any infinite run). Product construction is now the shared `_product` used by both
+  `Buchi` and `GeneralizedBuchi`. Validated on hand-built generalized automata over the traffic light.
 
 ### Internal — `check`/`check_all`/`explore` share one successor kernel
 
