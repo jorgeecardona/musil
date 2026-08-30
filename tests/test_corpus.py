@@ -24,6 +24,7 @@ from musil import (
     check,
     check_liveness,
     check_ltl,
+    expected_reward,
     explore,
     explore_por,
     por_sound,
@@ -326,6 +327,24 @@ def test_bounded_dtmc_reachability_is_geometric():
 
     for k in range(5):
         assert reach_probability(m, is_win, steps=k) == 1 - Fraction(1, 2) ** k
+
+
+# --------------------------------------------------------------------------------------------------
+# 8. Expected reward — symmetric-walk absorption time E = i(N-i), known exactly
+# --------------------------------------------------------------------------------------------------
+
+
+def test_expected_absorption_time_is_i_times_n_minus_i():
+    # Symmetric walk on 0..N, both ends absorbing: expected time to absorption from i is exactly i(N-i)
+    # (classic gambler's-ruin duration). Reached almost surely, so the expectation is finite. Known
+    # independent of musil; guards the exact expected-reward solver.
+    n = 6
+
+    def absorbed(s: Walk) -> bool:
+        return s.pos in (0, n)
+
+    for i in range(1, n):
+        assert expected_reward(walk_model(i, n), absorbed) == Fraction(i * (n - i))
 
 
 def test_profile_explores_the_same_reachable_set():

@@ -114,7 +114,7 @@ from musil.metrics import (
 )
 from musil.patterns import absent, always, eventually, recurs, responds
 from musil.por import explore_por, independent, por_sound
-from musil.probabilistic import reach_probability, reach_probability_mdp
+from musil.probabilistic import expected_reward, reach_probability, reach_probability_mdp
 from musil.profiling import ActionCost, Phase, Profile, profile
 from musil.refine import (
     RefinementMonitor,
@@ -228,6 +228,7 @@ __all__ = [
     "diff",
     "enumerate_actions",
     "eventually",
+    "expected_reward",
     "explore",
     "explore_por",
     "fifo_channel_actions",

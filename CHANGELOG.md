@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.probabilistic`: DTMC expected reward (`expected_reward`)
+
+- `expected_reward(model, target, cost=...)` returns the exact expected accumulated cost to first reach
+  `target` in a DTMC; with the default unit `cost` it is the expected number of steps. Solves `E(target)=0`
+  and `E(s) = sum_s' P(s, s') (cost + E(s'))` over the rationals (no floating point).
+- The expectation is finite only when the target is reached ALMOST SURELY, so it guards on
+  `reach_probability == 1` from the initial state and raises `ValueError` otherwise (infinite expectation).
+  That guard is what makes the `(I - P)` system on the non-target states non-singular: every explored state
+  is init-reachable, and if init reaches the target a.s. then so does every non-target state.
+- Corpus pins two known closed forms: the fair-walk absorption time `E = i(N-i)` and the geometric mean
+  `1/p` for a coin loop. MDP expected reward (the stochastic shortest/longest path problem) is deferred with
+  the reasons in `PROBABILISTIC_NOTES.md` (MAX is infinite unless all schedulers are proper; MIN needs a
+  proper initial policy and zero-cost-cycle care).
+
 ### Added — `musil.probabilistic`: step-bounded reachability (`steps=k`)
 
 - Both `reach_probability` and `reach_probability_mdp` now take an optional `steps=k`: the exact

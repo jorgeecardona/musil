@@ -17,7 +17,9 @@ actions WITHIN a move form the probability distribution (via ``weight``). This i
 process (MDP); ``optimize="max"`` / ``"min"`` returns the maximal / minimal reachability probability over
 all schedulers, solved EXACTLY by policy iteration (each policy's value is an exact DTMC solve; the policy
 is improved until stable). Both functions take an optional ``steps=k`` for the exact probability of
-reaching the target WITHIN ``k`` transitions (a finite unrolling, no fixed point). See PROBABILISTIC_NOTES.md.
+reaching the target WITHIN ``k`` transitions (a finite unrolling, no fixed point). ``expected_reward``
+answers the dual quantitative question: the exact expected accumulated cost (default: number of steps) to
+reach the target in a DTMC, finite only when the target is reached almost surely. See PROBABILISTIC_NOTES.md.
 """
 
 from __future__ import annotations
@@ -156,6 +158,61 @@ def reach_probability[S: Hashable](
     return _bounded_values(graph.states, {s: [dist[s]] for s in graph.states}, target, steps, minimize=False)[
         graph.initial[0]
     ]
+
+
+def expected_reward[S: Hashable](
+    model: Model[S],
+    target: Callable[[S], bool],
+    *,
+    weight: Callable[[str, S], Fraction | int] | None = None,
+    cost: Callable[[str, S], Fraction | int] | None = None,
+    max_states: int = 1_000_000,
+) -> Fraction:
+    """The exact EXPECTED accumulated cost to first reach ``target`` from the model's initial state,
+    treating the reachable graph as a DTMC. With the default unit ``cost`` this is the expected number of
+    STEPS to reach the target.
+
+    ``weight`` normalises the enabled actions into a distribution over successors exactly as in
+    ``reach_probability``; ``cost(action_name, state)`` is the cost charged for firing that action (default
+    ``1``). Returns a ``fractions.Fraction`` — exact, no floating point, solving ``E(s) = 0`` on the target
+    and ``E(s) = sum_s' P(s, s') (cost + E(s'))`` elsewhere.
+
+    The expectation is finite only if the target is reached ALMOST SURELY; otherwise it is infinite, so this
+    raises ``ValueError`` when ``reach_probability`` from the initial state is not exactly 1 (a scheduler-free
+    DTMC has a single value). Also raises ``ValueError`` if the exploration truncates at ``max_states``."""
+    graph = explore(model, max_states=max_states)
+    if graph.truncated:
+        raise ValueError("expected_reward: exploration truncated at max_states; the expectation is inconclusive")
+    init = graph.initial[0]
+    if target(init):
+        return Fraction(0)
+    w = weight if weight is not None else _uniform
+    c = cost if cost is not None else _uniform  # default cost 1 per step -> expected number of steps
+    dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
+    if _dtmc_values(graph.states, dist, target)[init] != 1:
+        raise ValueError(
+            "expected_reward: the target is not reached almost surely from the initial state "
+            "(reach probability < 1), so the expected cost is infinite"
+        )
+    # Every explored state is reachable from init, and init reaches the target a.s., so every non-target
+    # state also reaches it a.s. (a transient state that failed with positive probability would drag init's
+    # reach probability below 1). Hence (I - P) restricted to the non-target states is non-singular.
+    unknown = [s for s in graph.states if not target(s)]
+    index = {s: i for i, s in enumerate(unknown)}
+    n = len(unknown)
+    a = [[Fraction(0) for _ in range(n)] for _ in range(n)]
+    b = [Fraction(0) for _ in range(n)]
+    for s in unknown:
+        i = index[s]
+        a[i][i] = Fraction(1)
+        edges = graph.edges.get(s, ())
+        total = sum(Fraction(w(name, s)) for name, _ in edges)
+        for name, nxt in edges:
+            p = Fraction(w(name, s)) / total
+            b[i] += p * Fraction(c(name, s))  # expected immediate cost of this transition
+            if not target(nxt):
+                a[i][index[nxt]] -= p
+    return _solve_linear(a, b)[index[init]]
 
 
 def _move_value[S: Hashable](move: _Dist[S], values: Mapping[S, Fraction]) -> Fraction:

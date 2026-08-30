@@ -46,12 +46,24 @@ accelerator for large linear solves, never required).
   fixed point, so it is exact by construction and needs no `S0` precomputation (a bounded horizon cannot
   stall). `steps=0` is the indicator of the target; a DTMC is the single-move case. Corpus pins the
   geometric law `P(reach within k) = 1 - (1/2)^k` for a fair coin loop.
+- **DTMC expected reward** — `expected_reward(model, target, cost=...)`. The expected accumulated cost to
+  first reach the target (default unit cost = expected number of steps), solving `E(target) = 0` and
+  `E(s) = sum_s' P(s, s') (cost + E(s'))` exactly over the rationals. Finite only when the target is reached
+  ALMOST SURELY, so it guards on `reach_probability == 1` from the initial state and raises otherwise (the
+  expectation is infinite). The guard is what makes the `(I - P)` system on the non-target states
+  non-singular: every explored state is init-reachable, and if init reaches the target a.s. then so does
+  every non-target state (a transient state that failed with positive probability would drag init's reach
+  probability below 1). Corpus pins the fair-walk absorption time `E = i(N-i)` and the geometric mean `1/p`.
 
 ## Deferred (future layers, not blocking)
 
-- **Expected reward** (expected number of steps / accumulated cost to reach the target). Needs the same
-  `S0`/proper-policy care plus a guard that the target is reached almost surely (otherwise the expectation
-  is infinite), so it is its own increment with its own known-verdict corpus.
+- **MDP expected reward** (min/max expected cost to reach the target — the stochastic shortest/longest path
+  problem). Harder than the DTMC case and than MDP reachability: MAX expected cost is infinite whenever any
+  scheduler can loop away from the target with positive probability (so it needs the "all schedulers
+  proper" check, not just `S0`), and MIN expected cost (SSP) needs a *proper* initial policy and care with
+  zero-cost cycles for policy iteration to converge. Its own increment, with a corpus that includes a
+  zero/near-zero-cost cycle so the proper-policy handling is actually exercised. Until then `expected_reward`
+  is DTMC-only.
 - **Probabilistic LTL / long-run (steady-state) properties.** These reuse the LTL engine and the DTMC/MDP
   machinery but are a larger design; not started.
 

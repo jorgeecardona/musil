@@ -13,7 +13,7 @@ from fractions import Fraction
 
 import pytest
 
-from musil import Action, Model, reach_probability, reach_probability_mdp
+from musil import Action, Model, expected_reward, reach_probability, reach_probability_mdp
 
 
 @dataclass(frozen=True)
@@ -268,3 +268,46 @@ def test_bounded_mdp_max_and_min_within_one_step():
     assert reach_probability_mdp(m, _win, moves=_by_leading_letter, weight=biased, steps=1) == Fraction(2, 3)
     m_min = reach_probability_mdp(m, _win, moves=_by_leading_letter, weight=biased, steps=1, optimize="min")
     assert m_min == Fraction(1, 2)
+
+
+# --------------------------------------------------------------------------------------------------
+# Expected reward: expected accumulated cost (default: number of steps) to first reach the target.
+# --------------------------------------------------------------------------------------------------
+
+
+def test_expected_steps_is_the_geometric_mean():
+    # Coin loop: win with prob 1/2 each step -> expected steps to win = 1/p = 2.
+    assert expected_reward(coin_loop_model(), _win) == Fraction(2)
+
+
+def test_expected_reward_scales_with_cost():
+    # Same coin loop, but each step costs 3: expected total cost = 3 * expected steps = 6.
+    def cost3(_name: str, _s: Choice) -> int:
+        return 3
+
+    assert expected_reward(coin_loop_model(), _win, cost=cost3) == Fraction(6)
+
+
+def test_expected_steps_gamblers_ruin_absorption_time():
+    # Symmetric walk on 0..N with BOTH ends absorbing (target = absorbed): expected time to absorption from
+    # i is exactly i(N-i), a classic closed form. Reached almost surely, so the expectation is finite.
+    n = 4
+
+    def absorbed(s: Walk) -> bool:
+        return s.pos in (0, n)
+
+    for i in range(1, n):
+        assert expected_reward(walk_model(i, n), absorbed) == Fraction(i * (n - i))
+
+
+def test_expected_reward_infinite_when_not_reached_almost_surely():
+    # Single-target walk: from an interior state the target N is reached with prob i/N < 1 (the walk can be
+    # absorbed at 0 instead), so the expected time to reach N is infinite -> raises.
+    with pytest.raises(ValueError, match="almost surely"):
+        expected_reward(walk_model(2, 4), _won(4))
+
+
+def test_expected_reward_at_target_is_zero():
+    win = Choice("win")
+    m = Model(init=win, actions=[], terminal=lambda s: True)
+    assert expected_reward(m, _win) == Fraction(0)
