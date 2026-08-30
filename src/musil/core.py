@@ -657,6 +657,65 @@ def reaches[S: Hashable](graph: Graph[S], predicate: Callable[[S], bool]) -> fro
     return frozenset(seen)
 
 
+def _shortest_step_path[S: Hashable](graph: Graph[S], goal: Callable[[S], bool]) -> tuple[Step[S], ...] | None:
+    """Shortest path from an initial state to the first ``goal``-satisfying state, as a ``Step`` tuple
+    (``<init>`` then one step per edge taken), or None if no reachable state satisfies ``goal``. Forward BFS
+    over ``graph.edges``, so the returned path is of minimum length."""
+    parent: dict[S, tuple[S, str] | None] = {}
+    frontier: list[S] = []
+    for s0 in graph.initial:
+        if s0 not in parent:
+            parent[s0] = None
+            frontier.append(s0)
+    head = 0
+    target: S | None = None
+    while head < len(frontier):
+        s = frontier[head]
+        head += 1
+        if goal(s):
+            target = s
+            break
+        for name, t in graph.edges.get(s, ()):
+            if t not in parent:
+                parent[t] = (s, name)
+                frontier.append(t)
+    if target is None:
+        return None
+    chain: list[Step[S]] = []
+    cur: S = target
+    while True:
+        edge = parent[cur]
+        if edge is None:
+            chain.append(Step(action="<init>", state=cur))
+            break
+        prev, action = edge
+        chain.append(Step(action=action, state=cur))
+        cur = prev
+    return tuple(reversed(chain))
+
+
+def path_to[S: Hashable](graph: Graph[S], state: S) -> tuple[Step[S], ...] | None:
+    """The shortest path from an initial state to ``state`` (a specific reachable state), as a ``Step``
+    tuple, or None if ``state`` is not reachable. The positive counterpart to a counterexample trace — a
+    WITNESS that a state is reachable, and how. Render it with ``format_trace``."""
+    return _shortest_step_path(graph, lambda s: s == state)
+
+
+def witness[S: Hashable](graph: Graph[S], predicate: Callable[[S], bool]) -> tuple[Step[S], ...] | None:
+    """The shortest path from an initial state to SOME reachable state satisfying ``predicate`` — a witness
+    that a *good* state is reachable and how to get there — or None if none is. Where ``reaches`` answers the
+    same question as a yes/no over the whole reachable set, this returns the concrete path. Render it with
+    ``format_trace``."""
+    return _shortest_step_path(graph, predicate)
+
+
+def states_where[S: Hashable](graph: Graph[S], predicate: Callable[[S], bool]) -> tuple[S, ...]:
+    """The reachable states of ``graph`` satisfying ``predicate``, in exploration order.
+    ``solution_cardinality`` counts these; this returns them (e.g. to inspect *which* states a goal holds
+    in, or feed to ``path_to``)."""
+    return tuple(s for s in graph.states if predicate(s))
+
+
 @dataclass(frozen=True, slots=True)
 class FixedPoints[S: Hashable]:
     """Where the system settles: for each initial state, the distinct terminal states (no outgoing

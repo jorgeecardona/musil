@@ -57,9 +57,12 @@ from musil.core import (
     format_trace,
     format_trace_diff,
     invariant_from_violations,
+    path_to,
     reachable_violations,
     reaches,
+    states_where,
     symmetry_reduction_sound,
+    witness,
 )
 from musil.counterexample import as_regression_test, minimize, replay_actions
 from musil.diffing import ModelDiff, diff
@@ -252,6 +255,7 @@ __all__ = [
     "minimize",
     "multi_status_field_actions",
     "no_trace",
+    "path_to",
     "por_sound",
     "profile",
     "protocol_actions",
@@ -268,9 +272,11 @@ __all__ = [
     "simulate",
     "solution_cardinality",
     "state_space_metrics",
+    "states_where",
     "status_field_actions",
     "symmetry_reduction_sound",
     "terminal_states",
     "to_dot",
     "transition_actions",
+    "witness",
 ]

@@ -30,12 +30,15 @@ from musil import (
     expected_reward_mdp,
     explore,
     explore_por,
+    path_to,
     por_sound,
     profile,
     reach_probability,
     reach_probability_mdp,
     recurs,
     responds,
+    states_where,
+    witness,
 )
 
 # --------------------------------------------------------------------------------------------------
@@ -501,3 +504,29 @@ def test_strong_fairness_finds_a_subscc_counterexample():
 
     # Other direction: when g is enabled throughout the only cycle, strong fairness forces it -> <>done holds.
     assert check_liveness(forced_fairness_model(), goal=done, goal_name="done", fair_strong=("g",)).ok
+
+
+# --------------------------------------------------------------------------------------------------
+# 11. Witness API — the positive counterpart to a counterexample: a path to a GOOD state (#30)
+# --------------------------------------------------------------------------------------------------
+
+
+def test_witness_and_path_to_return_shortest_paths():
+    g = explore(counter_model(5))  # states n in 0..5
+
+    # witness: shortest path to SOME state satisfying the predicate. n==5 is 5 incs from 0.
+    w = witness(g, lambda s: s.n == 5)
+    assert w is not None
+    assert w[0].state == Counter(0) and w[-1].state == Counter(5)
+    assert len(w) == 6  # <init> at n=0, then five inc steps
+
+    # path_to: shortest path to a SPECIFIC state.
+    p = path_to(g, Counter(3))
+    assert p is not None and tuple(step.state.n for step in p) == (0, 1, 2, 3)
+
+    # states_where: the reachable states matching a predicate.
+    assert {s.n for s in states_where(g, lambda s: s.n >= 4)} == {4, 5}
+
+    # unreachable target / unsatisfiable predicate -> None.
+    assert path_to(g, Counter(9)) is None
+    assert witness(g, lambda s: s.n == 9) is None

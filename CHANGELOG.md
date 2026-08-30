@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — witness API: `path_to`, `witness`, `states_where` (positive witnesses over a graph)
+
+- musil could produce counterexamples (paths to a *bad* state) but had no first-class way to get a positive
+  WITNESS — a path to a *good* state. `reaches` answers "can it get there?" as a yes/no over the whole
+  reachable set; these return the concrete path (GitLab #30):
+  - `path_to(graph, state)` — the shortest path (a `Step` tuple, render with `format_trace`) from an initial
+    state to a specific reachable `state`, or `None` if unreachable.
+  - `witness(graph, predicate)` — the shortest path to SOME reachable state satisfying `predicate`, or
+    `None` (the concrete-path counterpart to `reaches`).
+  - `states_where(graph, predicate)` — the reachable states satisfying `predicate`, in exploration order
+    (`solution_cardinality` counts these; this returns them).
+- All three operate on a pre-built `Graph`, via a shared forward-BFS shortest-path helper, so no
+  re-exploration. Corpus pins the exact path lengths on the counter model and the `None` cases.
+
 ### Fixed — `check_liveness`: strong fairness missed sub-SCC counterexamples (soundness)
 
 - `check_liveness(..., fair_strong=(...))` could return `ok=True` when a fair counterexample existed — a
