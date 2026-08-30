@@ -114,7 +114,7 @@ from musil.metrics import (
 )
 from musil.patterns import absent, always, eventually, recurs, responds
 from musil.por import explore_por, independent, por_sound
-from musil.probabilistic import reach_probability
+from musil.probabilistic import reach_probability, reach_probability_mdp
 from musil.profiling import ActionCost, Phase, Profile, profile
 from musil.refine import (
     RefinementMonitor,
@@ -250,6 +250,7 @@ __all__ = [
     "protocol_actions",
     "protocol_operations",
     "reach_probability",
+    "reach_probability_mdp",
     "reachable_violations",
     "reaches",
     "recurs",

@@ -138,14 +138,18 @@ the global-scope family; the scoped and precedence patterns are not yet here.
 
 ::: musil.patterns
 
-## Probabilistic — `reach_probability`
+## Probabilistic — `reach_probability`, `reach_probability_mdp`
 
-The exact probability of eventually reaching a target set, treating the reachable graph as a
-discrete-time Markov chain (each state's enabled actions carry a relative `weight` that normalises into a
-distribution over successors). Solved by Gaussian elimination over `fractions.Fraction`, so the answer is
-exact with no floating-point error and no dependency: target states have probability 1, states that cannot
-reach the target have probability 0, and the rest solve `x_s = sum_s' P(s, s') x_s'` (the standard
-three-way split, Baier & Katoen ch. 10). MDP min/max value iteration is the next layer on top of this.
+The exact probability of eventually reaching a target set, as a `fractions.Fraction` (no floating-point
+error, no dependency). `reach_probability` treats the reachable graph as a discrete-time Markov chain
+(each state's enabled actions carry a relative `weight` that normalises into a distribution over
+successors) and solves it by Gaussian elimination over the rationals: target states have probability 1,
+states that cannot reach the target have probability 0, and the rest solve `x_s = sum_s' P(s, s') x_s'`
+(the standard three-way split, Baier & Katoen ch. 10). `reach_probability_mdp` adds nondeterministic
+choice — a caller-supplied `moves` partitions each state's enabled actions into the moves a scheduler
+picks between, with the actions within a move forming the distribution — and returns the maximal
+reachability probability over all schedulers (`optimize="max"`), solved exactly by policy iteration.
+`optimize="min"` is deferred (it needs the end-component precomputation; see `PROBABILISTIC_NOTES.md`).
 
 ::: musil.probabilistic
 

@@ -4,6 +4,25 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.probabilistic`: MDP max-reachability (exact policy iteration)
+
+- `reach_probability_mdp(model, target, moves=..., optimize="max")` adds NONDETERMINISTIC choice on top of
+  the DTMC layer: a caller-supplied `moves(state, enabled_actions)` partitions each state's enabled actions
+  into the moves a scheduler picks between, and the actions within a move form one probability distribution
+  (via `weight`). It returns the MAXIMAL probability of eventually reaching `target` over all schedulers.
+- Solved EXACTLY by policy iteration: each policy's value is an exact DTMC solve (`_dtmc_values`, now shared
+  with `reach_probability`), then every state switches to a strictly better move under those values, until
+  the policy is stable. Termination is by monotonicity (each switch strictly increases the bounded values,
+  so no policy repeats and the finite policy space is exhausted) — no floating-point convergence threshold.
+- Grouping every enabled action into a single move recovers `reach_probability` exactly (a DTMC has no
+  choice); pinned as a differential test against the gambler's-ruin walk.
+- `optimize="min"` raises `NotImplementedError` (with a message pointing to `PROBABILISTIC_NOTES.md`):
+  min-reachability needs the S0min end-component precomputation the max case does not, and shipping it
+  half-right would return an unsound quantitative answer. The deferral and the concrete plan (maximal
+  end-component collapse + the S0min attractor game, reusing `liveness.py`'s Tarjan) are documented.
+- Corpus pins a two-gamble MDP whose max value is hand-computable: move A is a fair coin (1/2), move B is
+  weighted 2:1 (2/3), so the max scheduler picks B and `reach_probability_mdp` returns exactly `2/3`.
+
 ### Added — `musil.probabilistic`: exact DTMC reachability probability
 
 - `reach_probability(model, target, weight=...)` returns the EXACT probability of eventually reaching a
@@ -17,7 +36,7 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   Truncated exploration raises rather than returning an inconclusive number.
 - Corpus pins the fair symmetric random walk (gambler's ruin): `reach_probability` on 0..N equals the
   theory closed form `i/N` for every start `i`, a known-verdict oracle independent of musil. This layer is
-  the base for MDP min/max value iteration (the next step).
+  the base for the MDP reachability that follows.
 
 ### Added — `musil.por`: partial-order reduction mechanism + soundness gate
 

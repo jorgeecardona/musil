@@ -8,6 +8,7 @@ correctness, not merely "unchanged"."""
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -28,6 +29,7 @@ from musil import (
     por_sound,
     profile,
     reach_probability,
+    reach_probability_mdp,
 )
 
 # --------------------------------------------------------------------------------------------------
@@ -247,6 +249,51 @@ def test_fair_walk_reach_probability_is_i_over_n():
     n = 5
     for i in range(n + 1):
         assert reach_probability(walk_model(i, n), lambda s: s.pos == n) == Fraction(i, n)
+
+
+# --------------------------------------------------------------------------------------------------
+# 6. Two-gamble MDP — the max scheduler picks the better coin; exact value known by hand
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Gamble:
+    tag: str  # "start", "win" (target), "dead"
+
+
+def two_gamble_model() -> Model[Gamble]:
+    win, dead = Gamble("win"), Gamble("dead")
+    at_start: Callable[[Gamble], bool] = lambda s: s.tag == "start"  # noqa: E731
+    return Model(
+        init=Gamble("start"),
+        actions=[
+            Action("A_win", enabled=at_start, apply=lambda s: win),
+            Action("A_lose", enabled=at_start, apply=lambda s: dead),
+            Action("B_win", enabled=at_start, apply=lambda s: win),
+            Action("B_lose", enabled=at_start, apply=lambda s: dead),
+        ],
+        terminal=lambda s: s.tag in ("win", "dead"),
+    )
+
+
+def test_mdp_max_reachability_is_the_better_coin():
+    # Move A is a fair coin (1/2); move B, weighted 2:1, wins with prob 2/3. Max over schedulers = 2/3,
+    # hand-computable and independent of musil. Guards the exact MDP policy-iteration solver.
+    m = two_gamble_model()
+
+    def by_letter(_s: Gamble, enabled: tuple[Action[Gamble], ...]) -> list[Sequence[Action[Gamble]]]:
+        groups: dict[str, list[Action[Gamble]]] = {}
+        for a in enabled:
+            groups.setdefault(a.name[0], []).append(a)
+        return list(groups.values())
+
+    def biased(name: str, _s: Gamble) -> int:
+        return 2 if name == "B_win" else 1
+
+    def is_win(s: Gamble) -> bool:
+        return s.tag == "win"
+
+    assert reach_probability_mdp(m, is_win, moves=by_letter, weight=biased) == Fraction(2, 3)
 
 
 def test_profile_explores_the_same_reachable_set():
