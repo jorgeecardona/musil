@@ -19,11 +19,12 @@ caller knows exactly what the verification is worth."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Mapping
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from musil.core import Action, Invariant, Model, Result, check
+from musil.liveness import LivenessResult, check_liveness
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,3 +141,87 @@ def check_open[S: Hashable](
                 unverified.append(assumption)
 
     return OpenResult(result=result, unverified_assumptions=tuple(unverified))
+
+
+@dataclass(frozen=True, slots=True)
+class OpenLivenessResult[S: Hashable]:
+    """The outcome of ``check_liveness_open``: the underlying ``LivenessResult`` plus every ``Assumption``
+    from the environments that is not yet ``"verified"`` (the residual proof obligations). ``bool`` and
+    ``ok`` delegate to the liveness verdict, so it works in assertions."""
+
+    result: LivenessResult[S]
+    unverified_assumptions: tuple[Assumption, ...]
+
+    @property
+    def ok(self) -> bool:
+        return self.result.ok
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+    def __str__(self) -> str:
+        lines = [str(self.result)]
+        if self.unverified_assumptions:
+            lines.append("Unverified assumptions (residual proof obligations):")
+            for a in self.unverified_assumptions:
+                src = f"  [{a.source}]" if a.source else ""
+                lines.append(f"  [{a.status}] {a.name}: {a.description}{src}")
+        return "\n".join(lines)
+
+
+def check_liveness_open[S: Hashable](
+    system: Model[S],
+    *envs: EnvironmentSpec[S],
+    goal: Callable[[S], bool],
+    goal_name: str = "goal",
+    everywhere: bool = False,
+    leadsto_from: Callable[[S], bool] | None = None,
+    fair: Iterable[str] | None = None,
+    fair_strong: Iterable[str] = (),
+    max_states: int = 1_000_000,
+) -> OpenLivenessResult[S]:
+    """Check a LIVENESS property of ``system`` under adversarial environments — the liveness counterpart
+    of ``check_open``, so the same ``EnvironmentSpec`` faults are not written twice (once as env behaviors
+    for the safety ``check_open``, once as hand-rolled unfair actions for ``check_liveness``).
+
+    Composition: every ``env.behaviors`` action is merged into the model (the BFS explores every env
+    action), and by default ``fair`` is the SYSTEM's own action names only — so environment behaviors are
+    UNFAIR, i.e. an adversarial environment is never assumed to eventually 'help' reach the goal. Pass
+    ``fair`` explicitly to override (e.g. add an env behavior whose ``EnvironmentSpec`` guarantees it is
+    fairly scheduled, like "the network eventually delivers"); ``fair=()`` is strict no-fairness.
+
+    ``goal`` / ``goal_name`` / ``everywhere`` / ``leadsto_from`` / ``fair_strong`` pass straight through to
+    ``check_liveness`` (see there for ``<>P`` vs ``[]<>P`` vs the response form). Environment SAFETY
+    guarantees are not re-checked here — they are safety, verified by ``check_open`` on the same envs; this
+    form verifies the liveness goal under the env's faults. Unverified assumptions from all environments are
+    surfaced in ``OpenLivenessResult.unverified_assumptions``.
+
+    ``check_liveness_open(system, goal=...)`` with no environments matches ``check_liveness(system, goal=...)``
+    with ``fair`` defaulting to the system's own moves."""
+    all_actions = list(system.actions)
+    for env in envs:
+        all_actions.extend(env.behaviors)
+    composed = Model(
+        init=system.init,
+        actions=all_actions,
+        invariants=system.invariants,
+        terminal=system.terminal,
+    )
+    fairset: Iterable[str] = tuple(a.name for a in system.actions) if fair is None else fair
+    result = check_liveness(
+        composed,
+        goal=goal,
+        goal_name=goal_name,
+        everywhere=everywhere,
+        leadsto_from=leadsto_from,
+        fair=fairset,
+        fair_strong=fair_strong,
+        max_states=max_states,
+    )
+    unverified = tuple(
+        assumption
+        for env in envs
+        for assumption in env.assumptions.values()
+        if assumption.status != "verified"
+    )
+    return OpenLivenessResult(result=result, unverified_assumptions=unverified)

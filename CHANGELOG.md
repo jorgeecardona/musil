@@ -4,6 +4,19 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `check_liveness_open`: verify liveness under the same environments as `check_open`
+
+- `check_liveness_open(system, *envs, goal=...)` is the liveness counterpart of `check_open`, so an
+  `EnvironmentSpec`'s faults are not written twice (once as env behaviors for the safety `check_open`, once
+  as hand-rolled unfair actions for `check_liveness`). From
+  [issue #20](https://gitlab.com/jorgeecardona/musil/-/work_items/20). It merges every `env.behaviors`
+  into the model and defaults `fair` to the SYSTEM's own action names, so environment behaviors are UNFAIR
+  — an adversarial environment is never assumed to eventually help reach the goal. Pass `fair` explicitly
+  to mark an env behavior fairly scheduled (e.g. "the network eventually delivers"); `fair=()` is strict.
+- `goal`/`goal_name`/`everywhere`/`leadsto_from`/`fair_strong` pass through to `check_liveness`. Returns an
+  `OpenLivenessResult` that surfaces the environments' unverified assumptions. Env SAFETY guarantees stay
+  with `check_open` (safety); this form verifies the liveness goal under the same shared faults.
+
 ## [0.25.0] - 2026-08-29
 
 Twelve features driven by the adoption issues (#5–#16) plus a coverage fix (#18), all stdlib-only so

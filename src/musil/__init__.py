@@ -63,7 +63,14 @@ from musil.core import (
 )
 from musil.counterexample import as_regression_test, minimize, replay_actions
 from musil.diffing import ModelDiff, diff
-from musil.env import Assumption, EnvironmentSpec, OpenResult, check_open
+from musil.env import (
+    Assumption,
+    EnvironmentSpec,
+    OpenLivenessResult,
+    OpenResult,
+    check_liveness_open,
+    check_open,
+)
 from musil.fsm import (
     declared_states,
     multi_status_field_actions,
@@ -143,6 +150,7 @@ __all__ = [
     "ModelDiff",
     "NetworkModel",
     "Node",
+    "OpenLivenessResult",
     "OpenResult",
     "Partition",
     "Phase",
@@ -175,6 +183,7 @@ __all__ = [
     "check_cached",
     "check_inductive",
     "check_liveness",
+    "check_liveness_open",
     "check_open",
     "check_refinement",
     "clear_verdict_cache",
