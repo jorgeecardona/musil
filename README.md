@@ -117,6 +117,22 @@ everyday "nothing gets stuck" (every service that reaches `placed` eventually re
 It's more lenient than `everywhere=True`: a never-reaching-the-goal loop only counts against you if
 Q can actually lead into it.
 
+**Arbitrary temporal properties (LTL)** — `check_ltl(model, formula)`. Beyond the fixed forms above, state
+any linear-temporal-logic property as data: `Always`, `Eventually`, `Next`, `Until`, `Release`, and boolean
+combinations of `Atom`s. The shapes that reduce onto `check` / `check_liveness` take that proven path;
+everything else (`Next`, `Until`, nesting) is decided by a general Büchi automaton over the reachable graph.
+A violation comes back as a lasso counterexample with a `--- loops forever ---` marker showing which suffix
+repeats. The `patterns` helpers (`always`, `eventually`, `recurs`, `responds`) name the common shapes as
+one-liners over the same engine. See `examples/ltl_properties.py`.
+
+**Exact quantitative checking (DTMC / MDP)** — `musil.probabilistic`. When actions carry a relative
+probability weight, the reachable graph is a Markov chain and you can ask exact questions, answered as
+`fractions.Fraction` with no floating-point error: `reach_probability` (probability of eventually — or, with
+`steps=k`, within `k` transitions — reaching a target) and `expected_reward` (expected steps or cost to
+reach it). When a scheduler also makes nondeterministic choices (an MDP), `reach_probability_mdp` /
+`expected_reward_mdp` give the minimum or maximum over all schedulers, by exact policy iteration. This is
+verification, not the sampling `sim` does. See `examples/lossy_retry.py`.
+
 **Where does it settle? — confluence** — `fixed_points(model)` reports, for each initial state
 *separately*, the distinct terminal states (no available step) its runs can end in. A single start
 that can settle in two different places means the outcome depends on the order steps fired — e.g.
@@ -237,7 +253,7 @@ and the runnable [`examples/route_delivery.py`](https://gitlab.com/jorgeecardona
 
 | | what it is | spec language | runs the real code? | liveness |
 |---|---|---|---|---|
-| **musil** | in-Python library, explicit-state | Python (frozen dataclasses) | the model can be driven from your code's tables | safety + weak/strong-fairness liveness |
+| **musil** | in-Python library, explicit-state | Python (frozen dataclasses) | the model can be driven from your code's tables | full LTL + weak/strong-fairness liveness + exact DTMC/MDP probabilities |
 | TLA+ / TLC | standalone checker | TLA+ (math) | no (separate model) | full temporal logic |
 | P | DSL + systematic testing, compiles to C | P (state machines) | yes (executable model) | safety + liveness |
 | Stateright | Rust library, model-check + run | Rust | yes (same actors on a real network) | safety + liveness |
@@ -253,19 +269,20 @@ deadlocks / stuck states and proving convergence.
   reachable states. Very large or infinite state spaces blow up (cap with `max_states`; the result
   flags `truncated`). Tools that reason symbolically instead of enumerating (TLA+'s Apalache, etc.)
   scale further.
-- **Exact by design, never approximate.** A clean `check` is a proof that the *whole* reachable space was
-  swept. musil deliberately has no probabilistic/bitstate mode (SPIN's supertrace, hash-compaction): those
-  trade a nonzero chance of missing a state for reaching larger spaces, and a checker whose "OK" might have
-  skipped the one bug is not what musil is for. Every reduction it *does* offer (symmetry, footprint
-  memoization) ships behind a gate that proves no state was dropped. If RAM is the ceiling, the answer is
-  lossless (compress the stored states, or spill them to disk), never a miss. See `BITSTATE_NOTES.md`.
-- **Limited reduction of redundant work**: when many concurrent steps are independent, musil still
-  explores all their orderings, which can be slow (the standard technique, "partial-order reduction," is
-  not implemented). It *can* collapse interchangeable parts of the state — pass `canonicalize=...`
-  (symmetry reduction), validated by `symmetry_reduction_sound`.
-- **Liveness is fairness-based, not arbitrary temporal logic**: it covers "eventually," "always
-  eventually" (with weak and strong fairness), and the "whenever Q then eventually P" response
-  property — not every formula a full temporal logic (LTL) could express.
+- **Exact search by design, never approximate.** A clean `check` is a proof that the *whole* reachable space
+  was swept. musil deliberately has no approximate-search mode (SPIN's supertrace / bitstate hash-compaction):
+  those trade a nonzero chance of missing a state for reaching larger spaces, and a checker whose "OK" might
+  have skipped the one bug is not what musil is for. (The probabilistic layer is a different thing — it
+  computes *exact* rational probabilities over the full graph, no sampling.) Every reduction musil *does*
+  offer (symmetry, footprint memoization) ships behind a gate that proves no state was dropped. If RAM is the
+  ceiling, the answer is lossless (compress the stored states, or spill them to disk), never a miss. See
+  `BITSTATE_NOTES.md`.
+- **Reducing redundant interleavings is opt-in, not automatic**: when many concurrent steps are independent,
+  the default sweep still explores all their orderings. Partial-order reduction *is* available —
+  `explore_por(model, ample=...)` fires only a chosen subset per state, and `por_sound` validates that the
+  choice drops no reachable violation — but computing the ample set automatically is deferred (see
+  `REDUCTION_NOTES.md`), so today you supply and gate it. Interchangeable parts of the state collapse with
+  `canonicalize=...` (symmetry reduction), validated by `symmetry_reduction_sound`.
 - **It checks the model**, not your code. Whether the real code actually behaves like the model is a
   separate question — `simulate`, or `generate_traces` + `replay`, bridge it by running the model's
   expected behaviors against the code.
