@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import Action, Model, check, check_liveness, explore
+from musil import Action, Model, check, check_liveness, explore, profile
 
 # --------------------------------------------------------------------------------------------------
 # 1. Bounded counter — a derivable-count sanity anchor
@@ -177,3 +177,13 @@ def test_traffic_light_safe_and_live():
     assert len(explore(m).states) == 3  # red, green, yellow
     assert check(m).ok  # known-color holds, no deadlock (it cycles)
     assert check_liveness(m, goal=lambda s: s.color == "green").ok  # eventually green on every run
+
+
+def test_profile_explores_the_same_reachable_set():
+    # profile keeps its own instrumented loop (it times enabled/apply/canonicalize separately, which the
+    # shared _successors kernel bundles). This pins its full-sweep reachable count to the corpus so it can
+    # never silently drift from check/explore.
+    assert profile(counter_model(5)).states_explored == len(explore(counter_model(5)).states) == 6
+    assert profile(peterson_model()).states_explored == len(explore(peterson_model()).states) == 20
+    assert profile(dining_naive_model()).states_explored == len(explore(dining_naive_model()).states) == 6
+    assert profile(light_model()).states_explored == len(explore(light_model()).states) == 3

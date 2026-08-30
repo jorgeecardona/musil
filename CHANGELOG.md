@@ -11,8 +11,10 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   / `_expand` shared by `check`/`check_all`. This is the exact spot that drifted in the 089aed0 bug
   (successors canonicalized in one path but not the other); it now lives in one place so it cannot diverge
   again. No behavior change: the known-verdict corpus (`tests/test_corpus.py`) pins identical reachable-state
-  counts and verdicts across the refactor. Three of the four BFS loops now share the kernel; `profile`
-  (which times `enabled`/`apply` separately) is the remaining one.
+  counts and verdicts across the refactor. `check`/`check_all`/`explore` share the kernel; `profile` keeps
+  its own instrumented loop by design (it times `enabled`/`apply`/`canonicalize` separately, which the
+  bundled kernel cannot), and the corpus now pins its full-sweep reachable count to `check`/`explore` so it
+  cannot silently drift either. Move 1b (BFS unification) complete.
 
 ### Docs — genericize examples to invented / commonly-known systems
 
