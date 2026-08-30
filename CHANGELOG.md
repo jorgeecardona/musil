@@ -4,6 +4,16 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `examples/coverage_vacuity.py`: when a green check is meaningless
+
+- A worked example of `coverage` / `invariant_coverage` (GitLab #2 item 1, "cheapest, highest signal"): a
+  tiny account passes `check` cleanly, yet `coverage` flags a dead action (`thaw`, guarded on a status
+  nothing sets) and `invariant_coverage` flags a vacuously-true invariant (`status-known`, which no action
+  can break) while confirming `non-negative-balance` is genuinely load-bearing (the withdraw guard protects
+  it). Shows that OK means "no invariant broke," not "the behaviour was exercised" or "the invariants caught
+  anything." Subprocess test pins the reports; the example asserts them itself. Generic account domain, no
+  new library code.
+
 ### Added — `examples/ltl_properties.py`: the LTL layer, worked end to end
 
 - The first worked example of `check_ltl`: a traffic light with six temporal properties that hold (safety
