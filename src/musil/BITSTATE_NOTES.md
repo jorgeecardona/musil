@@ -1,11 +1,10 @@
-# Memory-bounded search (bitstate / hash-compaction) — designed, awaiting a soundness decision
+# Memory-bounded search (bitstate / hash-compaction) — REJECTED; musil is exact-only by design
 
 `check`/`explore` hold the full `seen` set of reachable states in RAM, so the reachable space must fit in
 memory. Rich states (large frozen dataclasses) hit that wall before the time budget. This is GitLab #2 item
-4 (SPIN's supertrace/bitstate; PRISM/TLC have related modes). It is designed here but NOT shipped, because
-it changes something the rest of musil does not: it makes a clean run APPROXIMATE — evidence with a
-quantified miss-probability, not a proof. Whether a soundness-first tool should have such a mode at all is a
-decision for the user, recorded at the end.
+4 (SPIN's supertrace/bitstate; PRISM/TLC have related modes). It is designed here but **will not be
+shipped**: see the decision at the end. The reason is that it changes something the rest of musil does not —
+it makes a clean run APPROXIMATE, evidence with a quantified miss-probability rather than a proof.
 
 ## The two classic techniques
 
@@ -78,15 +77,35 @@ the SAME verdict as `check` (they must agree in the collision-free regime). That
 and the reporting; it cannot test the miss behaviour (probabilistic), only that the reported bound is
 computed correctly.
 
-## Open decision for the user
+## Decision (2026-08-30): rejected — musil is exact-only by design
 
-Does musil want an explicitly-approximate mode?
+The user's ruling: **no implementation may allow a miss. A nonzero miss probability is not an option.** So
+both techniques above are out — a clean `check` is a PROOF that the whole reachable space was swept, never
+evidence-with-a-probability. This is musil's identity as a soundness-first checker, consistent with every
+reduction it already ships (symmetry, POR, footprint memoization) being gated by a check that proves no
+state was dropped; a probabilistic miss can have no such gate, so it cannot exist here. Users who genuinely
+need bitstate-scale approximate search use SPIN.
 
-- **Yes** → implement variant A as `check_compact` with the approximation report and the differential gate
-  above; trace via option 1 first.
-- **No / exact-only by design** → keep #2.4 permanently deferred and state in the docs that musil is
-  exact-only on purpose (a clean `check` is a proof), and that users needing bitstate-scale approximate
-  search use SPIN. This is a defensible identity for a soundness-first checker.
+#2.4 is therefore **permanently deferred** (closed as won't-do), not parked pending effort.
+
+### If memory ever becomes the binding constraint, the sound (zero-miss) options are
+
+These keep `check` a proof and are the only directions musil would consider — none trades away exactness:
+
+- **Lossless state compression.** Store a smaller EXACT encoding in `seen` (a canonical serialization, field
+  interning / a shared dictionary of repeated substructures, delta-encoding against a parent) instead of the
+  full Python object. Equality is preserved exactly, so there is zero miss — it is the same search using
+  fewer bytes per state. This is the first thing to reach for.
+- **Collision detection done right.** Hashing is fine for BUCKETING as long as a hash hit is confirmed by a
+  full-state comparison (which is exactly what Python's own `set`/`dict` already do). The unsound step is
+  *dropping* the full state so the comparison cannot happen; keep the state (possibly compressed, above) and
+  there is no miss.
+- **External / on-disk `seen` set.** Spill the visited set to disk (sorted runs, or an embedded key-value
+  store keyed by the exact state encoding). Zero miss, RAM no longer the ceiling, at the cost of speed. A
+  pure-stdlib option (`sqlite3`, `shelve`) keeps the dependency policy.
+
+None of these is urgent for the bounded models musil targets; they are recorded so the exact-only stance has
+a concrete forward path that never reintroduces a miss.
 
 Everything else in GitLab #2 is shipped: item 1 (coverage & vacuity) via `musil.metrics`
 (`coverage`, `invariant_coverage`, `state_space_metrics`, `solution_cardinality`); item 2 (LTL layer) via

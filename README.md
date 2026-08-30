@@ -253,6 +253,12 @@ deadlocks / stuck states and proving convergence.
   reachable states. Very large or infinite state spaces blow up (cap with `max_states`; the result
   flags `truncated`). Tools that reason symbolically instead of enumerating (TLA+'s Apalache, etc.)
   scale further.
+- **Exact by design, never approximate.** A clean `check` is a proof that the *whole* reachable space was
+  swept. musil deliberately has no probabilistic/bitstate mode (SPIN's supertrace, hash-compaction): those
+  trade a nonzero chance of missing a state for reaching larger spaces, and a checker whose "OK" might have
+  skipped the one bug is not what musil is for. Every reduction it *does* offer (symmetry, footprint
+  memoization) ships behind a gate that proves no state was dropped. If RAM is the ceiling, the answer is
+  lossless (compress the stored states, or spill them to disk), never a miss. See `BITSTATE_NOTES.md`.
 - **Limited reduction of redundant work**: when many concurrent steps are independent, musil still
   explores all their orderings, which can be slow (the standard technique, "partial-order reduction," is
   not implemented). It *can* collapse interchangeable parts of the state — pass `canonicalize=...`
