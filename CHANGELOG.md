@@ -4,6 +4,17 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — LTL counterexamples mark where the infinite run loops
+
+- `Result` gains a `loop: int | None` field: for an infinite-run (LTL lasso) counterexample it is the index
+  in `trace` where the cycle begins — the state reached, then repeated forever — and `None` for a finite
+  (invariant/deadlock) counterexample. `check_ltl`'s general engine now sets it (`accepting_lasso` returns
+  the stem length alongside the lasso), and `format_trace` emits a `--- loops forever ---` marker after that
+  state (matching the existing `LivenessResult` rendering), so a liveness counterexample shows which suffix
+  repeats. `Result.__str__` also renders a proper `LTL VIOLATED: <formula>` header for `kind="ltl"`.
+- The field is defaulted, so every existing `Result` construction is unchanged. Corpus pins that the loop
+  index is in range and that the cycle closes back to the marked entry state.
+
 ### Fixed — `musil.ltl`: document the general-engine counterexample trace (and pin it)
 
 - The `check_ltl` docstring and the docs LTL section claimed the general Büchi engine returns "no

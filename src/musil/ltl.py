@@ -271,13 +271,17 @@ def check_ltl[S: Hashable](
     # General engine: model |= phi iff the automaton for Not(phi) has no accepting run over the
     # (stutter-extended) reachable graph. Covers Until/Release/Next/arbitrary nesting.
     graph = _stutter(explore(model, max_states=max_states))
-    lasso = GeneralizedBuchi[S].from_ltl(Not(formula)).accepting_lasso(graph)
+    found = GeneralizedBuchi[S].from_ltl(Not(formula)).accepting_lasso(graph)
+    if found is None:
+        return Result(ok=True, states_explored=len(graph.states), truncated=graph.truncated)
+    steps, loop = found
     return Result(
-        ok=lasso is None,
+        ok=False,
         states_explored=len(graph.states),
-        kind="ltl" if lasso is not None else None,
-        reason=str(formula) if lasso is not None else None,
-        trace=lasso or (),
+        kind="ltl",
+        reason=str(formula),
+        trace=steps,
+        loop=loop,
         truncated=graph.truncated,
     )
 
@@ -404,11 +408,12 @@ class GeneralizedBuchi[S: Hashable]:
             for scc in tarjan(set(prod), prod)
         )
 
-    def accepting_lasso(self, graph: Graph[S]) -> tuple[Step[S], ...] | None:
+    def accepting_lasso(self, graph: Graph[S]) -> tuple[tuple[Step[S], ...], int] | None:
         """A concrete witness of an accepting run, as a lasso trace ``<init> -> ...(stem)... -> ...(cycle)``
-        where the cycle repeats forever and visits every acceptance set. Returns None when there is no
-        accepting run. Product states are mapped back to model states (the automaton component dropped); the
-        looping cycle is appended once."""
+        where the cycle repeats forever and visits every acceptance set, PLUS the index in that trace where
+        the cycle begins (the state reached, then repeated forever). Returns None when there is no accepting
+        run. Product states are mapped back to model states (the automaton component dropped); the looping
+        cycle is appended once."""
         prod = _product(graph, self.initial, self.transitions)
         target: set[tuple[S, int]] | None = None
         for scc in tarjan(set(prod), prod):
@@ -442,7 +447,9 @@ class GeneralizedBuchi[S: Hashable]:
         steps: list[Step[S]] = [Step(action="<init>", state=source[0])]
         steps += [Step(action=a, state=m) for a, (m, _q) in stem]
         steps += [Step(action=a, state=m) for a, (m, _q) in cycle]
-        return tuple(steps)
+        # index 0 is <init>, indices 1..len(stem) are the stem, so the cycle-entry state (repeated forever)
+        # sits at index len(stem); the cycle steps follow it.
+        return tuple(steps), len(stem)
 
     @classmethod
     def from_ltl(cls, formula: LTL[S]) -> GeneralizedBuchi[S]:

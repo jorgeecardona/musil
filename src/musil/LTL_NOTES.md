@@ -45,9 +45,12 @@ the same AST, dependency-free (per the dependency policy: no z3, build it oursel
 - [x] Counterexample lasso from the engine (`GeneralizedBuchi.accepting_lasso`): a stem to the accepting
       SCC plus a cycle visiting every acceptance set, mapped to model states; `check_ltl`'s engine path now
       returns it as the `Result.trace`.
-- [ ] Re-express the fixed liveness forms and `musil.patterns` as sugar over `check_ltl`.
-- [ ] Mark the loop start in the trace (the trace is stem + one cycle iteration; there is no explicit
-      "cycle repeats from here" marker on `Result` yet).
+- [x] Re-express `musil.patterns` as sugar over `check_ltl`: the three LIVENESS patterns (`eventually`,
+      `recurs`, `responds`) now build their formula and call `check_ltl`. The two SAFETY patterns
+      (`always`, `absent`) stay direct `check` calls — `G(state)` is just an invariant, and they expose
+      `canonicalize`/`key` that `check_ltl`'s safety reduction does not forward.
+- [x] Mark the loop start in the trace: `Result.loop` is the index in `trace` where the cycle begins, set
+      by `accepting_lasso`, and `format_trace` emits a `--- loops forever ---` marker after that state.
 
 ## Terminal states (must handle when wiring check_ltl)
 

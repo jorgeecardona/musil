@@ -193,6 +193,9 @@ class Result[S: Hashable]:
     reason: str | None = None  # detail from a string-returning invariant (which sub-rule/entity)
     trace: tuple[Step[S], ...] = ()
     truncated: bool = False  # True if the max_states cap was hit before the space was exhausted
+    # For an infinite-run (LTL lasso) counterexample: the index in ``trace`` where the cycle begins — the
+    # state reached, then repeated forever. None for a finite counterexample (invariant/deadlock) or ok.
+    loop: int | None = None
 
     def __bool__(self) -> bool:
         return self.ok
@@ -205,18 +208,26 @@ class Result[S: Hashable]:
             head = f"INVARIANT VIOLATED: {self.invariant}"
             if self.reason:
                 head += f" — {self.reason}"
+        elif self.kind == "ltl":
+            head = f"LTL VIOLATED: {self.reason}" if self.reason else "LTL VIOLATED"
         else:
             head = "DEADLOCK (a non-terminal state with no enabled action)"
-        return f"{head}\n{format_trace(self.trace)}\n({self.states_explored} states explored)"
+        return f"{head}\n{format_trace(self.trace, loop=self.loop)}\n({self.states_explored} states explored)"
 
 
-def format_trace[S: Hashable](trace: Iterable[Step[S]], *, render: Callable[[S], str] | None = None) -> str:
+def format_trace[S: Hashable](
+    trace: Iterable[Step[S]], *, render: Callable[[S], str] | None = None, loop: int | None = None
+) -> str:
     """Render a counterexample as ``Init: <state>`` then ``→ <action>  <state>`` per step. ``render`` customises
-    how each state is shown (default ``str``) — useful for rich states whose full repr is noisy."""
+    how each state is shown (default ``str``) — useful for rich states whose full repr is noisy. ``loop`` is
+    the index of a lasso's cycle start: a ``--- loops forever ---`` marker is emitted after that state, so an
+    infinite-run (LTL) counterexample shows where the repeating suffix begins."""
     show = render if render is not None else str
     lines: list[str] = []
     for i, step in enumerate(trace):
         lines.append(f"  Init: {show(step.state)}" if i == 0 else f"  → {step.action}: {show(step.state)}")
+        if loop is not None and i == loop:
+            lines.append("  --- loops forever ---")
     return "\n".join(lines)
 
 

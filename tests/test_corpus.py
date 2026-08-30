@@ -270,6 +270,10 @@ def test_check_ltl_general_engine_returns_a_valid_counterexample_lasso():
     edges = {s: {nxt for _, nxt in e} for s, e in explore(m).edges.items()}
     for prev, step in zip(r.trace, r.trace[1:], strict=False):
         assert step.state in edges[prev.state]  # every consecutive pair is a genuine model transition
+    # the lasso marks where the infinite cycle begins, and the cycle closes back to that entry state.
+    assert r.loop is not None and 0 <= r.loop < len(r.trace)
+    assert r.trace[-1].state == r.trace[r.loop].state  # the suffix loops back to the marked entry
+    assert "--- loops forever ---" in str(r)  # and the rendering shows it
 
 
 def test_por_trivial_ample_matches_explore_and_is_sound():
