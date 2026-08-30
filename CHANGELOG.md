@@ -4,6 +4,16 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `examples/ltl_properties.py`: the LTL layer, worked end to end
+
+- The first worked example of `check_ltl`: a traffic light with six temporal properties that hold (safety
+  `G known`, `F green`, recurrence `G F red`, response `G(yellow -> F red)`, `X green`, `known U green`),
+  spanning the reducible fragment and the general Büchi engine (`Next`, `Until`). The last property,
+  `F G green` ("eventually green forever"), is FALSE and returns a counterexample as an infinite run — a
+  lasso with the `--- loops forever ---` marker showing the light never stabilises. A subprocess test pins
+  the verdicts and the marker; the example asserts them itself. Generic traffic-light domain, no new library
+  code.
+
 ### Added — `examples/lossy_retry.py`: the probabilistic layer, worked end to end
 
 - The first worked example of `musil.probabilistic`: a message over a lossy link (each attempt delivers
