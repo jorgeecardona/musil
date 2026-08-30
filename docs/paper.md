@@ -419,6 +419,17 @@ that silently reopens one of these rough edges fails CI.
   `max_states` parameter caps exploration, trading completeness for tractability.
   In practice, the models we've seen stay under 100k states.
 
+- **Single-threaded exploration.** The BFS runs in one process; there is no built-in parallel or
+  sharded `check`. Actions are Python closures, which `multiprocessing` cannot pickle to worker
+  processes, and the GIL serializes a CPU-bound thread pool — so exploration does not scale across cores
+  today. To fit a large space in a CI budget, *reduce* it rather than parallelize it: `Model.footprint`
+  to memoize an expensive `actions_fn`, symmetry reduction (`canonical_by_sorting` /
+  `canonical_by_permutations` / `canonical_by_fields`, each gated by `symmetry_reduction_sound`) to
+  collapse interchangeable identities, and a tighter `max_states` or a smaller initial scope. Where the
+  state space partitions naturally, run the independent per-partition models as separate checks (e.g. one
+  per shard under a forked test runner). Use `profile` to find where the time actually goes before
+  reaching for any of these.
+
 - **Liveness only via SCC.** `check_liveness` finds strongly-connected components with no
   outgoing transitions. This catches liveness violations where the system loops forever, but
   not linear-time temporal properties (LTL formulae).
