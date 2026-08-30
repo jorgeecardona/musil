@@ -370,39 +370,39 @@ machine-readable, citable assumptions attached to each input action.
 ### 5.5  Control-plane verification driven by production code
 
 The preceding case studies model a system *for* verification. This one inverts that: it points musil
-at the **already-written code of a production control plane** (a multi-region PaaS) and checks the
-*real* artifacts, demonstrating the "zero-drift" claim end to end. The control plane already had a
-hand-built correctness model — guarded labeled transition systems per resource (`state.py:ALLOWED`),
-ten cross-resource invariants (`invariants.py`, I1–I10), and a reconcile loop — but verified them
-only by *sampling* (property-based fault injection), never exhaustively.
+at the **already-written code of an industrial control plane** and checks the *real* artifacts,
+demonstrating the "zero-drift" claim end to end. The control plane already had a hand-built
+correctness model — a guarded labeled transition system per resource, a set of cross-resource
+invariants, and a reconcile loop — but verified them only by *sampling* (property-based fault
+injection), never exhaustively.
 
 musil closes that gap with no separate specification. The model's actions are generated directly from
-the production `ALLOWED` table (`multi_status_field_actions`); the safety property is the production
-`invariants.check(world) -> [Violation]` function itself, adapted with `invariant_from_violations` so
-the counterexample names which sub-rule and entity broke. Because the model *is* the code's data, it
+the production transition table (`multi_status_field_actions`); the safety property is the production
+`check(world) -> [Violation]` function itself, adapted with `invariant_from_violations` so the
+counterexample names which sub-rule and entity broke. Because the model *is* the code's data, it
 cannot drift from it. Four results illustrate the workflow:
 
-1. **A real incident, reproduced.** A 2026 outage — a wedged node left services stuck off `running`,
-   and because TLS-cert *serving* was coupled to the service being `running`, an active cert dropped
-   from the ingress route table — is reproduced as a one-step counterexample from the real transition
-   table, and the structural fix (serving depends only on cert validity, never a liveness signal) is
-   then *verified* to close it over the whole reachable space.
+1. **A real incident, reproduced.** A prior outage — a wedged node left resources stuck off `running`,
+   and because a serving capability was coupled to a resource being `running`, an active dependency
+   dropped from a routing table — is reproduced as a one-step counterexample from the real transition
+   table, and the structural fix (serving depends only on the dependency's own validity, never a
+   liveness signal) is then *verified* to close it over the whole reachable space.
 
-2. **A specification/code drift.** Driving the *implemented* `_i4` invariant (not a re-typed copy)
-   exposed that it is weaker than its documentation: the doc requires a placed service's node be
-   `online`, the code only forbids a `removed` node. Exhaustive checking surfaced a state the code
-   accepts but the spec rejects — a discrepancy invisible to tests written against either alone.
+2. **A specification/code drift.** Driving the *implemented* invariant (not a re-typed copy) exposed
+   that it is weaker than its documentation: the doc requires a placed resource's node be `online`,
+   the code only forbids a `removed` node. Exhaustive checking surfaced a state the code accepts but
+   the spec rejects — a discrepancy invisible to tests written against either alone.
 
 3. **Find rough edges, then verify the fix.** For each rough edge, the *corrected* design (e.g. node
-   removal atomically reschedules a placed service; stateful resources trigger recovery rather than a
+   removal atomically reschedules a placed resource; stateful resources trigger recovery rather than a
    blind reap) is re-checked and shown to hold over every reachable state — `reachable_violations`
    enumerates the exact set of invalid cross-resource states a guard must exclude, turning "find a
    bug" into "derive the guard specification."
 
-4. **Liveness as a response property.** The untimed form of the platform's I5 ("no resource stuck in
-   a transient state") is the leads-to property `placed ~> running`, which `check_liveness(...,
-   leadsto_from=...)` shows holds only under *strong* fairness of the reconciler's stabilizing step —
-   a concrete design obligation, not a vague "the reconciler should make progress."
+4. **Liveness as a response property.** The untimed form of "no resource stuck in a transient state"
+   is the leads-to property `placed ~> running`, which `check_liveness(..., leadsto_from=...)` shows
+   holds only under *strong* fairness of the reconciler's stabilizing step — a concrete design
+   obligation, not a vague "the reconciler should make progress."
 
 Methodologically, this case study is also where most of musil's closed-system API was *driven into
 existence*: each capability above (`invariant_from_violations`, `multi_status_field_actions`,

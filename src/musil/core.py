@@ -160,7 +160,7 @@ def enumerate_actions[S: Hashable](schemas: Iterable[ActionSchema[S]]) -> list[A
     """Expand parameterized ``ActionSchema``s into concrete musil ``Action``s — the cartesian product over
     each schema's bounded parameter domains, one Action per binding (a zero-param schema → one Action). Each
     argument tuple is bound BY VALUE so the generated closures don't capture the loop variable. The concrete
-    action's name encodes its binding (e.g. ``add_filter{field='op_area', value='cabin'}``) so counterexample
+    action's name encodes its binding (e.g. ``add_filter{field='status', value='active'}``) so counterexample
     traces read as filled actions. Pair with a static ``Model(actions=enumerate_actions(...))`` for a bounded
     parameterized algebra, or call it inside ``actions_fn`` to bound the domains per state."""
     out: list[Action[S]] = []

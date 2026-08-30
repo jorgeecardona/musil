@@ -121,5 +121,5 @@ safety runs only**; keep the differential test; keep liveness on the fairness en
   (VMCAI 2022) — the **full-cycle proviso** for sound DPOR over cyclic/stateful state spaces.
 - Siegel, "What's Wrong with On-the-Fly Partial Order Reduction" (CAV 2019); Neele, Valmari,
   Willemse (LMCS) — the POR-vs-liveness/Büchi unsoundness and partial repair.
-- Clarke, Grumberg, Peled, *Model Checking* (ch. on partial-order reduction). See
-  `docs/specs/RESEARCH.md` (in the paas repo) for the wider literature map.
+- Clarke, Grumberg, Peled, *Model Checking* (ch. on partial-order reduction) — the standard textbook
+  map of the wider literature.

@@ -4,6 +4,12 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Docs — genericize examples to invented / commonly-known systems
+
+- Doc examples and docstrings now use invented or widely-known systems only (a generic control plane,
+  `add_filter{field='status'}`), so nothing in the published docs or rendered API reference reflects any
+  particular downstream deployment.
+
 ### Added — `musil.environments.distributed`: stateful storage/state fault contracts
 
 - Two parameterized `EnvironmentSpec` factories for the fault classes that dominate a stateful distributed
@@ -54,7 +60,7 @@ as 0.25.0.
   ([issue #18](https://gitlab.com/jorgeecardona/musil/-/work_items/18)). It now derives the action universe
   from the names `actions_fn` offers across the reachable states (so a never-enabled kind is still counted).
 - `coverage(model, key=...)` / `coverage_of(graph, model, key=...)` take a `name -> kind` bucketer: an
-  `actions_fn` model whose per-state actions carry unique names (e.g. `add_filter{field='op_area'}`) reports
+  `actions_fn` model whose per-state actions carry unique names (e.g. `add_filter{field='status'}`) reports
   usefully with `key=lambda name: name.split('{')[0]`. Static-`actions` models are unchanged when no key is
   given.
 
@@ -269,7 +275,7 @@ as 0.25.0.
 
 Four of the five additions from
 [issue #1](https://gitlab.com/jorgeecardona/musil/-/work_items/1), raised by adopting musil in a
-classifier workspace. All four are stdlib-only, so `pip install musil` still installs zero
+downstream workspace. All four are stdlib-only, so `pip install musil` still installs zero
 third-party packages. The fifth — a Hypothesis strategy bridge — is the one that cannot be built
 without a dependency and is left open as a decision rather than answered by writing the code.
 
@@ -362,7 +368,7 @@ none was published, so everything below ships as 0.11.0.)
   `OpenResult`, `SimReport`) via the structural `Verdict` protocol, and sets `__tracebackhide__` so
   pytest does not reprint the elided repr as the helper's own frame. Still no dependency: it raises
   a plain `AssertionError`, so `unittest` and bare `assert` get the same message.
-- Prompted by feedback from adopting musil in a classifier workspace
+- Prompted by feedback from adopting musil in a downstream workspace
   ([issue #1](https://gitlab.com/jorgeecardona/musil/-/work_items/1), item 5). The pytest *plugin*
   from that report was deliberately not built: an entry point would make pytest a packaging concern
   of a package whose headline property is `dependencies = []`, and a plain function recovers the

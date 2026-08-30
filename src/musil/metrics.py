@@ -141,7 +141,7 @@ def coverage_of[S: Hashable](
 
     ``key`` maps an action NAME to a bucket ("kind") and coverage is reported over the buckets. This is how
     ``actions_fn`` models report usefully: their per-state actions typically carry per-state unique names
-    (e.g. ``add_filter{field='op_area'}``), so ``key=lambda name: name.split('{')[0]`` collapses them to
+    (e.g. ``add_filter{field='status'}``), so ``key=lambda name: name.split('{')[0]`` collapses them to
     the kind. Without a key, names are used as-is (right for static models and for ``actions_fn`` models
     whose action names are already a fixed set)."""
     kind: Callable[[str], str] = key if key is not None else (lambda name: name)
