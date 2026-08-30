@@ -8,7 +8,7 @@ correctness, not merely "unchanged"."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -29,6 +29,7 @@ from musil import (
     check,
     check_liveness,
     check_ltl,
+    check_of,
     eventually,
     expected_reward,
     expected_reward_mdp,
@@ -582,3 +583,28 @@ def test_assert_ok_rejects_a_truncated_green_by_default():
     with pytest.raises(AssertionError):
         assert_ok(r)  # a truncated green proves nothing -> fail by default
     assert_ok(r, truncated="ok")  # explicit opt-in accepts an inconclusive pass
+
+
+# --------------------------------------------------------------------------------------------------
+# 13. Graph-first check_of must agree with check on every corpus model (differential guard, #31)
+# --------------------------------------------------------------------------------------------------
+
+
+def _assert_check_of_agrees[S: Hashable](m: Model[S]) -> None:
+    r_check = check(m)
+    r_of = check_of(explore(m), m)
+    assert r_of.ok == r_check.ok
+    assert r_of.kind == r_check.kind
+    assert r_of.invariant == r_check.invariant
+    assert r_of.trace == r_check.trace  # identical shortest counterexample, not merely same verdict
+
+
+def test_check_of_agrees_with_check_over_a_prebuilt_graph():
+    # check_of runs the safety verdict over an already-explored graph (no re-exploration). It must give the
+    # SAME verdict AND the same shortest trace as check on every model in this corpus -- the guard against
+    # the two code paths silently diverging.
+    _assert_check_of_agrees(counter_model(5))
+    _assert_check_of_agrees(peterson_model())
+    _assert_check_of_agrees(dining_naive_model())
+    _assert_check_of_agrees(light_model())
+    _assert_check_of_agrees(overdraw_model())

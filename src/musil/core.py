@@ -720,30 +720,8 @@ def reaches[S: Hashable](graph: Graph[S], predicate: Callable[[S], bool]) -> fro
     return frozenset(seen)
 
 
-def _shortest_step_path[S: Hashable](graph: Graph[S], goal: Callable[[S], bool]) -> tuple[Step[S], ...] | None:
-    """Shortest path from an initial state to the first ``goal``-satisfying state, as a ``Step`` tuple
-    (``<init>`` then one step per edge taken), or None if no reachable state satisfies ``goal``. Forward BFS
-    over ``graph.edges``, so the returned path is of minimum length."""
-    parent: dict[S, tuple[S, str] | None] = {}
-    frontier: list[S] = []
-    for s0 in graph.initial:
-        if s0 not in parent:
-            parent[s0] = None
-            frontier.append(s0)
-    head = 0
-    target: S | None = None
-    while head < len(frontier):
-        s = frontier[head]
-        head += 1
-        if goal(s):
-            target = s
-            break
-        for name, t in graph.edges.get(s, ()):
-            if t not in parent:
-                parent[t] = (s, name)
-                frontier.append(t)
-    if target is None:
-        return None
+def _path_from_parents[S: Hashable](parent: Mapping[S, tuple[S, str] | None], target: S) -> tuple[Step[S], ...]:
+    """Reconstruct the ``<init> -> ... -> target`` Step path from a BFS ``parent`` map (``None`` at a root)."""
     chain: list[Step[S]] = []
     cur: S = target
     while True:
@@ -755,6 +733,70 @@ def _shortest_step_path[S: Hashable](graph: Graph[S], goal: Callable[[S], bool])
         chain.append(Step(action=action, state=cur))
         cur = prev
     return tuple(reversed(chain))
+
+
+def _shortest_step_path[S: Hashable](graph: Graph[S], goal: Callable[[S], bool]) -> tuple[Step[S], ...] | None:
+    """Shortest path from an initial state to the first ``goal``-satisfying state, as a ``Step`` tuple
+    (``<init>`` then one step per edge taken), or None if no reachable state satisfies ``goal``. Forward BFS
+    over ``graph.edges``, so the returned path is of minimum length."""
+    parent: dict[S, tuple[S, str] | None] = {}
+    frontier: list[S] = []
+    for s0 in graph.initial:
+        if s0 not in parent:
+            parent[s0] = None
+            frontier.append(s0)
+    head = 0
+    while head < len(frontier):
+        s = frontier[head]
+        head += 1
+        if goal(s):
+            return _path_from_parents(parent, s)
+        for name, t in graph.edges.get(s, ()):
+            if t not in parent:
+                parent[t] = (s, name)
+                frontier.append(t)
+    return None
+
+
+def check_of[S: Hashable](graph: Graph[S], model: Model[S]) -> Result[S]:
+    """Run the safety check over an ALREADY-explored ``graph`` instead of re-exploring — the graph-first
+    counterpart to ``check`` (as ``coverage_of`` is to ``coverage``), so several analyses can share one
+    ``explore``. Returns the same ``Result``: the first invariant violation or deadlock in breadth-first
+    order (shortest trace), else OK.
+
+    Deadlock detection needs a COMPLETE graph: on a truncated one a cut-off frontier state looks like a sink,
+    so deadlocks are not reported there (invariant violations still are — a reachable violating state is a
+    real bug regardless), and a clean result carries ``truncated=True`` (inconclusive). ``check(model)``
+    equals ``check_of(explore(model), model)`` on a complete graph, but ``check`` keeps its early-exit (it
+    stops at the first violation without building the whole graph), so prefer ``check`` when the verdict is
+    all you need. ``states_explored`` is the whole graph here, not ``check``'s partial count at early-exit."""
+    parent: dict[S, tuple[S, str] | None] = {}
+    frontier: list[S] = []
+    for s0 in graph.initial:
+        if s0 not in parent:
+            parent[s0] = None
+            frontier.append(s0)
+    total = len(graph.states)
+    head = 0
+    while head < len(frontier):
+        state = frontier[head]
+        head += 1
+        for name, inv in model.invariants.items():
+            verdict = inv(state)
+            if isinstance(verdict, str):
+                return Result(ok=False, states_explored=total, kind="invariant", invariant=name,
+                              reason=verdict or None, trace=_path_from_parents(parent, state))
+            if not verdict:
+                return Result(ok=False, states_explored=total, kind="invariant", invariant=name,
+                              trace=_path_from_parents(parent, state))
+        out = graph.edges.get(state, ())
+        if not out and not graph.truncated and not model.terminal(state):
+            return Result(ok=False, states_explored=total, kind="deadlock", trace=_path_from_parents(parent, state))
+        for name, t in out:
+            if t not in parent:
+                parent[t] = (state, name)
+                frontier.append(t)
+    return Result(ok=True, states_explored=total, truncated=graph.truncated)
 
 
 def path_to[S: Hashable](graph: Graph[S], state: S) -> tuple[Step[S], ...] | None:

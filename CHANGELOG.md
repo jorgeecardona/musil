@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `check_of`: the safety check over a pre-built graph (#31, partial)
+
+- `check_of(graph, model)` runs the safety verdict over an already-explored `Graph` instead of re-exploring
+  — the graph-first counterpart to `check`, as `coverage_of` is to `coverage` — so several analyses
+  (coverage, safety, ...) can share one `explore`. Returns the same `Result`: the first invariant violation
+  or deadlock in breadth-first order (shortest trace), else OK.
+- A differential test in the corpus pins that `check_of(explore(m), m)` gives the SAME verdict AND the same
+  shortest trace as `check(m)` on every corpus model — the guard against the two code paths diverging (they
+  agree exactly today, trace included). Deadlock detection needs a complete graph: on a truncated one a
+  cut-off frontier state looks like a sink, so `check_of` reports invariant violations there but not
+  deadlocks, and a clean result carries `truncated=True`.
+- `check_liveness_of` and `fixed_points_of` (the rest of #31) are follow-ups: `check_liveness` factors
+  cleanly (it already explores-then-analyses), while `fixed_points` explores each initial state separately,
+  so a single-graph variant has a narrower per-initial semantics to settle first.
+
 ### Added — negative-side assertion helpers: `assert_violates`, `.action_names`, `.witness` (#32)
 
 - `assert_violates(result, kind=..., invariant=..., via=[...], where=lambda s: ...)` — the red-side
