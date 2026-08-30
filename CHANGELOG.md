@@ -4,14 +4,15 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
-### Internal — `check`/`check_all` share one BFS successor-expansion
+### Internal — `check`/`check_all`/`explore` share one successor kernel
 
-- `check` and `check_all` now seed the frontier and expand successors through two shared helpers
-  (`_seed_frontier`, `_expand`) instead of two hand-copied BFS loops. The successor-expansion — the exact
-  spot that drifted in the 089aed0 bug (successors canonicalized in one path but not the other) — lives in
-  one place so it cannot diverge again. No behavior change: the known-verdict corpus (`tests/test_corpus.py`)
-  pins identical reachable-state counts and verdicts across the refactor. First step of unifying the four
-  BFS loops (`explore` and `profile` follow).
+- `check`, `check_all`, and `explore` now compute their canonical enabled successors through one lazy
+  generator, `_successors` (the single place `canon(action.apply(state))` happens) — plus `_seed_frontier`
+  / `_expand` shared by `check`/`check_all`. This is the exact spot that drifted in the 089aed0 bug
+  (successors canonicalized in one path but not the other); it now lives in one place so it cannot diverge
+  again. No behavior change: the known-verdict corpus (`tests/test_corpus.py`) pins identical reachable-state
+  counts and verdicts across the refactor. Three of the four BFS loops now share the kernel; `profile`
+  (which times `enabled`/`apply` separately) is the remaining one.
 
 ### Docs — genericize examples to invented / commonly-known systems
 

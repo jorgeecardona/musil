@@ -14,7 +14,7 @@ This module is dependency-free and knows nothing about any particular domain."""
 from __future__ import annotations
 
 import itertools
-from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Hashable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as _dc_fields
 from typing import Protocol, cast
@@ -340,6 +340,19 @@ def _seed_frontier[S: Hashable](
     return seen, parent, states_by_id, frontier
 
 
+def _successors[S: Hashable](
+    source: Callable[[S], Iterable[Action[S]]], canon: Callable[[S], S], state: S
+) -> Iterator[tuple[str, S]]:
+    """The canonical enabled ``(action_name, successor)`` pairs out of ``state``, lazily. This is the ONE
+    place a successor is computed as ``canon(action.apply(state))`` — shared by ``_expand`` (check/check_all)
+    and ``explore`` so the successor canonicalization (the 089aed0 bug: canonicalized in one path but not the
+    other) cannot drift. Lazy, so a caller that stops early on ``max_states`` computes no further
+    successors, matching the hand-written loops exactly."""
+    for action in source(state):
+        if action.enabled(state):
+            yield action.name, canon(action.apply(state))
+
+
 def _expand[S: Hashable](
     state: S,
     sid: Hashable,
@@ -352,22 +365,17 @@ def _expand[S: Hashable](
     frontier: list[S],
     max_states: int,
 ) -> tuple[bool, bool]:
-    """Fire every enabled action from ``state``, adding each new CANONICAL successor to the frontier and
-    recording its parent edge. Returns ``(fired, truncated)``: ``fired`` whether any action was enabled
-    (for deadlock detection), ``truncated`` whether the ``max_states`` cap was hit while adding a
-    successor. This is the single successor-expansion shared by ``check``/``check_all`` — the exact spot
-    that drifted in the 089aed0 bug (successors canonicalized in one but not the other), now in one place
-    so it cannot diverge again."""
+    """Fire every enabled action from ``state`` (via ``_successors``), adding each new successor to the
+    frontier and recording its parent edge. Returns ``(fired, truncated)``: ``fired`` whether any action
+    was enabled (for deadlock detection), ``truncated`` whether the ``max_states`` cap was hit. The single
+    successor-expansion shared by ``check``/``check_all``."""
     fired = False
-    for action in source(state):
-        if not action.enabled(state):
-            continue
+    for name, nxt in _successors(source, canon, state):
         fired = True
-        nxt = canon(action.apply(state))
         nid = ident(nxt)
         if nid not in seen:
             seen.add(nid)
-            parent[nid] = (sid, action.name)
+            parent[nid] = (sid, name)
             states_by_id[nid] = nxt
             frontier.append(nxt)
             if len(seen) >= max_states:
@@ -590,11 +598,8 @@ def explore[S: Hashable](
         state = frontier[head]
         head += 1
         out: list[tuple[str, S]] = []
-        for action in source(state):
-            if not action.enabled(state):
-                continue
-            nxt = canon(action.apply(state))
-            out.append((action.name, nxt))
+        for name, nxt in _successors(source, canon, state):
+            out.append((name, nxt))
             if nxt not in seen:
                 seen[nxt] = []
                 frontier.append(nxt)
