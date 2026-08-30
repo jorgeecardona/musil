@@ -4,6 +4,23 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.probabilistic`: MDP min-reachability (exact, via S0min + policy iteration)
+
+- `reach_probability_mdp(..., optimize="min")` now returns the MINIMAL probability of eventually reaching
+  `target` over all schedulers (it previously raised `NotImplementedError`). Same exact policy iteration as
+  the max case, minimizing, with one precomputation: `_s0_min` finds the states from which a scheduler can
+  avoid the target forever (the greatest set of non-target states in which every state has a move whose
+  support stays inside the set, by iterative removal) and pins them to probability 0.
+- That precomputation is exactly what makes min exact: without it, min policy iteration stalls on a
+  self-loop (or a loop through a non-target end component) whose move-value equals its current value, so the
+  strict-improvement step never lowers it to the true 0. With `S0min` pinned, no set of the remaining
+  states can be closed under any policy, so every policy is proper and minimizing policy iteration converges
+  to the unique exact `xmin`. No maximal-end-component *collapse* is needed — `_dtmc_values` already zeroes
+  unknowns a fixed policy cannot route to the target. See `PROBABILISTIC_NOTES.md`.
+- Corpus pins three known verdicts: the two-gamble MDP (`xmin = 1/2`, the worse coin, vs `xmax = 2/3`), a
+  self-loop (`xmin = 0`, `xmax = 1`), and a two-state non-target end component (`xmin = 0`) — the case
+  `_s0_min` exists for.
+
 ### Added — `musil.probabilistic`: MDP max-reachability (exact policy iteration)
 
 - `reach_probability_mdp(model, target, moves=..., optimize="max")` adds NONDETERMINISTIC choice on top of
@@ -16,10 +33,7 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   so no policy repeats and the finite policy space is exhausted) — no floating-point convergence threshold.
 - Grouping every enabled action into a single move recovers `reach_probability` exactly (a DTMC has no
   choice); pinned as a differential test against the gambler's-ruin walk.
-- `optimize="min"` raises `NotImplementedError` (with a message pointing to `PROBABILISTIC_NOTES.md`):
-  min-reachability needs the S0min end-component precomputation the max case does not, and shipping it
-  half-right would return an unsound quantitative answer. The deferral and the concrete plan (maximal
-  end-component collapse + the S0min attractor game, reusing `liveness.py`'s Tarjan) are documented.
+- `optimize="min"` is added in the entry above (it needs the `S0min` precomputation the max case does not).
 - Corpus pins a two-gamble MDP whose max value is hand-computable: move A is a fair coin (1/2), move B is
   weighted 2:1 (2/3), so the max scheduler picks B and `reach_probability_mdp` returns exactly `2/3`.
 

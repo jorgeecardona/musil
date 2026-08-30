@@ -147,9 +147,11 @@ successors) and solves it by Gaussian elimination over the rationals: target sta
 states that cannot reach the target have probability 0, and the rest solve `x_s = sum_s' P(s, s') x_s'`
 (the standard three-way split, Baier & Katoen ch. 10). `reach_probability_mdp` adds nondeterministic
 choice — a caller-supplied `moves` partitions each state's enabled actions into the moves a scheduler
-picks between, with the actions within a move forming the distribution — and returns the maximal
-reachability probability over all schedulers (`optimize="max"`), solved exactly by policy iteration.
-`optimize="min"` is deferred (it needs the end-component precomputation; see `PROBABILISTIC_NOTES.md`).
+picks between, with the actions within a move forming the distribution — and returns the maximal or
+minimal reachability probability over all schedulers (`optimize="max"` / `"min"`), solved exactly by
+policy iteration. The `"min"` case first pins the states from which a scheduler can avoid the target
+forever to probability 0 (`S0min`), which is what keeps min policy iteration exact; see
+`PROBABILISTIC_NOTES.md` for why that precomputation is needed and the max case is not.
 
 ::: musil.probabilistic
 

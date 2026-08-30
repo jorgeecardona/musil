@@ -276,9 +276,10 @@ def two_gamble_model() -> Model[Gamble]:
     )
 
 
-def test_mdp_max_reachability_is_the_better_coin():
-    # Move A is a fair coin (1/2); move B, weighted 2:1, wins with prob 2/3. Max over schedulers = 2/3,
-    # hand-computable and independent of musil. Guards the exact MDP policy-iteration solver.
+def test_mdp_max_and_min_reachability_pick_opposite_coins():
+    # Move A is a fair coin (1/2); move B, weighted 2:1, wins with prob 2/3. The max scheduler picks B
+    # (2/3), the min scheduler picks A (1/2) — both hand-computable and independent of musil, so this
+    # guards the exact MDP policy-iteration solver in both directions.
     m = two_gamble_model()
 
     def by_letter(_s: Gamble, enabled: tuple[Action[Gamble], ...]) -> list[Sequence[Action[Gamble]]]:
@@ -294,6 +295,7 @@ def test_mdp_max_reachability_is_the_better_coin():
         return s.tag == "win"
 
     assert reach_probability_mdp(m, is_win, moves=by_letter, weight=biased) == Fraction(2, 3)
+    assert reach_probability_mdp(m, is_win, moves=by_letter, weight=biased, optimize="min") == Fraction(1, 2)
 
 
 def test_profile_explores_the_same_reachable_set():

@@ -151,6 +151,27 @@ def _move_value[S: Hashable](move: _Dist[S], values: Mapping[S, Fraction]) -> Fr
     return sum((p * values[t] for p, t in move), Fraction(0))
 
 
+def _s0_min[S: Hashable](
+    states: Sequence[S], all_moves: Mapping[S, list[_Dist[S]]], target: Callable[[S], bool]
+) -> set[S]:
+    """The states with MINIMAL reachability probability 0 — those from which a scheduler can avoid the
+    target forever. This is the greatest ``U`` (subset of the non-target states) such that every state in
+    ``U`` has some move whose support stays inside ``U`` (including an absorbing/empty move, which trivially
+    stays). Computed by iterative removal: drop any state with no staying move, until a fixed point.
+
+    This is the precomputation min-reachability needs and max does not: without it, policy iteration for min
+    stalls on a self-loop move whose value equals the current (wrong) value, never reaching the true 0."""
+    u = {s for s in states if not target(s)}
+    changed = True
+    while changed:
+        changed = False
+        for s in list(u):
+            if not any(all(t in u for _, t in move) for move in all_moves[s]):
+                u.discard(s)
+                changed = True
+    return u
+
+
 def reach_probability_mdp[S: Hashable](
     model: Model[S],
     target: Callable[[S], bool],
@@ -160,7 +181,8 @@ def reach_probability_mdp[S: Hashable](
     optimize: Literal["max", "min"] = "max",
     max_states: int = 1_000_000,
 ) -> Fraction:
-    """The exact MAXIMAL probability of eventually reaching ``target`` over all schedulers of the MDP.
+    """The exact MAXIMAL (or MINIMAL) probability of eventually reaching ``target`` over all schedulers of
+    the MDP.
 
     ``moves(state, enabled_actions)`` partitions the enabled actions into the moves a scheduler chooses
     between at ``state``; the actions within a move form one distribution over successors (their ``weight``
@@ -168,16 +190,11 @@ def reach_probability_mdp[S: Hashable](
     ``reach_probability`` (a DTMC has no choice).
 
     Solved EXACTLY by policy iteration: evaluate the current policy as a DTMC (an exact rational solve),
-    then switch each state to a strictly better move under those values, until the policy is stable. The
-    result is a ``fractions.Fraction``. ``optimize="min"`` raises ``NotImplementedError`` — min-reachability
-    needs the S0min end-component precomputation (see PROBABILISTIC_NOTES.md). Raises ``ValueError`` if the
+    then switch each state to a strictly better move under those values, until the policy is stable — a
+    ``fractions.Fraction``. For ``optimize="min"`` the states from which a scheduler can avoid the target
+    forever are found first (``_s0_min``) and pinned to 0, which is what stops min policy iteration from
+    stalling on a value-preserving self-loop (see PROBABILISTIC_NOTES.md). Raises ``ValueError`` if the
     exploration truncates at ``max_states``."""
-    if optimize == "min":
-        raise NotImplementedError(
-            "reach_probability_mdp: min-reachability is not implemented — a min-scheduler can avoid the "
-            "target forever inside a non-target end component, so it needs the S0min precomputation the "
-            "max case does not. Only optimize='max' is supported. See PROBABILISTIC_NOTES.md."
-        )
     graph = explore(model, max_states=max_states)
     if graph.truncated:
         raise ValueError("reach_probability_mdp: exploration truncated at max_states; the probability is inconclusive")
@@ -194,20 +211,25 @@ def reach_probability_mdp[S: Hashable](
             for group in moves(s, enabled)
         ]
         all_moves[s] = state_moves if state_moves else [[]]  # no move -> a single absorbing move
-    # Policy iteration (max). Each improvement switches a state only to a STRICTLY better move under the
-    # current exact values, so the values are monotone non-decreasing and no policy repeats -> it
-    # terminates (the policy space is finite). Start every state at its first move.
+    minimize = optimize == "min"
+    # For min, pin the "can avoid the target forever" states to 0 by making them absorbing before iterating;
+    # for max they need no special treatment (unreachable-to-target already resolves to 0 in _dtmc_values).
+    absorbing = _s0_min(graph.states, all_moves, target) if minimize else set[S]()
+    # Policy iteration. Each improvement switches a state only to a STRICTLY better move (larger for max,
+    # smaller for min) under the current exact values, so the values move monotonically and no policy
+    # repeats -> it terminates (the policy space is finite). Start every state at its first move.
     policy: dict[S, int] = dict.fromkeys(graph.states, 0)
     while True:
-        values = _dtmc_values(graph.states, {s: all_moves[s][policy[s]] for s in graph.states}, target)
+        dist = {s: ([] if s in absorbing else all_moves[s][policy[s]]) for s in graph.states}
+        values = _dtmc_values(graph.states, dist, target)
         changed = False
         for s in graph.states:
-            if target(s):
+            if target(s) or s in absorbing:
                 continue
             best_i, best_v = policy[s], _move_value(all_moves[s][policy[s]], values)
             for i, move in enumerate(all_moves[s]):
                 v = _move_value(move, values)
-                if v > best_v:
+                if (v < best_v) if minimize else (v > best_v):
                     best_i, best_v = i, v
             if best_i != policy[s]:
                 policy[s] = best_i

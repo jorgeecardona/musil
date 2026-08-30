@@ -124,26 +124,26 @@ def _by_leading_letter(_state: Choice, enabled: tuple[Action[Choice], ...]) -> l
     return list(groups.values())
 
 
-def test_mdp_max_picks_the_better_move():
+def _singletons(_state: Choice, enabled: tuple[Action[Choice], ...]) -> list[Sequence[Action[Choice]]]:
+    # Every enabled action is its own (Dirac) move -> pure nondeterministic choice, no probability mixing.
+    return [[a] for a in enabled]
+
+
+def test_mdp_max_and_min_pick_opposite_coins():
     m = two_gamble_model()
 
     def biased(name: str, _s: Choice) -> int:
         return 2 if name == "B_win" else 1
 
-    # Uniform: A and B are both fair coins -> 1/2 either way. Weighted: B wins 2/3 > A's 1/2 -> max = 2/3.
+    # Uniform: A and B are both fair coins -> 1/2 either way. Weighted: A wins 1/2, B wins 2/3.
     assert reach_probability_mdp(m, _win, moves=_by_leading_letter) == Fraction(1, 2)
-    assert reach_probability_mdp(m, _win, moves=_by_leading_letter, weight=biased) == Fraction(2, 3)
+    assert reach_probability_mdp(m, _win, moves=_by_leading_letter, weight=biased) == Fraction(2, 3)  # max=B
+    assert reach_probability_mdp(m, _win, moves=_by_leading_letter, weight=biased, optimize="min") == Fraction(1, 2)
 
 
-def test_mdp_min_is_not_implemented():
-    m = two_gamble_model()
-    with pytest.raises(NotImplementedError, match="min-reachability"):
-        reach_probability_mdp(m, _win, moves=_by_leading_letter, optimize="min")
-
-
-def test_mdp_policy_iteration_improves_off_a_bad_initial_policy():
+def test_mdp_max_improves_off_a_bad_initial_policy():
     # start has two singleton moves: "stay" self-loops (value 0), "go" reaches the target (value 1).
-    # The initial policy is the FIRST move (stay) -> V=0; policy iteration must switch to go -> V=1.
+    # The initial policy is the FIRST move (stay) -> V=0; max policy iteration must switch to go -> V=1.
     start, win = Choice("start"), Choice("win")
     at_start: Callable[[Choice], bool] = lambda s: s.tag == "start"  # noqa: E731
     m = Model(
@@ -154,11 +154,44 @@ def test_mdp_policy_iteration_improves_off_a_bad_initial_policy():
         ],
         terminal=lambda s: s.tag == "win",
     )
+    assert reach_probability_mdp(m, _win, moves=_singletons) == Fraction(1)
 
-    def singletons(_state: Choice, enabled: tuple[Action[Choice], ...]) -> list[Sequence[Action[Choice]]]:
-        return [[a] for a in enabled]
 
-    assert reach_probability_mdp(m, _win, moves=singletons) == Fraction(1)
+def test_mdp_min_avoids_target_via_self_loop():
+    # Same stay/go model: the MIN scheduler stays forever -> 0. This is the case that stalls naive min
+    # policy iteration (the self-loop move keeps its current value); S0min pins it to 0.
+    start, win = Choice("start"), Choice("win")
+    at_start: Callable[[Choice], bool] = lambda s: s.tag == "start"  # noqa: E731
+    m = Model(
+        init=start,
+        actions=[
+            Action("stay", enabled=at_start, apply=lambda s: start),
+            Action("go", enabled=at_start, apply=lambda s: win),
+        ],
+        terminal=lambda s: s.tag == "win",
+    )
+    assert reach_probability_mdp(m, _win, moves=_singletons, optimize="min") == Fraction(0)
+    assert reach_probability_mdp(m, _win, moves=_singletons) == Fraction(1)  # max still escapes
+
+
+def test_mdp_min_avoids_target_via_end_component():
+    # u1 <-> u2 form a non-target END COMPONENT (each can loop to the other) and each can also escape to the
+    # target. The min scheduler loops in the EC forever -> 0; S0min = {u1, u2} is what makes this exact.
+    u1, u2, win = Choice("u1"), Choice("u2"), Choice("win")
+    at1: Callable[[Choice], bool] = lambda s: s.tag == "u1"  # noqa: E731
+    at2: Callable[[Choice], bool] = lambda s: s.tag == "u2"  # noqa: E731
+    m = Model(
+        init=u1,
+        actions=[
+            Action("u1_to_u2", enabled=at1, apply=lambda s: u2),
+            Action("u1_esc", enabled=at1, apply=lambda s: win),
+            Action("u2_to_u1", enabled=at2, apply=lambda s: u1),
+            Action("u2_esc", enabled=at2, apply=lambda s: win),
+        ],
+        terminal=lambda s: s.tag == "win",
+    )
+    assert reach_probability_mdp(m, _win, moves=_singletons, optimize="min") == Fraction(0)
+    assert reach_probability_mdp(m, _win, moves=_singletons) == Fraction(1)  # max escapes
 
 
 def test_mdp_single_move_recovers_the_dtmc():

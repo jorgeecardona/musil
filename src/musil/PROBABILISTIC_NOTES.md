@@ -17,33 +17,39 @@ accelerator for large linear solves, never required).
   switch each state to a strictly better move under those values, repeat until stable. Terminates because
   each switch strictly increases the (bounded, monotone) values, so no policy repeats and the policy space
   is finite.
+- **MDP MIN reachability** — `reach_probability_mdp(..., optimize="min")`. Same policy iteration, minimizing,
+  with ONE precomputation: `_s0_min` finds the states from which a scheduler can avoid the target forever —
+  the greatest set `U` of non-target states in which every state has a move whose support stays inside `U`
+  (an absorbing/empty move stays trivially) — by iterative removal, and pins them to 0. That precomputation
+  is exactly what makes min exact:
+  - **Why min needs it and max does not.** Without it, min policy iteration stalls: a state whose only way
+    to 0 is a self-loop (or a loop through a non-target *end component*) keeps, under the current
+    evaluation, a move-value equal to its current value, so the strict-improvement step never lowers it to
+    the true 0. Pinning `S0min` to 0 up front removes those states from the iteration.
+  - **Why the rest is then exact.** No set of the remaining "unknown" states can be closed under any policy
+    — a closed unknown set would satisfy the `S0min` staying-condition and so would have been removed as
+    `S0min`. Hence every policy reaches `target ∪ S0min` almost surely from every unknown (every policy is
+    *proper*), the induced-DTMC linear systems are non-singular, and minimizing policy iteration converges
+    to the unique `xmin` in finitely many strictly-decreasing steps.
 
-## Deferred — MDP MIN reachability (`optimize="min"` raises `NotImplementedError`)
+  This is the graph-theoretic `S0min` (`_s0_min` is an OR-reachability iterative removal, not a full
+  alternating attractor game — sufficient here because `S0min` for reachability is "∃ a staying move",
+  which is a plain greatest-fixpoint over the move relation) plus the exact rational solve, no maximal
+  end-component *collapse* needed: `_dtmc_values` already assigns 0 to unknowns that a fixed policy cannot
+  route to the target, so end components are handled by pinning `S0min`, not by quotienting the graph.
+  Corpus pins three known verdicts: the two-gamble MDP (`xmin = 1/2`, the worse coin), a self-loop
+  (`xmin = 0` where `xmax = 1`), and a two-state non-target end component (`xmin = 0`, the case `_s0_min`
+  exists for).
 
-Min-reachability is genuinely harder than max, and getting it subtly wrong returns an unsound quantitative
-answer (the worst outcome for a verification tool — same reasoning as the POR deferral in
-`REDUCTION_NOTES.md`). Two specific obstacles:
+## Deferred (future layers, not blocking)
 
-1. **S0min is a game, not plain graph reachability.** For MAX, the probability-0 set is exactly the states
-   from which the target is unreachable — plain backward reachability, which `_dtmc_values` already
-   computes from the support. For MIN, a scheduler is trying to AVOID the target: `S0min` is the set of
-   states from which the min-scheduler can force *never* reaching the target with positive probability.
-   That is an alternating (AND/OR) reachability / attractor computation over the MDP graph, not a simple
-   BFS.
-
-2. **End components break naive policy iteration.** A min-scheduler can stay forever inside a non-target
-   *end component* (a maximal set of states with a scheduler that keeps the play inside it), giving
-   probability 0 there. Policy iteration for min can then cycle between equal-value policies, and the
-   induced-DTMC linear system is singular on such a component. The sound method first collapses maximal
-   end components (Baier & Katoen ch. 10.6 / de Alfaro's thesis), computes `S0min`/`S1min` as games, then
-   solves the remainder — or uses value iteration from above (which only converges in the limit, so it is
-   not exact over `Fraction`).
-
-Plan when built: implement the maximal-end-component decomposition + the `S0min` attractor game, reusing
-Tarjan (already in `liveness.py`) for the SCC/EC work, then the same exact rational solve on the collapsed
-graph. Gate it with a known-verdict corpus entry whose min value is hand-computable (e.g. the safe/risky
-MDP where `Vmin` picks the risky move) AND with a case that has a non-target end component, so the EC
-handling is actually exercised. Until then `optimize="min"` raises with a message pointing here.
+- **Expected reward** (expected number of steps / accumulated cost to reach the target). Needs the same
+  `S0`/proper-policy care plus a guard that the target is reached almost surely (otherwise the expectation
+  is infinite), so it is its own increment with its own known-verdict corpus.
+- **Step-bounded reachability** (probability of reaching the target within `k` steps). A finite unrolling —
+  exact and simpler than the unbounded case, no fixpoint — but a distinct API.
+- **Probabilistic LTL / long-run (steady-state) properties.** These reuse the LTL engine and the DTMC/MDP
+  machinery but are a larger design; not started.
 
 ## References
 
