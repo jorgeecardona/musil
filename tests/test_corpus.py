@@ -24,6 +24,7 @@ from musil import (
     check,
     check_liveness,
     check_ltl,
+    eventually,
     expected_reward,
     expected_reward_mdp,
     explore,
@@ -32,6 +33,8 @@ from musil import (
     profile,
     reach_probability,
     reach_probability_mdp,
+    recurs,
+    responds,
 )
 
 # --------------------------------------------------------------------------------------------------
@@ -215,6 +218,42 @@ def test_traffic_light_ltl_via_check_ltl():
     assert check_ltl(m, Next(green)).ok
     assert not check_ltl(m, Next(red)).ok
     assert check_ltl(m, Until(known, green)).ok
+
+
+def test_patterns_agree_with_check_ltl():
+    # The liveness patterns are sugar over check_ltl: each must give the SAME verdict as the LTL formula it
+    # builds, on a property that holds AND one that does not. Pinned so the two temporal surfaces can never
+    # silently diverge.
+    m = light_model()
+
+    def is_green(s: Light) -> bool:
+        return s.color == "green"
+
+    def is_red(s: Light) -> bool:
+        return s.color == "red"
+
+    def is_yellow(s: Light) -> bool:
+        return s.color == "yellow"
+
+    def is_blue(s: Light) -> bool:
+        return s.color == "blue"  # never reached
+
+    # existence: <>green holds, <>blue does not; the pattern and the LTL formula must agree on both.
+    ev_green = eventually(m, is_green)
+    assert ev_green.ok and ev_green.ok == check_ltl(m, Eventually(Atom[Light]("P", is_green))).ok
+    ev_blue = eventually(m, is_blue)
+    assert not ev_blue.ok and ev_blue.ok == check_ltl(m, Eventually(Atom[Light]("P", is_blue))).ok
+
+    # recurrence []<>red holds; []<>blue does not.
+    rec_red = recurs(m, is_red)
+    assert rec_red.ok and rec_red.ok == check_ltl(m, Always(Eventually(Atom[Light]("P", is_red)))).ok
+    rec_blue = recurs(m, is_blue)
+    assert not rec_blue.ok and rec_blue.ok == check_ltl(m, Always(Eventually(Atom[Light]("P", is_blue)))).ok
+
+    # response yellow ~> red holds.
+    resp = responds(m, is_yellow, is_red, name="response")
+    resp_formula = Always(Implies(Atom[Light]("trigger", is_yellow), Eventually(Atom[Light]("response", is_red))))
+    assert resp.ok and resp.ok == check_ltl(m, resp_formula).ok
 
 
 def test_por_trivial_ample_matches_explore_and_is_sound():

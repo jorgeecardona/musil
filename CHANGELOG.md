@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Changed — `musil.patterns`: the liveness patterns are now sugar over `check_ltl`
+
+- `eventually`, `recurs`, and `responds` now build the corresponding LTL formula (`Eventually(p)`,
+  `Always(Eventually(p))`, `Always(Implies(trigger, Eventually(response)))`) and call `check_ltl`, instead
+  of calling `check_liveness` directly. `check_ltl` already owns the one reduction of that temporal fragment
+  onto `check_liveness` (with the same `fair` / `fair_strong` handling), so the lowering now lives in a
+  single place — fix or extend it there and every pattern follows — and a pattern is by construction the
+  same verdict as its LTL formula. Behaviour and return types are unchanged (each still returns the same
+  `LivenessResult`); the existing pattern tests pass untouched, and a corpus entry pins the
+  pattern-vs-`check_ltl` agreement on both a property that holds and one that does not.
+- The two safety patterns (`always`, `absent`) stay direct `check` calls: `G(state)` is just an invariant,
+  and they expose `canonicalize` / `key` that `check_ltl`'s safety reduction does not forward, so routing
+  them through it would drop those options for no gain. This is the "patterns re-expressed as sugar over
+  `check_ltl`" roadmap item, done where it is lossless.
+
 ### Added — `musil.probabilistic`: MDP min expected reward (stochastic shortest path)
 
 - `expected_reward_mdp(model, target, moves=..., cost=...)` returns the exact MINIMAL expected accumulated
