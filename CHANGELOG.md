@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.environments.distributed`: stateful storage/state fault contracts
+
+- Two parameterized `EnvironmentSpec` factories for the fault classes that dominate a stateful distributed
+  system's incidents ([issue #21](https://gitlab.com/jorgeecardona/musil/-/work_items/21), scope confirmed
+  on the issue):
+  - `credential_rotation(can_rotate, on_rotate)` — a credential invalidated mid-flight, with the assumption
+    that the holder eventually re-authenticates rather than trusting a cached token.
+  - `record_reality_divergence(can_diverge, on_diverge)` — a component's cached RECORD ceasing to match
+    REALITY. Made the general abstraction, so "stale view after restart/cutover" AND "wrong/empty volume
+    attached (record != reality)" are both usages of one factory rather than a domain-specific "volume" env.
+- Deliberately not shipped: message lost/reordered/duplicated (already `musil.channels` + `sim.NetworkModel`
+  — reuse those), and grace-window races (couple to `bounded_clock`; left downstream). Documented in
+  `environments.md`.
+
 ### Docs — API reference now covers every module (was stuck near the 0.6.2 surface)
 
 - `docs/api.md` was missing the modules added since 0.11.0, so the published site never surfaced them

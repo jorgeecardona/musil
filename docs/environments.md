@@ -172,6 +172,31 @@ Models etcd cluster faults: leader election, write conflicts, compaction.
 
 ---
 
+### `musil.environments.distributed` — stateful storage/state faults
+
+The fault classes that dominate a stateful distributed system's incident history, parameterized over
+model-supplied accessors (no assumed state shape).
+
+**Assumptions:**
+
+| Name | Status | Source |
+|------|--------|--------|
+| `distributed:credential-rotation-observed` | unverified | OAuth 2.0 access-token expiry (RFC 6749 §1.5); secret-rotation practice |
+| `distributed:reality-eventually-sensed` | unverified | Read-repair / cache-invalidation practice |
+
+**Factories:**
+
+- `credential_rotation(*, can_rotate, on_rotate, extra_assumptions=None)` — `EnvironmentSpec` for a
+  credential invalidated mid-flight.
+- `record_reality_divergence(*, can_diverge, on_diverge, extra_assumptions=None)` — `EnvironmentSpec` for a
+  cached RECORD ceasing to match REALITY (a restart, a cutover, a re-attached/empty volume). Both "stale
+  view after restart" and "wrong/empty volume attached" are usages of this one factory.
+
+Not shipped here on purpose: **message lost/reordered/duplicated** is already `musil.channels` +
+`sim.NetworkModel` (reuse those); **grace-window races** couple to `bounded_clock` and are left downstream.
+
+---
+
 ## Composing multiple environments
 
 Pass multiple `EnvironmentSpec` objects to `check_open` — behaviors and assumptions are merged:

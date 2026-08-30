@@ -17,6 +17,6 @@ Usage::
 Import from specific modules, not from this package directly.
 """
 
-from musil.environments import aws, etcd, k8s, linux, sel4
+from musil.environments import aws, distributed, etcd, k8s, linux, sel4
 
-__all__ = ["aws", "etcd", "k8s", "linux", "sel4"]
+__all__ = ["aws", "distributed", "etcd", "k8s", "linux", "sel4"]
