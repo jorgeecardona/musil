@@ -72,7 +72,7 @@ failure to do so is reported as `kind="liveness"`).
 
 ::: musil.sim
 
-## Open systems — `check_open`, `EnvironmentSpec`, `Assumption`
+## Open systems — `check_open`, `check_liveness_open`, `EnvironmentSpec`, `Assumption`
 
 Verify a system against adversarial external environments. Each `EnvironmentSpec` is a contract:
 the non-deterministic *behaviors* the environment can exhibit (eviction, crash, wrong answer), the
@@ -84,11 +84,12 @@ guarantees into the invariants. The result surface all `Assumption` objects that
 
 ::: musil.env
 
-## Metrics & coverage — `state_space_metrics`, `coverage`, `solution_cardinality`
+## Metrics & coverage — `state_space_metrics`, `coverage`, `invariant_coverage`, `solution_cardinality`
 
 How big and how branchy a design's reachable behaviour is, how many reachable states satisfy a goal,
 and — because a green `check` does not say the behaviour you wrote was ever explored — which actions
-never fired, were always enabled, or only ever self-looped.
+never fired, were always enabled, or only ever self-looped (`coverage`), and which invariants are
+load-bearing vs candidate-vacuous (`invariant_coverage`).
 
 ::: musil.metrics
 
@@ -97,3 +98,60 @@ never fired, were always enabled, or only ever self-looped.
 The reachable state graph and its Graphviz DOT rendering.
 
 ::: musil.graph
+
+## Inductive proofs — `check_inductive`
+
+Prove an invariant by k-induction over a finite domain, without enumerating the reachable set:
+base plus step, returning a counterexample-to-induction (a state satisfying `I` with a successor that
+breaks it) so you strengthen `I` rather than widen the scope. The "for all states" is made concrete by
+enumerating a caller-supplied `domain` that must include unreachable states.
+
+::: musil.induction
+
+## Temporal patterns — `always`, `absent`, `eventually`, `recurs`, `responds`
+
+The Dwyer/Corbett specification patterns as one-call helpers: universality, absence, existence,
+recurrence, and response. Each names a common temporal property and lowers onto the existing
+`check`/`check_liveness`, so you pick the pattern instead of hand-encoding the temporal logic. This is
+the global-scope family; the scoped and precedence patterns are not yet here.
+
+::: musil.patterns
+
+## Counterexamples — `minimize`, `as_regression_test`, `replay_actions`
+
+Turn a raw counterexample into a debugging artifact: `minimize` delta-debugs a violating trace to its
+minimal failing action subsequence, `as_regression_test` emits committable pytest source that replays it
+and asserts the same invariant breaks, and `replay_actions` replays a fixed action-name sequence with no
+search (the primitive the generated test runs).
+
+::: musil.counterexample
+
+## Model diff — `diff`, `ModelDiff`
+
+The behavioral delta between two model versions: states reachable in only one, transitions present in
+only one, and invariant outcomes that flipped on the shared states — so a refactor is reviewable as a
+delta ("same reachable states and validity") rather than a leap of faith.
+
+::: musil.diffing
+
+## Profiling — `profile`
+
+Where a slow `check` spends its time: per-phase timing (invariants, enumeration, enablement, `apply`,
+`canonicalize`, visited-set) and the hottest actions/guards, so the fix is obvious rather than guessed.
+
+::: musil.profiling
+
+## Verdict caching — `check_cached`, `clear_verdict_cache`
+
+Content-addressed caching for CI: return a cached verdict when the model (identified by a required
+`version` string plus its readable structure) and options are unchanged, so an unchanged model is not
+re-checked on every pipeline run.
+
+::: musil.cache
+
+## Coverage tracing — `no_trace`
+
+A context manager that pauses the current thread's trace function (coverage or any `sys.settrace`
+line-tracer) around the hot check, so the engine's inner loop is not line-traced under `pytest-cov`.
+
+::: musil.tracing

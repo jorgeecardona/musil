@@ -4,6 +4,15 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Docs — API reference now covers every module (was stuck near the 0.6.2 surface)
+
+- `docs/api.md` was missing the modules added since 0.11.0, so the published site never surfaced them
+  ([issue #19](https://gitlab.com/jorgeecardona/musil/-/work_items/19)). Added mkdocstrings sections for
+  `induction`, `patterns`, `counterexample`, `diffing`, `profiling`, `cache`, and `tracing`, and named the
+  new `invariant_coverage` / `check_liveness_open` symbols in the metrics/open-systems headings. A test
+  (`test_docs_coverage`) now fails if any public module lacks a `::: musil.<module>` section, so the docs
+  cannot silently drift behind the code again.
+
 ### Added — `check_liveness_open`: verify liveness under the same environments as `check_open`
 
 - `check_liveness_open(system, *envs, goal=...)` is the liveness counterpart of `check_open`, so an
