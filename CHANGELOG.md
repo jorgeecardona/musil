@@ -37,6 +37,13 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   degeneralizing. `has_accepting_run` finds a reachable non-trivial SCC that intersects every acceptance
   set (empty sets accept any infinite run). Product construction is now the shared `_product` used by both
   `Buchi` and `GeneralizedBuchi`. Validated on hand-built generalized automata over the traffic light.
+- `GeneralizedBuchi.from_ltl(formula)`: the GPVW tableau construction — an LTL formula (put in NNF first)
+  becomes the automaton accepting exactly its satisfying model runs, one acceptance set per
+  `Until`/`Eventually` subformula. This is the general LTL engine's front half. Validated by DIFFERENTIAL
+  testing: for the reducible fragment, `from_ltl(Not(phi)).has_accepting_run(explore(m))` agrees with the
+  trusted `check_ltl` reductions across many formula/model combinations, plus hand-verified `Until`/`Next`/
+  nested cases. Not yet wired into `check_ltl` (the wiring step adds terminal-state stuttering, see
+  `LTL_NOTES.md`); building and trusting the front half first.
 
 ### Internal — `check`/`check_all`/`explore` share one successor kernel
 

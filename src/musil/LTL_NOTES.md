@@ -38,10 +38,21 @@ the same AST, dependency-free (per the dependency policy: no z3, build it oursel
 - [x] AST + reducible fragment + `_push_negations` + conjunction split.
 - [ ] Product + nested-DFS emptiness over a HAND-BUILT automaton data structure (the sound back half),
       tested against known automata on the corpus models. Lower risk; build and trust it first.
-- [ ] GPVW `¬φ -> GBA` construction, tested independently (accept/reject ultimately-periodic words).
-- [ ] Wire `check_ltl` to `push_negations -> GPVW -> product -> nested-DFS`, replacing the
+- [x] GPVW construction (`GeneralizedBuchi.from_ltl`), validated by differential agreement with the
+      reducible-fragment reductions + hand-verified `Until`/`Next`/nested cases.
+- [ ] Wire `check_ltl` to `from_ltl(Not(phi)).has_accepting_run(explore(model))`, replacing the
       `NotImplementedError`s; re-express the fixed liveness forms and `musil.patterns` as sugar over it.
 - [ ] Corpus: pin general-LTL verdicts (`p U q`, `X`, `F G`, nested) on the classic models.
+
+## Terminal states (must handle when wiring check_ltl)
+
+LTL is over INFINITE runs; the Büchi emptiness only sees infinite product runs. A model with a terminal /
+deadlock state has FINITE maximal runs that ending there, which the product simply drops (the product
+state has no successor, so it is in no cycle). So `check_ltl` over a model with terminal states must
+STUTTER-EXTEND them — add a self-loop on every deadlock/terminal state before building the product — so a
+run that would end there instead repeats its last state forever, and `F p` / `G p` get the intended
+finite-run semantics. The GPVW tests use only the cycling traffic light (all runs infinite) to keep this
+orthogonal; the wiring step owns the stutter extension.
 
 ## Soundness discipline
 

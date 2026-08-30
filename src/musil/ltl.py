@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass, replace
+from itertools import count
 
 from musil.core import Graph, Model, Result, check
 from musil.liveness import LivenessResult, check_liveness, has_internal_edge, tarjan
@@ -341,3 +342,156 @@ class GeneralizedBuchi[S: Hashable]:
             and all(any(q in acc for _m, q in scc) for acc in self.accepting_sets)
             for scc in tarjan(set(prod), prod)
         )
+
+    @classmethod
+    def from_ltl(cls, formula: LTL[S]) -> GeneralizedBuchi[S]:
+        """Build the automaton that accepts exactly the model runs satisfying ``formula``, via the GPVW
+        (Gerth-Peled-Vardi-Wolper) tableau construction. To check ``model |= phi``, build the automaton for
+        ``Not(phi)`` and ask whether it ``has_accepting_run(explore(model))`` — an accepting run is a
+        counterexample to ``phi``. The formula is put in negation normal form first (``_push_negations``);
+        each ``Until``/``Eventually`` subformula contributes one acceptance set (its eventuality must be
+        fulfilled, not deferred forever). See ``LTL_NOTES.md``."""
+        return _gpvw(formula)
+
+
+@dataclass(slots=True)
+class _GNode[S: Hashable]:
+    """A GPVW tableau node: ``old`` are the subformulas that must hold at this node (its label),
+    ``nextf`` the subformulas that must hold at every successor, ``incoming`` the predecessor node ids."""
+
+    id: int
+    incoming: set[int]
+    old: frozenset[LTL[S]]
+    nextf: frozenset[LTL[S]]
+
+
+def _negate_literal[S: Hashable](literal: LTL[S]) -> LTL[S]:
+    match literal:
+        case Not(arg=inner):
+            return inner
+        case _:
+            return Not(literal)
+
+
+def _label_guard[S: Hashable](old: frozenset[LTL[S]]) -> Callable[[S], bool]:
+    """The guard for a node: the model state must satisfy every literal (``Atom`` / ``Not(Atom)``) in
+    ``old``. Non-literal formulas in ``old`` are structural obligations already discharged by expansion and
+    impose no state constraint here."""
+    lits: list[tuple[Callable[[S], bool], bool]] = []
+    for f in old:
+        match f:
+            case Atom(predicate=p):
+                lits.append((p, True))
+            case Not(arg=Atom(predicate=p)):
+                lits.append((p, False))
+            case _:
+                pass
+
+    def guard(s: S) -> bool:
+        return all(pred(s) == want for pred, want in lits)
+
+    return guard
+
+
+def _closure[S: Hashable](formula: LTL[S]) -> set[LTL[S]]:
+    """Every subformula of ``formula`` (itself included)."""
+    result: set[LTL[S]] = {formula}
+    match formula:
+        case Atom():
+            pass
+        case Not(arg=a) | Next(arg=a) | Eventually(arg=a) | Always(arg=a):
+            result |= _closure(a)
+        case (
+            And(left=a, right=b)
+            | Or(left=a, right=b)
+            | Implies(left=a, right=b)
+            | Until(left=a, right=b)
+            | Release(left=a, right=b)
+            | WeakUntil(left=a, right=b)
+        ):
+            result |= _closure(a) | _closure(b)
+        case _:
+            pass
+    return result
+
+
+def _eventualities[S: Hashable](formula: LTL[S]) -> list[tuple[LTL[S], LTL[S]]]:
+    """The ``(subformula, fulfiller)`` pairs whose eventuality must not be deferred forever: each
+    ``Until(a, b)`` promises ``b``, each ``Eventually(a)`` promises ``a``. (``Release``/``WeakUntil``/
+    ``Always`` carry no such promise.)"""
+    pairs: list[tuple[LTL[S], LTL[S]]] = []
+    for sub in _closure(formula):
+        match sub:
+            case Until(right=b):
+                pairs.append((sub, b))
+            case Eventually(arg=a):
+                pairs.append((sub, a))
+            case _:
+                pass
+    return pairs
+
+
+def _gpvw[S: Hashable](formula: LTL[S]) -> GeneralizedBuchi[S]:
+    """The GPVW tableau construction: ``formula`` -> a generalized Büchi automaton accepting exactly its
+    satisfying model runs. See ``LTL_NOTES.md`` and ``GeneralizedBuchi.from_ltl``."""
+    phi = _push_negations(formula)
+    finished: list[_GNode[S]] = []
+    ids = count()
+    init = -1  # sentinel "before the first node" predecessor
+
+    def expand(new: frozenset[LTL[S]], old: frozenset[LTL[S]], nextf: frozenset[LTL[S]], incoming: frozenset[int]) -> None:
+        if not new:
+            for nd in finished:
+                if nd.old == old and nd.nextf == nextf:
+                    nd.incoming |= incoming
+                    return
+            node_id = next(ids)
+            finished.append(_GNode(id=node_id, incoming=set(incoming), old=old, nextf=nextf))
+            expand(nextf, frozenset(), frozenset(), frozenset({node_id}))
+            return
+        f = next(iter(new))
+        rest = new - {f}
+        if f in old:
+            expand(rest, old, nextf, incoming)
+            return
+        match f:
+            case Atom() | Not(arg=Atom()):
+                if _negate_literal(f) in old:
+                    return  # contradictory node — discard
+                expand(rest, old | {f}, nextf, incoming)
+            case And(left=a, right=b):
+                expand(rest | ({a, b} - old), old | {f}, nextf, incoming)
+            case Or(left=a, right=b):
+                expand(rest | ({a} - old), old | {f}, nextf, incoming)
+                expand(rest | ({b} - old), old | {f}, nextf, incoming)
+            case Next(arg=a):
+                expand(rest, old | {f}, nextf | {a}, incoming)
+            case Until(left=a, right=b):  # a U b = b | (a & X(a U b))
+                expand(rest | ({b} - old), old | {f}, nextf, incoming)
+                expand(rest | ({a} - old), old | {f}, nextf | {f}, incoming)
+            case Release(left=a, right=b):  # a R b = b & (a | X(a R b))
+                expand(rest | ({a, b} - old), old | {f}, nextf, incoming)
+                expand(rest | ({b} - old), old | {f}, nextf | {f}, incoming)
+            case Eventually(arg=a):  # F a = a | X(F a)
+                expand(rest | ({a} - old), old | {f}, nextf, incoming)
+                expand(rest, old | {f}, nextf | {f}, incoming)
+            case Always(arg=a):  # G a = a & X(G a)
+                expand(rest | ({a} - old), old | {f}, nextf | {f}, incoming)
+            case WeakUntil(left=a, right=b):  # a W b = b | (a & X(a W b))
+                expand(rest | ({b} - old), old | {f}, nextf, incoming)
+                expand(rest | ({a} - old), old | {f}, nextf | {f}, incoming)
+            case _:
+                expand(rest, old | {f}, nextf, incoming)
+
+    expand(frozenset({phi}), frozenset(), frozenset(), frozenset({init}))
+
+    initial = frozenset(nd.id for nd in finished if init in nd.incoming)
+    transitions: dict[int, tuple[tuple[Callable[[S], bool], int], ...]] = {}
+    for q in finished:
+        guard = _label_guard(q.old)
+        transitions[q.id] = tuple((guard, qp.id) for qp in finished if q.id in qp.incoming)
+    accepting_sets = tuple(
+        frozenset(nd.id for nd in finished if (mu not in nd.old) or (fulfiller in nd.old))
+        for mu, fulfiller in _eventualities(phi)
+    )
+    return GeneralizedBuchi(initial=initial, accepting_sets=accepting_sets, transitions=transitions)
