@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.ltl`: an LTL formula AST + `check_ltl` (first layer)
+
+- An LTL formula as pure data — `Atom`, `Not`, `And`, `Or`, `Implies`, `Next`, `Eventually`, `Always`,
+  `Until`, `Release`, `WeakUntil` — and `check_ltl(model, formula)`, the start of a full temporal-property
+  layer (issue #2, item 2). This first cut checks the fragment that reduces SOUNDLY onto the existing
+  proven primitives: `Always(state)` -> a safety invariant, `Eventually(state)` -> `<>P`,
+  `Always(Eventually(state))` -> `[]<>P`, and `Always(Implies(a, Eventually(b)))` -> the response
+  (leads-to) property, where `state` is any boolean combination of `Atom`s.
+- Anything outside that fragment (`Until`, `Release`, `Next`, arbitrary nesting) raises
+  `NotImplementedError` rather than returning a guessed verdict — the general engine (a Büchi automaton
+  for the negated formula, its product with the reachable graph, emptiness via nested-DFS) lands
+  incrementally on top of this same AST, at which point the fixed liveness forms and `musil.patterns`
+  become sugar over it. Corpus entries pin the reductions against the traffic light's known verdicts.
+
 ### Internal — `check`/`check_all`/`explore` share one successor kernel
 
 - `check`, `check_all`, and `explore` now compute their canonical enabled successors through one lazy

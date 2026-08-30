@@ -108,6 +108,17 @@ enumerating a caller-supplied `domain` that must include unreachable states.
 
 ::: musil.induction
 
+## LTL — `check_ltl`, formula AST
+
+A linear-temporal-logic formula as pure data (`Atom`, `Not`, `And`, `Or`, `Implies`, `Next`,
+`Eventually`, `Always`, `Until`, `Release`, `WeakUntil`), and `check_ltl`, which checks the fragment that
+reduces soundly onto `check`/`check_liveness` (`G(state)`, `F(state)`, `G F(state)`, `G(a -> F b)`).
+Anything outside that fragment raises `NotImplementedError` rather than returning a guessed verdict; the
+general Büchi + nested-DFS engine that covers `Until`/`Release`/`Next`/arbitrary nesting lands
+incrementally on top of this AST.
+
+::: musil.ltl
+
 ## Temporal patterns — `always`, `absent`, `eventually`, `recurs`, `responds`
 
 The Dwyer/Corbett specification patterns as one-call helpers: universality, absence, existence,

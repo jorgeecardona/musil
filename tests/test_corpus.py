@@ -10,7 +10,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import Action, Model, check, check_liveness, explore, profile
+from musil import (
+    Action,
+    Always,
+    Atom,
+    Eventually,
+    Implies,
+    Model,
+    check,
+    check_liveness,
+    check_ltl,
+    explore,
+    profile,
+)
 
 # --------------------------------------------------------------------------------------------------
 # 1. Bounded counter — a derivable-count sanity anchor
@@ -177,6 +189,18 @@ def test_traffic_light_safe_and_live():
     assert len(explore(m).states) == 3  # red, green, yellow
     assert check(m).ok  # known-color holds, no deadlock (it cycles)
     assert check_liveness(m, goal=lambda s: s.color == "green").ok  # eventually green on every run
+
+
+def test_traffic_light_ltl_via_check_ltl():
+    m = light_model()
+    green = Atom[Light]("green", lambda s: s.color == "green")
+    red = Atom[Light]("red", lambda s: s.color == "red")
+    yellow = Atom[Light]("yellow", lambda s: s.color == "yellow")
+    known = Atom[Light]("known", lambda s: s.color in {"red", "green", "yellow"})
+    assert check_ltl(m, Always(known)).ok  # G known-color (safety)
+    assert check_ltl(m, Eventually(green)).ok  # F green
+    assert check_ltl(m, Always(Eventually(red))).ok  # []<> red (recurrence)
+    assert check_ltl(m, Always(Implies(yellow, Eventually(red)))).ok  # yellow ~> red (response)
 
 
 def test_profile_explores_the_same_reachable_set():
