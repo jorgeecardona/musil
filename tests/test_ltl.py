@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-import pytest
-
 from musil import (
     Action,
     Always,
@@ -106,9 +104,8 @@ def test_conjunction_splits_into_independent_checks():
     # G known-color  &  G red : the second conjunct fails, and its failing result is returned
     r = check_ltl(m, And(Always(_KNOWN), Always(_RED)))
     assert not r.ok
-    # a conjunction with an irreducible conjunct propagates the refusal
-    with pytest.raises(NotImplementedError, match="outside the fragment"):
-        check_ltl(m, And(Always(_KNOWN), Until(_YELLOW, _RED)))
+    # a conjunction with a general-engine conjunct still works: both hold (yellow U red holds from red)
+    assert check_ltl(m, And(Always(_KNOWN), Until(_YELLOW, _RED))).ok
 
 
 def test_buchi_product_emptiness_detects_the_accepting_cycle():
@@ -177,10 +174,32 @@ def test_generalized_buchi_requires_every_acceptance_set():
     assert gba_empty.has_accepting_run(g)
 
 
-def test_out_of_fragment_refuses_rather_than_guessing():
-    with pytest.raises(NotImplementedError, match="outside the fragment"):
-        check_ltl(_light(), Until(_YELLOW, _RED))
-    with pytest.raises(NotImplementedError, match="outside the fragment"):
-        check_ltl(_light(), Next(_GREEN))
-    with pytest.raises(NotImplementedError, match="outside the fragment"):
-        check_ltl(_light(), _GREEN)  # a bare state formula: wrap it in Always/Eventually
+def test_general_engine_handles_the_previously_refused_fragment():
+    m = _light()
+    # yellow U red: from the initial state red, red already holds -> the until is satisfied -> holds.
+    assert check_ltl(m, Until(_YELLOW, _RED)).ok
+    # X green: from red, step 1 is green -> holds.
+    assert check_ltl(m, Next(_GREEN)).ok
+    # X red: from red, step 1 is green, not red -> fails.
+    assert not check_ltl(m, Next(_RED)).ok
+    # a bare state formula is evaluated at time 0: the init is red, not green -> green fails at time 0.
+    assert not check_ltl(m, _GREEN).ok
+    assert check_ltl(m, _RED).ok  # the init IS red
+
+
+def test_general_engine_stutters_terminal_states():
+    @dataclass(frozen=True)
+    class N:
+        n: int
+
+    line = Model(
+        init=N(0),
+        actions=[Action("step", enabled=lambda s: s.n < 2, apply=lambda s: N(s.n + 1))],
+        terminal=lambda s: s.n == 2,
+    )
+    at1 = Atom[N]("at1", lambda s: s.n == 1)
+    at2 = Atom[N]("at2", lambda s: s.n == 2)
+    # X at1 holds (step 1 is n=1); X at2 fails (step 1 is n=1). n=2 is terminal, so without the stutter
+    # self-loop the single run 0->1->2 would be finite and the Büchi product would see no run at all.
+    assert check_ltl(line, Next(at1)).ok
+    assert not check_ltl(line, Next(at2)).ok

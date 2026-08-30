@@ -1,21 +1,24 @@
 """Linear Temporal Logic — a formula AST plus a checker.
 
 The nodes (``Atom``, ``Not``, ``And``, ``Or``, ``Implies``, ``Next``, ``Eventually``, ``Always``,
-``Until``, ``Release``, ``WeakUntil``) build an LTL formula as pure data. ``check_ltl`` checks it.
+``Until``, ``Release``, ``WeakUntil``) build an LTL formula as pure data. ``check_ltl`` checks ANY of them.
 
-This first layer checks the fragment that reduces SOUNDLY to musil's existing proven primitives:
+``check_ltl`` first tries the shapes that reduce SOUNDLY to musil's proven primitives (fast, and they
+carry a shortest-path counterexample trace):
 
 - ``Always(state)``                    -> a safety invariant (``check``)
 - ``Eventually(state)``                -> ``<>P`` (``check_liveness``)
 - ``Always(Eventually(state))``        -> ``[]<>P`` recurrence (``check_liveness(everywhere=True)``)
 - ``Always(Implies(state, Eventually(state)))`` -> the response/leads-to property
+- a top-level conjunction of any of the above (checked conjunct by conjunct)
 
-where ``state`` is any boolean combination of ``Atom``s (no temporal operator). Anything OUTSIDE this
-fragment — ``Next``, ``Until``, ``Release``, ``WeakUntil``, or temporal nesting other than the shapes
-above — raises ``NotImplementedError`` rather than returning a guessed verdict. The general engine (a
-Büchi automaton for ``Not(formula)``, its product with the reachable graph, emptiness via nested-DFS)
-lands incrementally on top of this same AST; when it does, the fixed liveness forms and ``musil.patterns``
-become sugar over it.
+where ``state`` is any boolean combination of ``Atom``s. Anything else — ``Next``, ``Until``, ``Release``,
+``WeakUntil``, arbitrary nesting — falls through to the GENERAL engine: ``model |= phi`` iff the Büchi
+automaton for ``Not(phi)`` (GPVW, ``GeneralizedBuchi.from_ltl``) has no accepting run over the
+stutter-extended reachable graph (``has_accepting_run``, emptiness via SCC). The engine is sound over
+infinite runs; terminal/deadlock states are stutter-extended so their finite runs are handled. Still to
+come: a counterexample lasso from the engine, and re-expressing the fixed liveness forms / ``musil.patterns``
+as sugar over ``check_ltl``. See ``LTL_NOTES.md``.
 """
 
 from __future__ import annotations
@@ -24,8 +27,19 @@ from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from itertools import count
 
-from musil.core import Graph, Model, Result, check
+from musil.core import Graph, Model, Result, check, explore
 from musil.liveness import LivenessResult, check_liveness, has_internal_edge, tarjan
+
+
+def _stutter[S: Hashable](graph: Graph[S]) -> Graph[S]:
+    """Add a self-loop to every state with no successor, so a finite maximal run that would end there
+    becomes an infinite stuttering run — LTL's semantics are over infinite runs, and the Büchi product
+    only sees infinite runs (a dead-end product state is in no cycle). Returns a new ``Graph``."""
+    edges: dict[S, tuple[tuple[str, S], ...]] = {}
+    for s in graph.states:
+        out = tuple(graph.edges.get(s, ()))
+        edges[s] = out if out else (("<stutter>", s),)
+    return replace(graph, edges=edges)
 
 
 class LTL[S: Hashable]:
@@ -222,8 +236,10 @@ def check_ltl[S: Hashable](
     """Check ``formula`` against ``model``, reducing the supported fragment onto ``check`` /
     ``check_liveness`` (see the module docstring). Returns a ``Result`` for the safety reductions and a
     ``LivenessResult`` for the liveness ones; both satisfy the ``Verdict`` protocol (``.ok`` + ``__str__``).
-    ``fair`` / ``fair_strong`` apply to the liveness reductions. Raises ``NotImplementedError`` for any
-    formula outside the fragment, never a guessed verdict."""
+    ``fair`` / ``fair_strong`` apply to the liveness reductions. Any formula outside the reducible shapes
+    is checked by the general Büchi engine over the stutter-extended reachable graph (a ``Result`` with
+    ``kind="ltl"`` on violation; no counterexample trace from the engine yet). Requires hashable states
+    (the engine explores the graph)."""
     formula = _push_negations(formula)  # negated temporal forms become reducible; e.g. !F p -> G !p
     match formula:
         case Always(arg=Eventually(arg=inner)):  # G F inner -> recurrence []<>P
@@ -249,11 +265,16 @@ def check_ltl[S: Hashable](
             return check_ltl(model, b, name=name, fair=fair, fair_strong=fair_strong, max_states=max_states)
         case _:
             pass
-    raise NotImplementedError(
-        f"check_ltl cannot yet check {formula!s}: it is outside the fragment reducible to check/"
-        "check_liveness (G(state), F(state), G F(state), G(a -> F b)). The general Büchi + nested-DFS "
-        "engine that covers Until/Release/Next/arbitrary nesting lands in a later step; until then this "
-        "refuses rather than returning a guessed verdict."
+    # General engine: model |= phi iff the automaton for Not(phi) has no accepting run over the
+    # (stutter-extended) reachable graph. Covers Until/Release/Next/arbitrary nesting.
+    graph = _stutter(explore(model, max_states=max_states))
+    violated = GeneralizedBuchi[S].from_ltl(Not(formula)).has_accepting_run(graph)
+    return Result(
+        ok=not violated,
+        states_explored=len(graph.states),
+        kind="ltl" if violated else None,
+        reason=str(formula) if violated else None,
+        truncated=graph.truncated,
     )
 
 

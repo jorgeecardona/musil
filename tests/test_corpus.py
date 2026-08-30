@@ -17,6 +17,8 @@ from musil import (
     Eventually,
     Implies,
     Model,
+    Next,
+    Until,
     check,
     check_liveness,
     check_ltl,
@@ -201,6 +203,10 @@ def test_traffic_light_ltl_via_check_ltl():
     assert check_ltl(m, Eventually(green)).ok  # F green
     assert check_ltl(m, Always(Eventually(red))).ok  # []<> red (recurrence)
     assert check_ltl(m, Always(Implies(yellow, Eventually(red)))).ok  # yellow ~> red (response)
+    # general-engine (irreducible) forms: X green holds (red->green); X red fails; known U green holds
+    assert check_ltl(m, Next(green)).ok
+    assert not check_ltl(m, Next(red)).ok
+    assert check_ltl(m, Until(known, green)).ok
 
 
 def test_profile_explores_the_same_reachable_set():

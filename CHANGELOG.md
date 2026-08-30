@@ -44,6 +44,12 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   trusted `check_ltl` reductions across many formula/model combinations, plus hand-verified `Until`/`Next`/
   nested cases. Not yet wired into `check_ltl` (the wiring step adds terminal-state stuttering, see
   `LTL_NOTES.md`); building and trusting the front half first.
+- `check_ltl` now checks ARBITRARY LTL: the reducible shapes still fast-path to `check`/`check_liveness`
+  (with traces), and everything else — `Next`, `Until`, `Release`, `WeakUntil`, arbitrary nesting, bare
+  state formulas — falls through to the general engine (`GeneralizedBuchi.from_ltl(Not(phi))` +
+  `has_accepting_run`). Terminal/deadlock states are stutter-extended so their finite runs get the right
+  infinite-run semantics. The engine path returns a `Result` (`kind="ltl"` on violation); a counterexample
+  lasso from the engine is still to come. Corpus pins general-LTL verdicts (`X`, `U`) on the traffic light.
 
 ### Internal — `check`/`check_all`/`explore` share one successor kernel
 

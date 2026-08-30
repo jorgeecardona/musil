@@ -40,9 +40,11 @@ the same AST, dependency-free (per the dependency policy: no z3, build it oursel
       tested against known automata on the corpus models. Lower risk; build and trust it first.
 - [x] GPVW construction (`GeneralizedBuchi.from_ltl`), validated by differential agreement with the
       reducible-fragment reductions + hand-verified `Until`/`Next`/nested cases.
-- [ ] Wire `check_ltl` to `from_ltl(Not(phi)).has_accepting_run(explore(model))`, replacing the
-      `NotImplementedError`s; re-express the fixed liveness forms and `musil.patterns` as sugar over it.
-- [ ] Corpus: pin general-LTL verdicts (`p U q`, `X`, `F G`, nested) on the classic models.
+- [x] Wire `check_ltl` to `from_ltl(Not(phi)).has_accepting_run(_stutter(explore(model)))` for the
+      irreducible fragment; terminal states are stutter-extended. General-LTL corpus entries pinned.
+- [ ] Counterexample lasso from the engine (stem + cycle) so the engine path returns a real trace, not
+      just a verdict.
+- [ ] Re-express the fixed liveness forms and `musil.patterns` as sugar over `check_ltl`.
 
 ## Terminal states (must handle when wiring check_ltl)
 
