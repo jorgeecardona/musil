@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Fixed — `check_liveness`: strong fairness missed sub-SCC counterexamples (soundness)
+
+- `check_liveness(..., fair_strong=(...))` could return `ok=True` when a fair counterexample existed — a
+  false OK, the unsound direction. Fairness was judged on the MAXIMAL SCC: a strongly-fair action enabled
+  anywhere in the SCC but never taken there ruled the whole SCC out, even when a cycle confined to a
+  *sub-SCC* never enables that action and so carries no fairness obligation. `_find_fair_scc` now applies
+  the standard Emerson-Lei refinement — remove the states that enable an unsatisfied strongly-fair action
+  and re-decompose the remainder, recursing to a fixpoint — so a fair cycle in a sub-SCC is found.
+- Regression pinned in the corpus (issue #22): a model whose maximal SCC contains a strongly-fair action
+  enabled only at one state, with a sub-cycle that avoids it, now correctly reports the fair counterexample
+  (cycle confined to the sub-SCC); a companion model where the fair action is enabled throughout the only
+  cycle still correctly reports the property holds (the fix does not over-report). Weak fairness is
+  unchanged (enabled-everywhere persists under any subset, so it needs no refinement).
+
 ### Added — `examples/coverage_vacuity.py`: when a green check is meaningless
 
 - A worked example of `coverage` / `invariant_coverage` (GitLab #2 item 1, "cheapest, highest signal"): a

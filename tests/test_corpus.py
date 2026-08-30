@@ -448,3 +448,56 @@ def test_profile_explores_the_same_reachable_set():
     assert profile(peterson_model()).states_explored == len(explore(peterson_model()).states) == 20
     assert profile(dining_naive_model()).states_explored == len(explore(dining_naive_model()).states) == 6
     assert profile(light_model()).states_explored == len(explore(light_model()).states) == 3
+
+
+# --------------------------------------------------------------------------------------------------
+# 10. Strong-fairness sub-SCC — a fair counterexample confined to a sub-SCC must be found (issue #22)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class FairS:
+    at: str  # "s0", "s1", "s2", "done"
+
+
+def subscc_fairness_model() -> Model[FairS]:
+    # Maximal SCC {s0, s1, s2}; the strongly-fair action "g" is enabled only at s2 (-> done). The s0<->s1
+    # sub-cycle never enables g, so looping there forever is FAIR and never reaches done: <>done is VIOLATED
+    # under strong fairness. Judging fairness on the maximal SCC alone misses this (the fixed bug).
+    return Model(
+        init=FairS("s0"),
+        actions=[
+            Action("step", enabled=lambda s: s.at == "s0", apply=lambda s: FairS("s1")),
+            Action("back", enabled=lambda s: s.at == "s1", apply=lambda s: FairS("s0")),
+            Action("advance", enabled=lambda s: s.at == "s1", apply=lambda s: FairS("s2")),
+            Action("g", enabled=lambda s: s.at == "s2", apply=lambda s: FairS("done")),
+            Action("retreat", enabled=lambda s: s.at == "s2", apply=lambda s: FairS("s1")),
+        ],
+        terminal=lambda s: s.at == "done",
+    )
+
+
+def forced_fairness_model() -> Model[FairS]:
+    # The only ¬done cycle is {s0, s1}, and the strongly-fair action "g" is enabled in BOTH its states
+    # (-> done). Strong fairness then FORCES g, so every fair run reaches done: <>done HOLDS. Guards the
+    # other direction -- the fix must still rule out a cycle whose fair action really is forced.
+    return Model(
+        init=FairS("s0"),
+        actions=[
+            Action("a", enabled=lambda s: s.at == "s0", apply=lambda s: FairS("s1")),
+            Action("b", enabled=lambda s: s.at == "s1", apply=lambda s: FairS("s0")),
+            Action("g", enabled=lambda s: s.at in ("s0", "s1"), apply=lambda s: FairS("done")),
+        ],
+        terminal=lambda s: s.at == "done",
+    )
+
+
+def test_strong_fairness_finds_a_subscc_counterexample():
+    done: Callable[[FairS], bool] = lambda s: s.at == "done"  # noqa: E731
+    # The s0<->s1 loop never enables g, so it is a genuine fair counterexample under strong fairness of g.
+    r = check_liveness(subscc_fairness_model(), goal=done, goal_name="done", fair_strong=("g",))
+    assert not r.ok and r.kind == "fair-cycle"
+    assert {step.state.at for step in r.cycle} == {"s0", "s1"}  # confined to the sub-SCC that avoids g
+
+    # Other direction: when g is enabled throughout the only cycle, strong fairness forces it -> <>done holds.
+    assert check_liveness(forced_fairness_model(), goal=done, goal_name="done", fair_strong=("g",)).ok

@@ -15,7 +15,12 @@ we find with a lasso counterexample (a stem into a recurring set, plus the loop)
 
 Method: explore the reachable graph, restrict to ¬P states reachable through ¬P from a ¬P initial
 state, then (1) flag any from which P is unreachable, (2) Tarjan-SCC the rest and report the first
-weakly-fair non-trivial SCC. Dependency-free; for finite (bounded) models."""
+non-trivial SCC that hosts a fair cycle. *Strong* fairness (``fair_strong=[...]``: an action enabled
+*infinitely often* must be taken) is checked with sub-SCC refinement — a strongly-fair action enabled
+somewhere in an SCC but never taken need not fire on a cycle that avoids the states enabling it, so
+those states are removed and the remainder re-decomposed to a fixpoint (Emerson-Lei). Without that,
+a fair cycle confined to a sub-SCC is missed and the property is wrongly reported to hold.
+Dependency-free; for finite (bounded) models."""
 
 from __future__ import annotations
 
@@ -138,16 +143,14 @@ def check_liveness[S: Hashable](
                 kind="p-unreachable", stem=_stem(parent, s),
             )
 
-    # (2) a weakly-fair recurring cycle of ¬P states.
-    for scc in tarjan(reachable_bad, bad_succ):
-        if not has_internal_edge(scc, bad_succ):
-            continue
-        if _fair_admissible(scc, g.edges, fairset, strongset):
-            entry = next(s for s in order if s in scc)  # shortest-stem entry
-            return LivenessResult(
-                ok=False, states_explored=len(g.states), goal=goal_name, kind="fair-cycle",
-                stem=_stem(parent, entry), cycle=_simple_cycle(scc, entry, bad_succ),
-            )
+    # (2) a fair recurring cycle of ¬P states (strong fairness refines into sub-SCCs, see _find_fair_scc).
+    fair_scc = _find_fair_scc(reachable_bad, bad_succ, g.edges, fairset, strongset)
+    if fair_scc is not None:
+        entry = next(s for s in order if s in fair_scc)  # shortest-stem entry
+        return LivenessResult(
+            ok=False, states_explored=len(g.states), goal=goal_name, kind="fair-cycle",
+            stem=_stem(parent, entry), cycle=_simple_cycle(fair_scc, entry, bad_succ),
+        )
 
     return LivenessResult(ok=True, states_explored=len(g.states), goal=goal_name, truncated=g.truncated)
 
@@ -160,29 +163,59 @@ def has_internal_edge[S: Hashable](scc: set[S], succ: Mapping[S, list[tuple[str,
     return any(t == only for _a, t in succ[only])
 
 
-def _fair_admissible[S: Hashable](
-    scc: set[S],
+def _taken_inside[S: Hashable](a: str, scc: set[S], edges: Mapping[S, tuple[tuple[str, S], ...]]) -> bool:
+    """Whether action ``a`` labels an edge that stays inside ``scc`` (a fair action taken on the cycle)."""
+    return any(name == a and t in scc for s in scc for name, t in edges[s])
+
+
+def _enables[S: Hashable](a: str, s: S, edges: Mapping[S, tuple[tuple[str, S], ...]]) -> bool:
+    """Whether action ``a`` is enabled at ``s`` (it labels some outgoing edge in the full graph)."""
+    return any(name == a for name, _t in edges[s])
+
+
+def _find_fair_scc[S: Hashable](
+    states: set[S],
+    bad_succ: Mapping[S, list[tuple[str, S]]],
     edges: Mapping[S, tuple[tuple[str, S], ...]],
     weak: frozenset[str],
     strong: frozenset[str],
-) -> bool:
-    """Can the system loop in this SCC forever without violating the fairness assumptions? It cannot
-    (so the loop is NOT a genuine counterexample) if any fair action must fire:
-      - weak fairness: an action enabled in *every* SCC state but never taken on an internal edge;
-      - strong fairness: an action enabled in *any* SCC state but never taken on an internal edge.
-    Strong is the stronger requirement (enabled-somewhere is easier to meet than enabled-everywhere),
-    so it rules out more cycles."""
+) -> set[S] | None:
+    """A non-trivial SCC within ``states`` (over the ¬P subgraph ``bad_succ``) that hosts a cycle satisfying
+    the fairness assumptions, or None — the search for a fair counterexample cycle.
 
-    def taken_inside(a: str) -> bool:
-        return any(name == a and t in scc for s in scc for name, t in edges[s])
+    A cycle is ruled out when a fair action *must* fire on it:
 
-    for a in weak:
-        if not taken_inside(a) and all(any(name == a for name, _t in edges[s]) for s in scc):
-            return False
-    for a in strong:
-        if not taken_inside(a) and any(any(name == a for name, _t in edges[s]) for s in scc):
-            return False
-    return True
+    - **Weak fairness**: an action enabled in EVERY state of the SCC but never taken inside must eventually
+      fire. No cycle in the SCC (nor in any subset, which keeps it enabled everywhere) is fair, so the SCC
+      is skipped outright.
+    - **Strong fairness**: an action enabled in ANY state of the SCC but never taken inside must fire *if it
+      stays enabled infinitely often* — but a cycle that AVOIDS the states where it is enabled never enables
+      it, so it carries no obligation. So instead of rejecting the whole SCC (the old bug: a fair cycle
+      confined to a sub-SCC was missed, wrongly reporting the property holds), remove the states that enable
+      the action and re-decompose the remainder, recursing to a fixpoint (Emerson-Lei fair-cycle detection).
+
+    Only when no fair action forces itself does the SCC host a fair cycle."""
+    for scc in tarjan(states, bad_succ):
+        if not has_internal_edge(scc, bad_succ):
+            continue
+        if any(
+            not _taken_inside(a, scc, edges) and all(_enables(a, s, edges) for s in scc) for a in weak
+        ):
+            continue  # a weakly-fair action is enabled throughout and never taken: no fair cycle here
+        forced = next(
+            (a for a in strong if not _taken_inside(a, scc, edges) and any(_enables(a, s, edges) for s in scc)),
+            None,
+        )
+        if forced is None:
+            return scc  # no fair action forces itself: this SCC hosts a fair cycle
+        # A strongly-fair action is enabled somewhere but never taken. Any fair cycle must avoid the states
+        # that enable it (it is never taken here), so drop them and look for a fair cycle in the remainder.
+        sub = _find_fair_scc(
+            {s for s in scc if not _enables(forced, s, edges)}, bad_succ, edges, weak, strong
+        )
+        if sub is not None:
+            return sub
+    return None
 
 
 def tarjan[S: Hashable](nodes: set[S], succ: Mapping[S, list[tuple[str, S]]]) -> list[set[S]]:
