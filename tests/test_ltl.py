@@ -79,6 +79,23 @@ def test_boolean_combination_in_a_state_formula():
     assert check_ltl(_light(), Always(Or(_GREEN, Not(_GREEN)))).ok  # tautology holds everywhere
 
 
+def test_negated_temporal_forms_reduce_via_pushed_negation():
+    m = _light()
+    # !F green == G !green : fails, green is reachable
+    assert not check_ltl(m, Not(Eventually(_GREEN))).ok
+    # !G green == F !green : holds, a non-green state is reachable
+    assert check_ltl(m, Not(Always(_GREEN))).ok
+    # !G known == F !known : fails, every reachable state has a known color
+    assert not check_ltl(m, Not(Always(_KNOWN))).ok
+    # double negation collapses: !!G known == G known : holds
+    assert check_ltl(m, Not(Not(Always(_KNOWN)))).ok
+
+
+def test_pushed_negation_preserves_the_response_shape():
+    # G(yellow -> F red) must still match the response reduction after negation-pushing (Implies kept)
+    assert check_ltl(_light(), Always(Implies(_YELLOW, Eventually(_RED)))).ok
+
+
 def test_out_of_fragment_refuses_rather_than_guessing():
     with pytest.raises(NotImplementedError, match="outside the fragment"):
         check_ltl(_light(), Until(_YELLOW, _RED))

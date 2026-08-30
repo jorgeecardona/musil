@@ -128,6 +128,65 @@ class WeakUntil[S: Hashable](LTL[S]):
         return f"({self.left} W {self.right})"
 
 
+def _push_negations[S: Hashable](formula: LTL[S]) -> LTL[S]:
+    """Push every ``Not`` down toward the atoms using LTL dualities (semantics-preserving): ``!!x = x``,
+    ``!F x = G !x``, ``!G x = F !x``, ``!X x = X !x``, ``!(a & b) = !a | !b`` and its dual, ``!(a -> b) =
+    a & !b``, ``!(a U b) = !a R !b`` and its dual, ``!(a W b) = !b U (!a & !b)``. ``Implies`` is kept as a
+    node (not expanded to ``!a | b``) so the response shape ``G(a -> F b)`` survives for the reduction.
+    This both widens the fragment ``check_ltl`` can reduce (negated temporal forms) and is the negation-
+    normal-form preprocessing the general Büchi construction will need."""
+    match formula:
+        case Atom():
+            return formula
+        case Not(arg=inner):
+            match inner:
+                case Atom():
+                    return formula  # a literal
+                case Not(arg=x):
+                    return _push_negations(x)
+                case And(left=a, right=b):
+                    return Or(_push_negations(Not(a)), _push_negations(Not(b)))
+                case Or(left=a, right=b):
+                    return And(_push_negations(Not(a)), _push_negations(Not(b)))
+                case Implies(left=a, right=b):
+                    return And(_push_negations(a), _push_negations(Not(b)))
+                case Next(arg=x):
+                    return Next(_push_negations(Not(x)))
+                case Eventually(arg=x):
+                    return Always(_push_negations(Not(x)))
+                case Always(arg=x):
+                    return Eventually(_push_negations(Not(x)))
+                case Until(left=a, right=b):
+                    return Release(_push_negations(Not(a)), _push_negations(Not(b)))
+                case Release(left=a, right=b):
+                    return Until(_push_negations(Not(a)), _push_negations(Not(b)))
+                case WeakUntil(left=a, right=b):
+                    nb = _push_negations(Not(b))
+                    return Until(nb, And(_push_negations(Not(a)), nb))
+                case _:
+                    return formula
+        case And(left=a, right=b):
+            return And(_push_negations(a), _push_negations(b))
+        case Or(left=a, right=b):
+            return Or(_push_negations(a), _push_negations(b))
+        case Implies(left=a, right=b):
+            return Implies(_push_negations(a), _push_negations(b))
+        case Next(arg=x):
+            return Next(_push_negations(x))
+        case Eventually(arg=x):
+            return Eventually(_push_negations(x))
+        case Always(arg=x):
+            return Always(_push_negations(x))
+        case Until(left=a, right=b):
+            return Until(_push_negations(a), _push_negations(b))
+        case Release(left=a, right=b):
+            return Release(_push_negations(a), _push_negations(b))
+        case WeakUntil(left=a, right=b):
+            return WeakUntil(_push_negations(a), _push_negations(b))
+        case _:
+            return formula
+
+
 def _state_predicate[S: Hashable](formula: LTL[S]) -> Callable[[S], bool] | None:
     """Compile a temporal-operator-free formula (a boolean combination of ``Atom``s) to a state
     predicate, or return None if it contains any temporal operator."""
@@ -164,6 +223,7 @@ def check_ltl[S: Hashable](
     ``LivenessResult`` for the liveness ones; both satisfy the ``Verdict`` protocol (``.ok`` + ``__str__``).
     ``fair`` / ``fair_strong`` apply to the liveness reductions. Raises ``NotImplementedError`` for any
     formula outside the fragment, never a guessed verdict."""
+    formula = _push_negations(formula)  # negated temporal forms become reducible; e.g. !F p -> G !p
     match formula:
         case Always(arg=Eventually(arg=inner)):  # G F inner -> recurrence []<>P
             p = _state_predicate(inner)

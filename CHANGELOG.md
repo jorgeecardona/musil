@@ -17,6 +17,10 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   for the negated formula, its product with the reachable graph, emptiness via nested-DFS) lands
   incrementally on top of this same AST, at which point the fixed liveness forms and `musil.patterns`
   become sugar over it. Corpus entries pin the reductions against the traffic light's known verdicts.
+- `check_ltl` pushes negations to the literals first (semantics-preserving LTL dualities: `!F = G !`,
+  `!G = F !`, `!X = X !`, De Morgan, `!(a U b) = !a R !b`), so negated temporal forms reduce too — e.g.
+  `!F p` becomes the invariant `G !p`, `!G p` becomes `<> !p`. `Implies` is kept unexpanded so the
+  response shape survives. This is also the negation-normal-form preprocessing the general engine needs.
 
 ### Internal — `check`/`check_all`/`explore` share one successor kernel
 
