@@ -87,7 +87,7 @@ from musil.fsm import (
 )
 from musil.graph import to_dot
 from musil.induction import InductionResult, check_inductive
-from musil.liveness import LivenessResult, check_liveness
+from musil.liveness import LivenessResult, check_liveness, check_liveness_of
 from musil.ltl import (
     LTL,
     Always,
@@ -227,6 +227,7 @@ __all__ = [
     "check_cached",
     "check_inductive",
     "check_liveness",
+    "check_liveness_of",
     "check_liveness_open",
     "check_ltl",
     "check_of",

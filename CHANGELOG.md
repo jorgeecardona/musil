@@ -4,6 +4,18 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `check_liveness_of`: liveness over a pre-built graph (#31)
+
+- `check_liveness_of(graph, goal=..., ...)` runs the liveness analysis over an already-explored `Graph`
+  instead of re-exploring — the graph-first counterpart to `check_liveness`, same properties/verdict/lasso.
+  `check_liveness` was refactored to be exactly `check_liveness_of(explore(model, max_states=...), ...)`, so
+  there is a single analysis path (no divergence risk) and the graph can be shared with `check_of` /
+  `coverage_of` / `invariant_coverage_of`. Corpus pins that the two entries give the identical
+  `LivenessResult` on a passing case and on a strong-fairness sub-SCC counterexample.
+- With this, `check_of` + `check_liveness_of` cover the safety and liveness halves of #31; `fixed_points_of`
+  remains open pending the per-initial-state semantics decision (`fixed_points` explores each initial
+  separately, so a single merged graph would give a narrower answer).
+
 ### Added — `check_of`: the safety check over a pre-built graph (#31, partial)
 
 - `check_of(graph, model)` runs the safety verdict over an already-explored `Graph` instead of re-exploring

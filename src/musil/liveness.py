@@ -27,7 +27,7 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass
 
-from musil.core import Model, Step, explore, format_trace, reaches
+from musil.core import Graph, Model, Step, explore, format_trace, reaches
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,7 +111,33 @@ def check_liveness[S: Hashable](
     (an action enabled *infinitely often* — i.e. in any state of the cycle — must be taken); strong
     is the stronger assumption and rules out more cycles, so it can force a "flickering" action that
     weak fairness cannot."""
-    g = explore(model, max_states=max_states)
+    return check_liveness_of(
+        explore(model, max_states=max_states),
+        goal=goal,
+        fair=fair,
+        fair_strong=fair_strong,
+        everywhere=everywhere,
+        leadsto_from=leadsto_from,
+        goal_name=goal_name,
+    )
+
+
+def check_liveness_of[S: Hashable](
+    graph: Graph[S],
+    *,
+    goal: Callable[[S], bool],
+    fair: Iterable[str] = (),
+    fair_strong: Iterable[str] = (),
+    everywhere: bool = False,
+    leadsto_from: Callable[[S], bool] | None = None,
+    goal_name: str = "goal",
+) -> LivenessResult[S]:
+    """Run the liveness analysis over an ALREADY-explored ``graph`` instead of re-exploring — the graph-first
+    counterpart to ``check_liveness`` (as ``coverage_of`` is to ``coverage``), so several analyses can share
+    one ``explore``. Same properties, verdict, and lasso counterexample; see ``check_liveness`` for the full
+    semantics of ``goal`` / ``everywhere`` / ``leadsto_from`` and the fairness assumptions. ``check_liveness``
+    is exactly ``check_liveness_of(explore(model, max_states=max_states), ...)``."""
+    g = graph
     fairset = frozenset(fair)
     strongset = frozenset(fair_strong)
 

@@ -28,6 +28,7 @@ from musil import (
     assert_violates,
     check,
     check_liveness,
+    check_liveness_of,
     check_ltl,
     check_of,
     eventually,
@@ -608,3 +609,29 @@ def test_check_of_agrees_with_check_over_a_prebuilt_graph():
     _assert_check_of_agrees(dining_naive_model())
     _assert_check_of_agrees(light_model())
     _assert_check_of_agrees(overdraw_model())
+
+
+# --------------------------------------------------------------------------------------------------
+# 14. Graph-first check_liveness_of must agree with check_liveness (#31)
+# --------------------------------------------------------------------------------------------------
+
+
+def test_check_liveness_of_agrees_with_check_liveness():
+    # check_liveness now delegates to check_liveness_of(explore(model), ...). Pin that the graph-first entry
+    # gives the identical LivenessResult on a passing case AND a strong-fairness sub-SCC counterexample.
+    def green(s: Light) -> bool:
+        return s.color == "green"
+
+    m = light_model()
+    a = check_liveness(m, goal=green, goal_name="green")
+    b = check_liveness_of(explore(m), goal=green, goal_name="green")
+    assert (a.ok, a.kind, a.stem, a.cycle) == (b.ok, b.kind, b.stem, b.cycle)
+
+    def done(s: FairS) -> bool:
+        return s.at == "done"
+
+    fm = subscc_fairness_model()
+    a2 = check_liveness(fm, goal=done, goal_name="done", fair_strong=("g",))
+    b2 = check_liveness_of(explore(fm), goal=done, goal_name="done", fair_strong=("g",))
+    assert (a2.ok, a2.kind, a2.stem, a2.cycle) == (b2.ok, b2.kind, b2.stem, b2.cycle)
+    assert not b2.ok  # sanity: it really is the fair counterexample
