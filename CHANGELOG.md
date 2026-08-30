@@ -4,6 +4,16 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `examples/lossy_retry.py`: the probabilistic layer, worked end to end
+
+- The first worked example of `musil.probabilistic`: a message over a lossy link (each attempt delivers
+  with probability 1/2, else retries). It shows `reach_probability` (eventual delivery = 1), the bounded
+  `reach_probability(..., steps=k)` geometric law `1-(1/2)^k`, `expected_reward` (expected attempts `1/p =
+  2`), and `expected_reward_mdp` (when the sender may pick a fast or careful link, the minimal expected cost
+  over all strategies, `2`, with the fast link chosen) — all as exact `fractions.Fraction`. A subprocess
+  test pins the printed closed forms, and the example asserts them itself. Generic networking domain, no
+  new library code.
+
 ### Added — LTL counterexamples mark where the infinite run loops
 
 - `Result` gains a `loop: int | None` field: for an infinite-run (LTL lasso) counterexample it is the index
