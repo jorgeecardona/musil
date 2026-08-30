@@ -151,7 +151,9 @@ picks between, with the actions within a move forming the distribution — and r
 minimal reachability probability over all schedulers (`optimize="max"` / `"min"`), solved exactly by
 policy iteration. The `"min"` case first pins the states from which a scheduler can avoid the target
 forever to probability 0 (`S0min`), which is what keeps min policy iteration exact; see
-`PROBABILISTIC_NOTES.md` for why that precomputation is needed and the max case is not.
+`PROBABILISTIC_NOTES.md` for why that precomputation is needed and the max case is not. Both functions
+take an optional `steps=k` for the exact probability of reaching the target within `k` transitions (a
+finite unrolling, `steps=0` being the indicator of the target) instead of the unbounded probability.
 
 ::: musil.probabilistic
 

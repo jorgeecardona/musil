@@ -4,6 +4,18 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.probabilistic`: step-bounded reachability (`steps=k`)
+
+- Both `reach_probability` and `reach_probability_mdp` now take an optional `steps=k`: the exact
+  probability of reaching `target` WITHIN `k` transitions (the unbounded probability is still the default,
+  `steps=None`). Computed by a finite backward induction (`_bounded_values`): `V_0` is the indicator of the
+  target, `V_i(s) = opt_move sum_s' P(s, s') V_{i-1}(s')`. No fixed point, so it is exact by construction
+  and needs no `S0` precomputation — a bounded horizon cannot stall. `steps=0` is the indicator of the
+  target; a DTMC is the single-move case (the per-step optimisation is over one value). Negative `steps`
+  raises `ValueError`.
+- Corpus pins the geometric law: for a fair coin loop (win with prob 1/2 each step, else retry),
+  `reach_probability(..., steps=k) == 1 - (1/2)^k`, exactly, for every `k`.
+
 ### Added — `musil.probabilistic`: MDP min-reachability (exact, via S0min + policy iteration)
 
 - `reach_probability_mdp(..., optimize="min")` now returns the MINIMAL probability of eventually reaching

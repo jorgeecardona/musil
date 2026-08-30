@@ -40,14 +40,18 @@ accelerator for large linear solves, never required).
   Corpus pins three known verdicts: the two-gamble MDP (`xmin = 1/2`, the worse coin), a self-loop
   (`xmin = 0` where `xmax = 1`), and a two-state non-target end component (`xmin = 0`, the case `_s0_min`
   exists for).
+- **Step-bounded reachability** — `steps=k` on either function (`reach_probability`, `reach_probability_mdp`).
+  The exact probability of reaching the target WITHIN `k` transitions, by a finite backward induction
+  (`_bounded_values`): `V_0` is the indicator of the target, `V_i(s) = opt_move sum P(s') V_{i-1}(s')`. No
+  fixed point, so it is exact by construction and needs no `S0` precomputation (a bounded horizon cannot
+  stall). `steps=0` is the indicator of the target; a DTMC is the single-move case. Corpus pins the
+  geometric law `P(reach within k) = 1 - (1/2)^k` for a fair coin loop.
 
 ## Deferred (future layers, not blocking)
 
 - **Expected reward** (expected number of steps / accumulated cost to reach the target). Needs the same
   `S0`/proper-policy care plus a guard that the target is reached almost surely (otherwise the expectation
   is infinite), so it is its own increment with its own known-verdict corpus.
-- **Step-bounded reachability** (probability of reaching the target within `k` steps). A finite unrolling —
-  exact and simpler than the unbounded case, no fixpoint — but a distinct API.
 - **Probabilistic LTL / long-run (steady-state) properties.** These reuse the LTL engine and the DTMC/MDP
   machinery but are a larger design; not started.
 

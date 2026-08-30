@@ -14,9 +14,10 @@ probability 1; states that cannot reach the target have probability 0; the rest 
 ``reach_probability_mdp`` adds NONDETERMINISTIC choice on top of the DTMC: a caller-supplied ``moves``
 function partitions each state's enabled actions into the moves a scheduler may pick between, and the
 actions WITHIN a move form the probability distribution (via ``weight``). This is a Markov decision
-process (MDP); ``optimize="max"`` returns the maximal reachability probability over all schedulers, solved
-EXACTLY by policy iteration (each policy's value is an exact DTMC solve; the policy is improved until
-stable). ``optimize="min"`` is deferred (see PROBABILISTIC_NOTES.md).
+process (MDP); ``optimize="max"`` / ``"min"`` returns the maximal / minimal reachability probability over
+all schedulers, solved EXACTLY by policy iteration (each policy's value is an exact DTMC solve; the policy
+is improved until stable). Both functions take an optional ``steps=k`` for the exact probability of
+reaching the target WITHIN ``k`` transitions (a finite unrolling, no fixed point). See PROBABILISTIC_NOTES.md.
 """
 
 from __future__ import annotations
@@ -128,6 +129,7 @@ def reach_probability[S: Hashable](
     target: Callable[[S], bool],
     *,
     weight: Callable[[str, S], Fraction | int] | None = None,
+    steps: int | None = None,
     max_states: int = 1_000_000,
 ) -> Fraction:
     """The exact probability of eventually reaching a ``target`` state from the model's initial state,
@@ -136,19 +138,53 @@ def reach_probability[S: Hashable](
     At each state the enabled actions' ``weight(action_name, state)`` values are normalised into a
     probability distribution over the successors (edges to the same successor sum); the default weight is
     ``1`` for every action, i.e. a uniform choice. States must be HASHABLE (the graph is explored). Returns
-    a ``fractions.Fraction`` — exact, no floating point. Raises ``ValueError`` if the exploration truncates
-    at ``max_states`` (the probability would be inconclusive)."""
+    a ``fractions.Fraction`` — exact, no floating point.
+
+    With ``steps=k`` the answer is the probability of reaching ``target`` WITHIN ``k`` transitions (an exact
+    finite unrolling; ``steps=0`` is the indicator of ``target``). With ``steps=None`` (the default) it is
+    the unbounded probability, solved by the exact linear system. Raises ``ValueError`` if the exploration
+    truncates at ``max_states`` (the probability would be inconclusive) or if ``steps`` is negative."""
     graph = explore(model, max_states=max_states)
     if graph.truncated:
         raise ValueError("reach_probability: exploration truncated at max_states; the probability is inconclusive")
     w = weight if weight is not None else _uniform
     dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
-    return _dtmc_values(graph.states, dist, target)[graph.initial[0]]
+    if steps is None:
+        return _dtmc_values(graph.states, dist, target)[graph.initial[0]]
+    if steps < 0:
+        raise ValueError(f"reach_probability: steps must be non-negative, got {steps}")
+    return _bounded_values(graph.states, {s: [dist[s]] for s in graph.states}, target, steps, minimize=False)[
+        graph.initial[0]
+    ]
 
 
 def _move_value[S: Hashable](move: _Dist[S], values: Mapping[S, Fraction]) -> Fraction:
     """Expected value of a move: sum over its (probability, successor) pairs of ``p * values[successor]``."""
     return sum((p * values[t] for p, t in move), Fraction(0))
+
+
+def _bounded_values[S: Hashable](
+    states: Sequence[S],
+    all_moves: Mapping[S, list[_Dist[S]]],
+    target: Callable[[S], bool],
+    steps: int,
+    minimize: bool,
+) -> dict[S, Fraction]:
+    """Exact probability of reaching ``target`` WITHIN ``steps`` transitions (optimising over the moves each
+    step, ``min`` or ``max``). A finite backward induction — no fixed point, so it is exact by construction:
+    ``V_0`` is the indicator of ``target``, and ``V_i(s) = opt_move sum P(s') V_{i-1}(s')`` for non-target
+    ``s``. A DTMC is the single-move case (the optimisation is over one value). ``steps=0`` gives the
+    indicator of ``target``."""
+    values = {s: Fraction(target(s)) for s in states}
+    reduce = min if minimize else max
+    for _ in range(steps):
+        values = {
+            s: Fraction(1)
+            if target(s)
+            else reduce((_move_value(m, values) for m in all_moves[s]), default=Fraction(0))
+            for s in states
+        }
+    return values
 
 
 def _s0_min[S: Hashable](
@@ -179,6 +215,7 @@ def reach_probability_mdp[S: Hashable](
     moves: Moves[S],
     weight: Callable[[str, S], Fraction | int] | None = None,
     optimize: Literal["max", "min"] = "max",
+    steps: int | None = None,
     max_states: int = 1_000_000,
 ) -> Fraction:
     """The exact MAXIMAL (or MINIMAL) probability of eventually reaching ``target`` over all schedulers of
@@ -193,8 +230,12 @@ def reach_probability_mdp[S: Hashable](
     then switch each state to a strictly better move under those values, until the policy is stable — a
     ``fractions.Fraction``. For ``optimize="min"`` the states from which a scheduler can avoid the target
     forever are found first (``_s0_min``) and pinned to 0, which is what stops min policy iteration from
-    stalling on a value-preserving self-loop (see PROBABILISTIC_NOTES.md). Raises ``ValueError`` if the
-    exploration truncates at ``max_states``."""
+    stalling on a value-preserving self-loop (see PROBABILISTIC_NOTES.md).
+
+    With ``steps=k`` the answer is instead the optimal probability of reaching ``target`` WITHIN ``k``
+    transitions — an exact finite backward induction, so ``_s0_min`` is not needed (a bounded horizon cannot
+    stall). Raises ``ValueError`` if the exploration truncates at ``max_states`` or if ``steps`` is
+    negative."""
     graph = explore(model, max_states=max_states)
     if graph.truncated:
         raise ValueError("reach_probability_mdp: exploration truncated at max_states; the probability is inconclusive")
@@ -212,6 +253,10 @@ def reach_probability_mdp[S: Hashable](
         ]
         all_moves[s] = state_moves if state_moves else [[]]  # no move -> a single absorbing move
     minimize = optimize == "min"
+    if steps is not None:
+        if steps < 0:
+            raise ValueError(f"reach_probability_mdp: steps must be non-negative, got {steps}")
+        return _bounded_values(graph.states, all_moves, target, steps, minimize)[graph.initial[0]]
     # For min, pin the "can avoid the target forever" states to 0 by making them absorbing before iterating;
     # for max they need no special treatment (unreachable-to-target already resolves to 0 in _dtmc_values).
     absorbing = _s0_min(graph.states, all_moves, target) if minimize else set[S]()

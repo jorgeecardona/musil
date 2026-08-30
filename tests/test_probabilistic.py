@@ -202,3 +202,69 @@ def test_mdp_single_move_recovers_the_dtmc():
     for start in range(5):
         walk = walk_model(start, 4)
         assert reach_probability_mdp(walk, _won(4), moves=one_move) == reach_probability(walk, _won(4))
+
+
+# --------------------------------------------------------------------------------------------------
+# Step-bounded reachability: probability of reaching the target WITHIN k transitions (exact, finite).
+# --------------------------------------------------------------------------------------------------
+
+
+def coin_loop_model() -> Model[Choice]:
+    # start: "win" -> target, "again" -> start; uniform so each is 1/2. P(reach within k) = 1 - (1/2)^k.
+    start, win = Choice("start"), Choice("win")
+    at_start: Callable[[Choice], bool] = lambda s: s.tag == "start"  # noqa: E731
+    return Model(
+        init=start,
+        actions=[
+            Action("win", enabled=at_start, apply=lambda s: win),
+            Action("again", enabled=at_start, apply=lambda s: start),
+        ],
+        terminal=lambda s: s.tag == "win",
+    )
+
+
+def test_bounded_dtmc_is_one_minus_half_to_the_k():
+    m = coin_loop_model()
+    assert reach_probability(m, _win, steps=0) == Fraction(0)  # start is not the target
+    assert reach_probability(m, _win, steps=1) == Fraction(1, 2)
+    assert reach_probability(m, _win, steps=2) == Fraction(3, 4)
+    assert reach_probability(m, _win, steps=3) == Fraction(7, 8)
+    assert reach_probability(m, _win) == Fraction(1)  # unbounded: reaches almost surely
+
+
+def test_bounded_negative_steps_raises():
+    m = coin_loop_model()
+    with pytest.raises(ValueError, match="non-negative"):
+        reach_probability(m, _win, steps=-1)
+    with pytest.raises(ValueError, match="non-negative"):
+        reach_probability_mdp(m, _win, moves=_singletons, steps=-1)
+
+
+def test_bounded_mdp_horizon_matters():
+    # Deterministic chain s0 -> s1 -> win: reachable within 1 step is impossible (only s1); within 2, sure.
+    s0, s1, win = Choice("s0"), Choice("s1"), Choice("win")
+    at0: Callable[[Choice], bool] = lambda s: s.tag == "s0"  # noqa: E731
+    at1: Callable[[Choice], bool] = lambda s: s.tag == "s1"  # noqa: E731
+    m = Model(
+        init=s0,
+        actions=[
+            Action("a", enabled=at0, apply=lambda s: s1),
+            Action("b", enabled=at1, apply=lambda s: win),
+        ],
+        terminal=lambda s: s.tag == "win",
+    )
+    assert reach_probability_mdp(m, _win, moves=_singletons, steps=1) == Fraction(0)
+    assert reach_probability_mdp(m, _win, moves=_singletons, steps=2) == Fraction(1)
+
+
+def test_bounded_mdp_max_and_min_within_one_step():
+    m = two_gamble_model()
+
+    def biased(name: str, _s: Choice) -> int:
+        return 2 if name == "B_win" else 1
+
+    # The whole decision is one step, so a 1-step horizon already gives the unbounded max/min.
+    assert reach_probability_mdp(m, _win, moves=_by_leading_letter, steps=0) == Fraction(0)
+    assert reach_probability_mdp(m, _win, moves=_by_leading_letter, weight=biased, steps=1) == Fraction(2, 3)
+    m_min = reach_probability_mdp(m, _win, moves=_by_leading_letter, weight=biased, steps=1, optimize="min")
+    assert m_min == Fraction(1, 2)

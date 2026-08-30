@@ -298,6 +298,36 @@ def test_mdp_max_and_min_reachability_pick_opposite_coins():
     assert reach_probability_mdp(m, is_win, moves=by_letter, weight=biased, optimize="min") == Fraction(1, 2)
 
 
+# --------------------------------------------------------------------------------------------------
+# 7. Step-bounded reachability — geometric law P(reach within k) = 1 - (1/2)^k, known exactly
+# --------------------------------------------------------------------------------------------------
+
+
+def coin_loop_model() -> Model[Gamble]:
+    win = Gamble("win")
+    at_start: Callable[[Gamble], bool] = lambda s: s.tag == "start"  # noqa: E731
+    return Model(
+        init=Gamble("start"),
+        actions=[
+            Action("win", enabled=at_start, apply=lambda s: win),
+            Action("again", enabled=at_start, apply=lambda s: Gamble("start")),
+        ],
+        terminal=lambda s: s.tag == "win",
+    )
+
+
+def test_bounded_dtmc_reachability_is_geometric():
+    # Each step wins with prob 1/2, else retries: P(reach the target within k steps) = 1 - (1/2)^k, exactly.
+    # Known independent of musil; guards the finite-unrolling bounded solver.
+    m = coin_loop_model()
+
+    def is_win(s: Gamble) -> bool:
+        return s.tag == "win"
+
+    for k in range(5):
+        assert reach_probability(m, is_win, steps=k) == 1 - Fraction(1, 2) ** k
+
+
 def test_profile_explores_the_same_reachable_set():
     # profile keeps its own instrumented loop (it times enabled/apply/canonicalize separately, which the
     # shared _successors kernel bundles). This pins its full-sweep reachable count to the corpus so it can
