@@ -8,6 +8,16 @@ The model definition and the safety/deadlock/reachability checker.
 
 ::: musil.core
 
+## Partial-order reduction — `explore_por`, `por_sound`, `independent`
+
+Explore only an *ample set* of actions per state instead of every interleaving. `explore_por` takes a
+caller-supplied `ample(state, enabled) -> subset`; `por_sound` validates that an ample choice preserves the
+violable invariants (POR must not drop the path to a bug) before it is trusted — the same soundness
+discipline as `symmetry_reduction_sound`. `independent` is the concrete per-state independence test
+(commute + neither disables the other) the ample-set computation rests on.
+
+::: musil.por
+
 ## Symmetry — `canonical_by_sorting`, `canonical_by_permutations`
 
 Build the `canonicalize` that `check`/`explore` take, instead of hand-writing it. Sort the slices

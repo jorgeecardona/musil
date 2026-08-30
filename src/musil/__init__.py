@@ -113,6 +113,7 @@ from musil.metrics import (
     state_space_metrics,
 )
 from musil.patterns import absent, always, eventually, recurs, responds
+from musil.por import explore_por, independent, por_sound
 from musil.profiling import ActionCost, Phase, Profile, profile
 from musil.refine import (
     RefinementMonitor,
@@ -227,6 +228,7 @@ __all__ = [
     "enumerate_actions",
     "eventually",
     "explore",
+    "explore_por",
     "fifo_channel_actions",
     "fifo_send",
     "fixed_points",
@@ -234,6 +236,7 @@ __all__ = [
     "format_trace",
     "format_trace_diff",
     "generate_traces",
+    "independent",
     "invariant_coverage",
     "invariant_coverage_of",
     "invariant_from_violations",
@@ -241,6 +244,7 @@ __all__ = [
     "minimize",
     "multi_status_field_actions",
     "no_trace",
+    "por_sound",
     "profile",
     "protocol_actions",
     "protocol_operations",

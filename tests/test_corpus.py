@@ -23,6 +23,8 @@ from musil import (
     check_liveness,
     check_ltl,
     explore,
+    explore_por,
+    por_sound,
     profile,
 )
 
@@ -207,6 +209,13 @@ def test_traffic_light_ltl_via_check_ltl():
     assert check_ltl(m, Next(green)).ok
     assert not check_ltl(m, Next(red)).ok
     assert check_ltl(m, Until(known, green)).ok
+
+
+def test_por_trivial_ample_matches_explore_and_is_sound():
+    m = peterson_model()
+    # the trivial ample (fire everything) reduces nothing: same reachable set as explore, and sound.
+    assert len(explore_por(m, ample=lambda state, enabled: enabled).states) == 20
+    assert por_sound(m, lambda state, enabled: enabled)
 
 
 def test_profile_explores_the_same_reachable_set():

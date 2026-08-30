@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.por`: partial-order reduction mechanism + soundness gate
+
+- POR fires only an *ample set* of actions per state instead of every interleaving. This first layer ships
+  the MECHANISM and the GATE (the risky automatic ample-set computation lands on top, guarded):
+  - `explore_por(model, ample=...)` builds the reachable graph firing only `ample(state, enabled) -> subset`
+    at each state (`ample = lambda state, enabled: enabled` is exactly `explore`).
+  - `por_sound(model, ample)` validates that an ample choice is safe before it is trusted: the reduced
+    reachable set must be a subset of the full one, and the SAME invariants must be violable in both — an
+    ample set that drops the only path to a bug makes these disagree. Same discipline as
+    `symmetry_reduction_sound` / `footprint_sound`; certifies SAFETY preservation (deadlock/liveness need
+    the extra proviso, called out and left to a later step).
+  - `independent(a, b, state)` is the concrete per-state independence test (both enabled, neither disables
+    the other, and they commute) the ample-set computation will rest on — testable concretely because
+    musil's `enabled`/`apply` are pure. Corpus pins that the trivial ample matches `explore` and is sound.
+
 ### Added — `musil.ltl`: an LTL formula AST + `check_ltl` (first layer)
 
 - An LTL formula as pure data — `Atom`, `Not`, `And`, `Or`, `Implies`, `Next`, `Eventually`, `Always`,
