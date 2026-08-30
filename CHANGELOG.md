@@ -4,6 +4,18 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Fixed — `musil.ltl`: document the general-engine counterexample trace (and pin it)
+
+- The `check_ltl` docstring and the docs LTL section claimed the general Büchi engine returns "no
+  counterexample trace yet" / that out-of-fragment formulas "raise `NotImplementedError`". Both were stale:
+  the engine has for a while returned a real counterexample — the accepting lasso of the `Not(formula)`
+  automaton mapped back to model states (`<init> -> stem -> cycle`) — as `Result.trace`, and out-of-fragment
+  formulas are decided, not rejected. Corrected the docstring and `docs/api.md`.
+- Corpus now pins the guarantee: for a failing out-of-fragment formula (`Next(red)` on the traffic light),
+  `check_ltl` returns a non-empty trace that is a GENUINE run of the model — it starts at the initial state
+  and every consecutive pair is a real model edge. So the counterexample can never silently regress to empty
+  or to a non-run.
+
 ### Changed — `musil.patterns`: the liveness patterns are now sugar over `check_ltl`
 
 - `eventually`, `recurs`, and `responds` now build the corresponding LTL formula (`Eventually(p)`,

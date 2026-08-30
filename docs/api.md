@@ -121,11 +121,13 @@ enumerating a caller-supplied `domain` that must include unreachable states.
 ## LTL — `check_ltl`, formula AST
 
 A linear-temporal-logic formula as pure data (`Atom`, `Not`, `And`, `Or`, `Implies`, `Next`,
-`Eventually`, `Always`, `Until`, `Release`, `WeakUntil`), and `check_ltl`, which checks the fragment that
-reduces soundly onto `check`/`check_liveness` (`G(state)`, `F(state)`, `G F(state)`, `G(a -> F b)`).
-Anything outside that fragment raises `NotImplementedError` rather than returning a guessed verdict; the
-general Büchi + nested-DFS engine that covers `Until`/`Release`/`Next`/arbitrary nesting lands
-incrementally on top of this AST.
+`Eventually`, `Always`, `Until`, `Release`, `WeakUntil`), and `check_ltl`. The shapes that reduce soundly
+onto the proven primitives (`G(state)` -> a safety invariant, `F(state)`, `G F(state)`, `G(a -> F b)` ->
+`check_liveness`, with `fair`/`fair_strong`) take that path; everything else (`Until`/`Release`/`Next`/
+arbitrary nesting) is decided by the general Büchi engine — the `Not(formula)` automaton via the GPVW
+tableau, producted with the reachable graph, checked for an accepting run by SCC emptiness (Tarjan). On
+violation the engine returns a counterexample **lasso** (`<init> -> stem -> cycle`) mapped back to model
+states — a concrete run refuting the formula.
 
 ::: musil.ltl
 

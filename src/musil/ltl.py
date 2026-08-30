@@ -239,8 +239,10 @@ def check_ltl[S: Hashable](
     ``LivenessResult`` for the liveness ones; both satisfy the ``Verdict`` protocol (``.ok`` + ``__str__``).
     ``fair`` / ``fair_strong`` apply to the liveness reductions. Any formula outside the reducible shapes
     is checked by the general Büchi engine over the stutter-extended reachable graph (a ``Result`` with
-    ``kind="ltl"`` on violation; no counterexample trace from the engine yet). Requires hashable states
-    (the engine explores the graph)."""
+    ``kind="ltl"`` on violation). On violation the ``Result`` carries a counterexample trace: the accepting
+    lasso of the ``Not(formula)`` automaton mapped back to model states — ``<init> -> ...(stem)... ->
+    ...(cycle)`` — a concrete run that refutes the formula. Requires hashable states (the engine explores
+    the graph)."""
     formula = _push_negations(formula)  # negated temporal forms become reducible; e.g. !F p -> G !p
     match formula:
         case Always(arg=Eventually(arg=inner)):  # G F inner -> recurrence []<>P

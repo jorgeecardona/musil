@@ -20,6 +20,7 @@ from musil import (
     Implies,
     Model,
     Next,
+    Result,
     Until,
     check,
     check_liveness,
@@ -254,6 +255,21 @@ def test_patterns_agree_with_check_ltl():
     resp = responds(m, is_yellow, is_red, name="response")
     resp_formula = Always(Implies(Atom[Light]("trigger", is_yellow), Eventually(Atom[Light]("response", is_red))))
     assert resp.ok and resp.ok == check_ltl(m, resp_formula).ok
+
+
+def test_check_ltl_general_engine_returns_a_valid_counterexample_lasso():
+    # A formula OUTSIDE the reducible fragment (Next) that fails goes to the general Büchi engine, which
+    # must return a real counterexample run: X(red) is false from red (the next state is green). Pin that
+    # the returned lasso is a genuine run of the model — starts at the initial state, every step a real edge.
+    m = light_model()
+    r = check_ltl(m, Next(Atom[Light]("red", lambda s: s.color == "red")))
+    assert isinstance(r, Result)
+    assert not r.ok and r.kind == "ltl"
+    assert r.trace, "the general engine must return a counterexample trace, not an empty one"
+    assert r.trace[0].state == m.init  # the run starts at the model's initial state
+    edges = {s: {nxt for _, nxt in e} for s, e in explore(m).edges.items()}
+    for prev, step in zip(r.trace, r.trace[1:], strict=False):
+        assert step.state in edges[prev.state]  # every consecutive pair is a genuine model transition
 
 
 def test_por_trivial_ample_matches_explore_and_is_sound():
