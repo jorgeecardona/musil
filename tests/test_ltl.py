@@ -96,6 +96,18 @@ def test_pushed_negation_preserves_the_response_shape():
     assert check_ltl(_light(), Always(Implies(_YELLOW, Eventually(_RED)))).ok
 
 
+def test_conjunction_splits_into_independent_checks():
+    m = _light()
+    # G known-color  &  []<> red  : both hold
+    assert check_ltl(m, And(Always(_KNOWN), Always(Eventually(_RED)))).ok
+    # G known-color  &  G red : the second conjunct fails, and its failing result is returned
+    r = check_ltl(m, And(Always(_KNOWN), Always(_RED)))
+    assert not r.ok
+    # a conjunction with an irreducible conjunct propagates the refusal
+    with pytest.raises(NotImplementedError, match="outside the fragment"):
+        check_ltl(m, And(Always(_KNOWN), Until(_YELLOW, _RED)))
+
+
 def test_out_of_fragment_refuses_rather_than_guessing():
     with pytest.raises(NotImplementedError, match="outside the fragment"):
         check_ltl(_light(), Until(_YELLOW, _RED))

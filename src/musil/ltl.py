@@ -241,6 +241,11 @@ def check_ltl[S: Hashable](
             p = _state_predicate(inner)
             if p is not None:
                 return check_liveness(model, goal=p, goal_name=name, fair=fair, fair_strong=fair_strong, max_states=max_states)
+        case And(left=a, right=b):  # model |= (a & b) iff model |= a and model |= b (conjunction splits)
+            left_result = check_ltl(model, a, name=name, fair=fair, fair_strong=fair_strong, max_states=max_states)
+            if not left_result.ok:
+                return left_result
+            return check_ltl(model, b, name=name, fair=fair, fair_strong=fair_strong, max_states=max_states)
         case _:
             pass
     raise NotImplementedError(

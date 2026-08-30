@@ -21,6 +21,10 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   `!G = F !`, `!X = X !`, De Morgan, `!(a U b) = !a R !b`), so negated temporal forms reduce too — e.g.
   `!F p` becomes the invariant `G !p`, `!G p` becomes `<> !p`. `Implies` is kept unexpanded so the
   response shape survives. This is also the negation-normal-form preprocessing the general engine needs.
+- A top-level conjunction splits: `model |= (a & b)` iff `model |= a` and `model |= b`, so conjoined
+  specs like `G(safety) & G F(progress)` reduce (each conjunct independently; a failing conjunct's result
+  is returned, an irreducible conjunct propagates the refusal). `LTL_NOTES.md` records the plan for the
+  general Büchi + nested-DFS engine that will replace the remaining `NotImplementedError`s.
 
 ### Internal — `check`/`check_all`/`explore` share one successor kernel
 
