@@ -138,7 +138,7 @@ the global-scope family; the scoped and precedence patterns are not yet here.
 
 ::: musil.patterns
 
-## Probabilistic — `reach_probability`, `reach_probability_mdp`, `expected_reward`
+## Probabilistic — `reach_probability`, `reach_probability_mdp`, `expected_reward`, `expected_reward_mdp`
 
 The exact probability of eventually reaching a target set, as a `fractions.Fraction` (no floating-point
 error, no dependency). `reach_probability` treats the reachable graph as a discrete-time Markov chain
@@ -157,6 +157,9 @@ finite unrolling, `steps=0` being the indicator of the target) instead of the un
 `expected_reward` answers the dual question — the exact expected accumulated cost (default: number of
 steps) to reach the target in a DTMC — solving `E(s) = sum P(s, s') (cost + E(s'))`. It raises when the
 target is not reached almost surely (`reach_probability < 1`), because the expectation is then infinite.
+`expected_reward_mdp` is the MDP version — the minimal expected cost over all schedulers (the stochastic
+shortest path), solved exactly by policy iteration seeded with the max-reachability-optimal (hence proper)
+policy; costs must be positive, and it raises when no scheduler reaches the target almost surely.
 
 ::: musil.probabilistic
 

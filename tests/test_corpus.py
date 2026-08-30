@@ -25,6 +25,7 @@ from musil import (
     check_liveness,
     check_ltl,
     expected_reward,
+    expected_reward_mdp,
     explore,
     explore_por,
     por_sound,
@@ -345,6 +346,39 @@ def test_expected_absorption_time_is_i_times_n_minus_i():
 
     for i in range(1, n):
         assert expected_reward(walk_model(i, n), absorbed) == Fraction(i * (n - i))
+
+
+# --------------------------------------------------------------------------------------------------
+# 9. MDP min expected reward (SSP) — retry-until-success minimal expected attempts = 1/p, known exactly
+# --------------------------------------------------------------------------------------------------
+
+
+def test_ssp_min_expected_attempts_is_one_over_p():
+    # start: "retry" wins with prob 1/2 else loops back (expected attempts 1/p = 2), or a sure but slower
+    # 4-step "detour". The min scheduler retries -> exactly 2, a known geometric mean independent of musil.
+    start, win = Gamble("start"), Gamble("win")
+    chain = [Gamble(f"d{i}") for i in range(4)]
+    at_start: Callable[[Gamble], bool] = lambda s: s.tag == "start"  # noqa: E731
+    actions = [
+        Action("R_win", enabled=at_start, apply=lambda s: win),
+        Action("R_loop", enabled=at_start, apply=lambda s: start),
+        Action("detour", enabled=at_start, apply=lambda s: chain[0]),
+    ]
+    for i, node in enumerate(chain):
+        nxt = chain[i + 1] if i + 1 < len(chain) else win
+        actions.append(Action(f"step{i}", enabled=lambda s, node=node: s.tag == node.tag, apply=lambda s, nxt=nxt: nxt))
+
+    m: Model[Gamble] = Model(init=start, actions=actions, terminal=lambda s: s.tag == "win")
+
+    def moves(_s: Gamble, enabled: tuple[Action[Gamble], ...]) -> list[Sequence[Action[Gamble]]]:
+        retry = [a for a in enabled if a.name.startswith("R_")]
+        others: list[Sequence[Action[Gamble]]] = [[a] for a in enabled if not a.name.startswith("R_")]
+        return ([retry] if retry else []) + others
+
+    def is_win(s: Gamble) -> bool:
+        return s.tag == "win"
+
+    assert expected_reward_mdp(m, is_win, moves=moves) == Fraction(2)
 
 
 def test_profile_explores_the_same_reachable_set():

@@ -265,6 +265,38 @@ def _s0_min[S: Hashable](
     return u
 
 
+def _reach_policy_iteration[S: Hashable](
+    states: Sequence[S],
+    all_moves: Mapping[S, list[_Dist[S]]],
+    target: Callable[[S], bool],
+    *,
+    minimize: bool,
+    absorbing: set[S],
+) -> tuple[dict[S, Fraction], dict[S, int]]:
+    """Optimal (max or min) reachability probability of every state AND the optimal memoryless policy, by
+    policy iteration. Each improvement switches a state only to a STRICTLY better move under the current
+    exact values, so the values move monotonically and no policy repeats -> it terminates (finite policy
+    space). ``absorbing`` states are pinned to 0 (used for the min ``_s0_min`` set)."""
+    policy: dict[S, int] = dict.fromkeys(states, 0)
+    while True:
+        dist = {s: ([] if s in absorbing else all_moves[s][policy[s]]) for s in states}
+        values = _dtmc_values(states, dist, target)
+        changed = False
+        for s in states:
+            if target(s) or s in absorbing:
+                continue
+            best_i, best_v = policy[s], _move_value(all_moves[s][policy[s]], values)
+            for i, move in enumerate(all_moves[s]):
+                v = _move_value(move, values)
+                if (v < best_v) if minimize else (v > best_v):
+                    best_i, best_v = i, v
+            if best_i != policy[s]:
+                policy[s] = best_i
+                changed = True
+        if not changed:
+            return values, policy
+
+
 def reach_probability_mdp[S: Hashable](
     model: Model[S],
     target: Callable[[S], bool],
@@ -317,24 +349,111 @@ def reach_probability_mdp[S: Hashable](
     # For min, pin the "can avoid the target forever" states to 0 by making them absorbing before iterating;
     # for max they need no special treatment (unreachable-to-target already resolves to 0 in _dtmc_values).
     absorbing = _s0_min(graph.states, all_moves, target) if minimize else set[S]()
-    # Policy iteration. Each improvement switches a state only to a STRICTLY better move (larger for max,
-    # smaller for min) under the current exact values, so the values move monotonically and no policy
-    # repeats -> it terminates (the policy space is finite). Start every state at its first move.
-    policy: dict[S, int] = dict.fromkeys(graph.states, 0)
+    values, _ = _reach_policy_iteration(graph.states, all_moves, target, minimize=minimize, absorbing=absorbing)
+    return values[graph.initial[0]]
+
+
+def expected_reward_mdp[S: Hashable](
+    model: Model[S],
+    target: Callable[[S], bool],
+    *,
+    moves: Moves[S],
+    weight: Callable[[str, S], Fraction | int] | None = None,
+    cost: Callable[[str, S], Fraction | int] | None = None,
+    max_states: int = 1_000_000,
+) -> Fraction:
+    """The exact MINIMAL expected accumulated cost to first reach ``target`` over all schedulers of the MDP
+    (the stochastic shortest path). With the default unit ``cost`` this is the minimal expected number of
+    STEPS. ``moves``/``weight`` describe the MDP exactly as in ``reach_probability_mdp``; ``cost`` must be
+    POSITIVE (the default unit cost is), so that any scheduler which fails to reach the target a.s. has
+    infinite cost — the assumption stochastic shortest path rests on.
+
+    Solved EXACTLY by policy iteration seeded with a PROPER policy: the max-reachability-optimal policy
+    reaches the target almost surely from every state whose max reachability is 1 (a convex combination of
+    values ``<= 1`` equal to 1 forces every successor to 1), so it is proper there and is a valid seed. The
+    iteration then minimises expected cost over the moves whose successors are all proper, each evaluation an
+    exact rational solve of ``E(s) = cost(s) + sum_s' P(s, s') E(s')``.
+
+    Raises ``ValueError`` if no scheduler reaches ``target`` almost surely from the initial state (the min
+    expected cost is then infinite) or if the exploration truncates. ``optimize="max"`` is not offered:
+    maximal expected cost is infinite unless EVERY scheduler is proper (see PROBABILISTIC_NOTES.md)."""
+    graph = explore(model, max_states=max_states)
+    if graph.truncated:
+        raise ValueError("expected_reward_mdp: exploration truncated at max_states; the expectation is inconclusive")
+    init = graph.initial[0]
+    if target(init):
+        return Fraction(0)
+    source = actions_source(model)
+    w = weight if weight is not None else _uniform
+    c = cost if cost is not None else _uniform  # default cost 1 per step -> expected number of steps
+    # Per state: each move's distribution AND its expected immediate cost, from the canonical edges.
+    all_moves: dict[S, list[_Dist[S]]] = {}
+    all_costs: dict[S, list[Fraction]] = {}
+    for s in graph.states:
+        by_name = {name: nxt for name, nxt in graph.edges.get(s, ())}
+        enabled = tuple(a for a in source(s) if a.enabled(s))
+        state_moves: list[_Dist[S]] = []
+        state_costs: list[Fraction] = []
+        for group in moves(s, enabled):
+            members = [a for a in group if a.name in by_name]
+            total = sum((Fraction(w(a.name, s)) for a in members), Fraction(0))
+            acc: dict[S, Fraction] = {}
+            move_cost = Fraction(0)
+            if total != 0:
+                for a in members:
+                    p = Fraction(w(a.name, s)) / total
+                    acc[by_name[a.name]] = acc.get(by_name[a.name], Fraction(0)) + p
+                    move_cost += p * Fraction(c(a.name, s))
+            state_moves.append([(p, t) for t, p in acc.items()])
+            state_costs.append(move_cost)
+        all_moves[s] = state_moves if state_moves else [[]]
+        all_costs[s] = state_costs if state_costs else [Fraction(0)]
+    # Proper states (a scheduler reaches the target a.s.) are exactly those with max reachability 1; the
+    # max-optimal policy is a proper seed there. States that cannot reach a.s. have infinite min cost.
+    reach_values, reach_policy = _reach_policy_iteration(
+        graph.states, all_moves, target, minimize=False, absorbing=set[S]()
+    )
+    if reach_values[init] != 1:
+        raise ValueError(
+            "expected_reward_mdp: no scheduler reaches the target almost surely from the initial state, "
+            "so the minimal expected cost is infinite"
+        )
+    proper = {s for s in graph.states if reach_values[s] == 1}
+    unknown = [s for s in proper if not target(s)]
+    idx = {s: i for i, s in enumerate(unknown)}
+
+    def _safe(move: _Dist[S]) -> bool:
+        return all(t in proper for _, t in move)  # a move a proper scheduler may take (no failure branch)
+
+    # Stochastic shortest path by policy iteration, seeded proper, restricted to safe moves. Each switch
+    # strictly lowers a finite expected cost, so it never picks an improper (infinite-cost) policy and
+    # terminates at the optimum (Bertsekas & Tsitsiklis, SSP).
+    policy = {s: reach_policy[s] for s in unknown}
     while True:
-        dist = {s: ([] if s in absorbing else all_moves[s][policy[s]]) for s in graph.states}
-        values = _dtmc_values(graph.states, dist, target)
+        n = len(unknown)
+        a = [[Fraction(0) for _ in range(n)] for _ in range(n)]
+        b = [Fraction(0) for _ in range(n)]
+        for s in unknown:
+            i = idx[s]
+            a[i][i] = Fraction(1)
+            b[i] = all_costs[s][policy[s]]
+            for p, t in all_moves[s][policy[s]]:
+                if not target(t):
+                    a[i][idx[t]] -= p
+        solution = _solve_linear(a, b)
+        e = {s: (Fraction(0) if target(s) else solution[idx[s]]) for s in proper}
         changed = False
-        for s in graph.states:
-            if target(s) or s in absorbing:
-                continue
-            best_i, best_v = policy[s], _move_value(all_moves[s][policy[s]], values)
+        for s in unknown:
+            best_i = policy[s]
+            best_c = all_costs[s][best_i] + _move_value(all_moves[s][best_i], e)
             for i, move in enumerate(all_moves[s]):
-                v = _move_value(move, values)
-                if (v < best_v) if minimize else (v > best_v):
-                    best_i, best_v = i, v
+                if not _safe(move):
+                    continue
+                v = all_costs[s][i] + _move_value(move, e)
+                if v < best_c:
+                    best_i, best_c = i, v
             if best_i != policy[s]:
                 policy[s] = best_i
                 changed = True
         if not changed:
-            return values[graph.initial[0]]
+            return e[init]

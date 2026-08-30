@@ -13,7 +13,14 @@ from fractions import Fraction
 
 import pytest
 
-from musil import Action, Model, expected_reward, reach_probability, reach_probability_mdp
+from musil import (
+    Action,
+    Model,
+    expected_reward,
+    expected_reward_mdp,
+    reach_probability,
+    reach_probability_mdp,
+)
 
 
 @dataclass(frozen=True)
@@ -311,3 +318,93 @@ def test_expected_reward_at_target_is_zero():
     win = Choice("win")
     m = Model(init=win, actions=[], terminal=lambda s: True)
     assert expected_reward(m, _win) == Fraction(0)
+
+
+# --------------------------------------------------------------------------------------------------
+# MDP min expected reward (stochastic shortest path): minimal expected cost to reach the target.
+# --------------------------------------------------------------------------------------------------
+
+
+def test_ssp_min_picks_the_cheaper_route():
+    # start -> "direct" (1 step) or "detour" -> mid -> target (2 steps). Min expected steps = 1.
+    start, mid, win = Choice("start"), Choice("mid"), Choice("win")
+    at_start: Callable[[Choice], bool] = lambda s: s.tag == "start"  # noqa: E731
+    at_mid: Callable[[Choice], bool] = lambda s: s.tag == "mid"  # noqa: E731
+    m = Model(
+        init=start,
+        actions=[
+            Action("direct", enabled=at_start, apply=lambda s: win),
+            Action("detour", enabled=at_start, apply=lambda s: mid),
+            Action("step", enabled=at_mid, apply=lambda s: win),
+        ],
+        terminal=lambda s: s.tag == "win",
+    )
+    assert expected_reward_mdp(m, _win, moves=_singletons) == Fraction(1)
+
+    # With a heavy cost on "direct", the detour (cost 1 + 1) becomes cheaper -> min switches to 2.
+    def cost(name: str, _s: Choice) -> int:
+        return 10 if name == "direct" else 1
+
+    assert expected_reward_mdp(m, _win, moves=_singletons, cost=cost) == Fraction(2)
+
+
+def test_ssp_min_avoids_a_move_with_a_non_reaching_branch():
+    # start -> "sure" (reaches target) or the risky move (1/2 target, 1/2 dead sink). The risky move can
+    # fail forever, so its expected cost is infinite; min must take "sure" -> 1.
+    start, win, dead = Choice("start"), Choice("win"), Choice("dead")
+    at_start: Callable[[Choice], bool] = lambda s: s.tag == "start"  # noqa: E731
+    m = Model(
+        init=start,
+        actions=[
+            Action("sure", enabled=at_start, apply=lambda s: win),
+            Action("R_win", enabled=at_start, apply=lambda s: win),
+            Action("R_lose", enabled=at_start, apply=lambda s: dead),
+        ],
+        terminal=lambda s: s.tag in ("win", "dead"),
+    )
+    assert expected_reward_mdp(m, _win, moves=_by_leading_letter) == Fraction(1)
+
+
+def test_ssp_min_is_infinite_when_no_scheduler_reaches_almost_surely():
+    # Only the risky move exists: max reachability is 1/2 < 1, so no scheduler reaches a.s. -> infinite.
+    start, win, dead = Choice("start"), Choice("win"), Choice("dead")
+    at_start: Callable[[Choice], bool] = lambda s: s.tag == "start"  # noqa: E731
+    m = Model(
+        init=start,
+        actions=[
+            Action("R_win", enabled=at_start, apply=lambda s: win),
+            Action("R_lose", enabled=at_start, apply=lambda s: dead),
+        ],
+        terminal=lambda s: s.tag in ("win", "dead"),
+    )
+    with pytest.raises(ValueError, match="almost surely"):
+        expected_reward_mdp(m, _win, moves=_by_leading_letter)
+
+
+def test_ssp_min_ignores_an_improper_self_loop_and_uses_the_gamble():
+    # start: "gamble" (1/2 target, 1/2 start) or "wait" (self-loop). Waiting never reaches (improper), so
+    # min must gamble: E = 1 + 1/2 E => E = 2. The proper seed (max-optimal = gamble) is what avoids a
+    # singular evaluation of the improper "wait" policy.
+    start, win = Choice("start"), Choice("win")
+    at_start: Callable[[Choice], bool] = lambda s: s.tag == "start"  # noqa: E731
+    m = Model(
+        init=start,
+        actions=[
+            Action("G_win", enabled=at_start, apply=lambda s: win),
+            Action("G_again", enabled=at_start, apply=lambda s: start),
+            Action("wait", enabled=at_start, apply=lambda s: start),
+        ],
+        terminal=lambda s: s.tag == "win",
+    )
+
+    def by_kind(_s: Choice, enabled: tuple[Action[Choice], ...]) -> list[Sequence[Action[Choice]]]:
+        gamble = [a for a in enabled if a.name.startswith("G_")]
+        wait = [a for a in enabled if a.name == "wait"]
+        result: list[Sequence[Action[Choice]]] = []
+        if gamble:
+            result.append(gamble)
+        if wait:
+            result.append(wait)
+        return result
+
+    assert expected_reward_mdp(m, _win, moves=by_kind) == Fraction(2)

@@ -54,16 +54,26 @@ accelerator for large linear solves, never required).
   non-singular: every explored state is init-reachable, and if init reaches the target a.s. then so does
   every non-target state (a transient state that failed with positive probability would drag init's reach
   probability below 1). Corpus pins the fair-walk absorption time `E = i(N-i)` and the geometric mean `1/p`.
+- **MDP MIN expected reward** — `expected_reward_mdp(model, target, moves=..., cost=...)`. The minimal
+  expected accumulated cost over all schedulers (the stochastic shortest path). The piece that is normally
+  hard — a *proper* initial policy for policy iteration — comes for free: the max-reachability-optimal
+  policy reaches the target almost surely from every state whose max reachability is 1 (a convex combination
+  of values `<= 1` equal to 1 forces every successor to 1), so it is proper there and seeds the iteration.
+  The iteration then minimises expected cost over the moves whose successors are all proper (`_safe`), each
+  evaluation an exact rational solve of `E(s) = cost(s) + sum_s' P(s, s') E(s')`; strict improvement keeps
+  the policy proper (an improper policy has infinite cost, never an improvement) and terminates at the
+  optimum (Bertsekas & Tsitsiklis SSP). Costs MUST be positive (default unit), so a scheduler that fails to
+  reach a.s. has infinite cost; the guard raises when `max reachability(init) != 1`. Corpus pins the
+  retry-until-success minimal expected attempts `1/p`.
 
 ## Deferred (future layers, not blocking)
 
-- **MDP expected reward** (min/max expected cost to reach the target — the stochastic shortest/longest path
-  problem). Harder than the DTMC case and than MDP reachability: MAX expected cost is infinite whenever any
-  scheduler can loop away from the target with positive probability (so it needs the "all schedulers
-  proper" check, not just `S0`), and MIN expected cost (SSP) needs a *proper* initial policy and care with
-  zero-cost cycles for policy iteration to converge. Its own increment, with a corpus that includes a
-  zero/near-zero-cost cycle so the proper-policy handling is actually exercised. Until then `expected_reward`
-  is DTMC-only.
+- **MDP MAX expected reward** and **zero/negative-cost SSP.** Maximal expected cost is infinite whenever any
+  scheduler can loop away from the target with positive probability, so it needs an "every scheduler is
+  proper" check (min reachability `= 1`) rather than the "exists a proper policy" the min case uses; and the
+  positive-cost SSP assumption above breaks with zero- or negative-cost cycles (an improper policy no longer
+  has infinite cost, so policy iteration can stall). Both are their own increments; each needs a corpus case
+  that actually exercises the degenerate cycle.
 - **Probabilistic LTL / long-run (steady-state) properties.** These reuse the LTL engine and the DTMC/MDP
   machinery but are a larger design; not started.
 

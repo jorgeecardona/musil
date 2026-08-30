@@ -4,6 +4,26 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.probabilistic`: MDP min expected reward (stochastic shortest path)
+
+- `expected_reward_mdp(model, target, moves=..., cost=...)` returns the exact MINIMAL expected accumulated
+  cost to reach `target` over all schedulers of an MDP (default unit cost = minimal expected steps).
+- The normally-hard piece, a *proper* initial policy for policy iteration, comes for free: the
+  max-reachability-optimal policy reaches the target almost surely from every state whose max reachability is
+  1 (a convex combination of values `<= 1` equal to 1 forces every successor to 1), so it is proper there
+  and seeds the iteration. The iteration minimises expected cost over the moves whose successors are all
+  proper, each evaluation an exact rational solve of `E(s) = cost(s) + sum_s' P(s, s') E(s')`. Strict
+  improvement keeps the policy proper (an improper policy has infinite cost) and terminates at the optimum
+  (Bertsekas & Tsitsiklis SSP).
+- Costs must be positive (default unit); it raises `ValueError` when no scheduler reaches the target almost
+  surely from the initial state (min expected cost infinite). MAX expected cost and zero/negative-cost
+  cycles are deferred (reasons in `PROBABILISTIC_NOTES.md`). Refactored the reach policy iteration into a
+  shared `_reach_policy_iteration` that returns the optimal values AND policy (the SSP seed); guarded by the
+  existing MDP reachability corpus.
+- Corpus pins the retry-until-success minimal expected attempts `1/p` (a slower sure alternative does not
+  lower it), plus tests for the cheaper-route choice, the safe-move restriction (avoid a non-reaching
+  branch), the infinite-cost guard, and ignoring an improper self-loop.
+
 ### Added — `musil.probabilistic`: DTMC expected reward (`expected_reward`)
 
 - `expected_reward(model, target, cost=...)` returns the exact expected accumulated cost to first reach
