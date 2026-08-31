@@ -32,6 +32,7 @@ from musil import (
     check_liveness_of,
     check_ltl,
     check_of,
+    crash_actions,
     eventually,
     expected_reward,
     expected_reward_mdp,
@@ -763,3 +764,43 @@ def test_check_all_reports_edge_and_state_violations_together():
     assert ("edge-invariant", "no-force-publish") in kinds
     assert ("invariant", "known-stage") in kinds
     assert len(kinds) == 2
+
+
+# --------------------------------------------------------------------------------------------------
+# 17. crash_actions — explicit-state crash/revive faults under a budget (#29)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Mesh:
+    up: frozenset[int]
+
+
+def mesh_model(budget: int) -> Model[Mesh]:
+    # 3 nodes; crash_actions generate crash/revive edges under a SIMULTANEOUS-failure budget. Quorum is
+    # "at least 2 of 3 up" -- it survives 1 crash but not 2.
+    def get_up(s: Mesh, n: Hashable) -> bool:
+        return n in s.up
+
+    def set_up(s: Mesh, n: Hashable, up: bool) -> Mesh:
+        assert isinstance(n, int)
+        return Mesh(up=(s.up | {n}) if up else (s.up - {n}))
+
+    return Model(
+        init=Mesh(frozenset(range(3))),
+        actions=crash_actions(range(3), get_up=get_up, set_up=set_up, budget=budget, revive=True),
+        invariants={"quorum": lambda s: len(s.up) >= 2},
+        terminal=lambda s: False,
+    )
+
+
+def test_crash_actions_budget_bounds_simultaneous_failures():
+    # budget=1: at most one node down at a time -> quorum (>=2 up) always holds. Reachable states: all-up
+    # plus each single-down = 1 + 3 = 4, derivable.
+    assert check(mesh_model(1)).ok
+    assert len(explore(mesh_model(1)).states) == 4
+    # budget=2: two nodes can be down at once -> only one up -> quorum fails, via two crash edges.
+    r = check(mesh_model(2))
+    assert not r.ok
+    assert r.invariant == "quorum"
+    assert r.action_names == ("fault:crash:0", "fault:crash:1")

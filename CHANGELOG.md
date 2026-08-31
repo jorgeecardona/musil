@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.faults.crash_actions`: explicit-state crash/revive faults (#29)
+
+- `crash_actions(nodes, get_up=, set_up=, budget=, revive=)` builds crash (and optional revive) `Action`s
+  over a caller-declared node-liveness lens, for the explicit-state path (`check` / `explore` /
+  `check_open`) where most models live — retiring the byte-identical per-node `_crash` / `_revive` edges
+  distributed models hand-write. `budget` bounds the number of SIMULTANEOUS failures (a crash fires only
+  when fewer than `budget` nodes are already down); `revive=True` adds heal edges for reconvergence testing.
+  New module `musil.faults`, same lens style (`get`/`put`) as `musil.channels`.
+- Corpus pins a 3-node quorum mesh: with `budget=1` quorum (≥2 of 3 up) always holds and the space is 4
+  states (all-up + each single-down); with `budget=2` two crashes drop it below quorum, and the trace is the
+  two `fault:crash:*` edges.
+- Note: the issue referenced a `cohort_faults` (0.28) precedent, but no such helper exists in musil — this
+  is designed fresh against the `channels` factory convention. `partition_actions` (the other half of #29)
+  is a follow-up.
+
 ### Added — fairness by action tag + fair-name validation (#27)
 
 - `Action(..., fair="weak" | "strong" | None)` — an action can carry its own fairness. When

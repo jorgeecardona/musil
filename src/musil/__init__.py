@@ -78,6 +78,7 @@ from musil.env import (
     check_liveness_open,
     check_open,
 )
+from musil.faults import crash_actions
 from musil.fsm import (
     declared_states,
     multi_status_field_actions,
@@ -240,6 +241,7 @@ __all__ = [
     "compose",
     "coverage",
     "coverage_of",
+    "crash_actions",
     "declared_states",
     "diff",
     "enumerate_actions",
