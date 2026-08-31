@@ -67,7 +67,6 @@ cabildo issues show <slug>
 | Issue | Area | Scope | Verify | Status | Waiting on |
 |---|---|---|---|---|---|
 | [check holds every state in RAM, so the reachable space must fit in memory](12-08-2026-check-holds-every-state-in-ram-so-the-reachable-space-must-fit.md) | core | M | inspect | open | — |
-| [Decide whether musil takes an optional Hypothesis dependency before building a strategy bridge](12-08-2026-decide-whether-musil-takes-an-optional-hypothesis-dependency-before-building-a-strategy.md) | core | M | inspect | open | — |
 
-_2 open — 2 open; 7 done. Generated; edit the files, then `cabildo issues reindex`._
+_1 open — 1 open; 8 done. Generated; edit the files, then `cabildo issues reindex`._
 <!-- END GENERATED INDEX -->

@@ -1,12 +1,34 @@
 ---
 title: Decide whether musil takes an optional Hypothesis dependency before building a strategy bridge
-status: open
+status: done
 area: core
 owner: null
 filed: 2026-08-12
+fixed_in: 811ed61
 scope: M
 verify: inspect
 ---
+
+## Resolved (decided 2026-08-31)
+
+**Decision: no.** musil does not take a Hypothesis dependency, optional or otherwise, and ships no strategy
+library. This is the direct application of the founding dependency-free identity (`dependencies = []`;
+"dependency-free" in the package description, the module docstring, and the pyproject comment naming it "the
+point of the project") and the dependency policy (build in-house; the only sanctioned optional accelerator is
+numpy for the probabilistic hot path, itself deferred to Rust-later — never a convenience dependency).
+
+The issue's own analysis is the reasoning: the value is *glue* — a user writes `@given(st.lists(...))` and
+calls `check` in the test body in about fifteen lines, with no help from musil — and shipping strategies would
+be "the first thing in the package that cannot be used without installing something else," breaking the
+invariant this issue says the decision must not break: `pip install musil` installs zero third-party packages
+and `python -c "import musil"` works. That invariant is core identity, not a detail.
+
+What users do instead (no musil glue needed): wrap a `check` or `generate_traces` call in a Hypothesis
+`@given` in the adopting project's own test suite — the dependency lives there, where it already is, not in
+musil. The vendored mini-generator alternative is ruled out by this issue itself ("strictly worse").
+`verify: inspect` is satisfied — the recorded decision is the artifact. The upstream GitLab issue (#1 item 4)
+can be closed as won't-do (conflicts with the dependency-free identity). Reversible if the maintainer decides
+the dependency-free principle should bend for this; nothing was pushed.
 
 Source: gitlab.com/jorgeecardona/musil issue #1 (item 4 of five), filed 2026-08-11 from adopting musil in the thalamus classifier workspace. This is the one of the five that is a **decision** first and code second, which is why it is filed as `verify: inspect`.
 
