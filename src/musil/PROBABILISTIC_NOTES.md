@@ -132,9 +132,12 @@ accelerator for large linear solves, never required).
   random DTMC run satisfies `formula`, for the shapes with a direct characterisation: `F p` = reachability of
   `p`; `G p` = `1 - P(F ¬p)`; `GF p` = probability of absorption into a bottom SCC that CONTAINS a `p` state (a
   run visits every state of its absorbing BSCC infinitely often); `FG p` = absorption into a bottom SCC
-  ENTIRELY inside `p`. Reuses the reachability solve and the BSCC decomposition (`_bscc_reach_sum`), and the
-  reducible-fragment matcher from `check_ltl` (`_push_negations` / `_state_predicate`). Corpus separates GF
-  from FG on a model with a `{A,B}` cycle where only `A` is the target: `P(GF A) = 1/2`, `P(FG A) = 0`.
+  ENTIRELY inside `p`; `a U b` (both STATE predicates) = the CONSTRAINED (until) reachability of `b` avoiding
+  `¬a`, i.e. `reach_probability` with `avoid=¬a` — no automaton needed, since strong until on state predicates
+  IS constrained reachability. Reuses the reachability solve and the BSCC decomposition (`_bscc_reach_sum`),
+  and the reducible-fragment matcher from `check_ltl` (`_push_negations` / `_state_predicate`). Corpus
+  separates GF from FG on a model with a `{A,B}` cycle where only `A` is the target: `P(GF A) = 1/2`,
+  `P(FG A) = 0`; and pins `a U b` against the constrained-reachability answer.
 
 - **MDP probabilistic LTL, F / G / GF / FG, max AND min** — `probability_ltl(model, formula, moves=...,
   optimize="max"|"min")`. The optimal probability over all schedulers that a run satisfies `formula`, for the
@@ -146,6 +149,8 @@ accelerator for large linear solves, never required).
     its own MEC — consistent with the DTMC deadlock treatment). min = the dual `1 - P_max(FG ¬p)`.
   - `FG p` (co-Büchi) — max = max reachability to the region the scheduler can stay inside `p` forever
     (`_stay_within`, a greatest fixpoint). min = the dual `1 - P_max(GF ¬p)`.
+  - `a U b` — max / min constrained reachability of `b` avoiding `¬a` (`reach_probability_mdp` with
+    `avoid=¬a`), the same reduction as the DTMC case.
 
   So the whole fragment rests on three primitives — max/min reachability, MEC (for GF-max), and the
   stay-within set (for FG-max) — plus the standard temporal duals. Corpus pins the full matrix on one model:
@@ -154,11 +159,13 @@ accelerator for large linear solves, never required).
 
 ## Deferred (future layers, not blocking)
 
-- **General probabilistic LTL** (`Until`, `Next`, leads-to, nested/ disjoined temporal operators). Unlike the
-  qualitative engine, the quantitative measure needs a DETERMINISTIC automaton for the formula — the
-  nondeterministic Büchi automaton the GPVW engine builds gives the wrong probability on the DTMC product — so
-  it needs a Rabin/Safra determinization (or a limit-deterministic construction), a larger build.
-  `probability_ltl` raises `NotImplementedError` outside the reducible fragment until then.
+- **General probabilistic LTL** (`Next`, leads-to, NESTED / disjoined temporal operators, and `Until` whose
+  operands are themselves temporal — e.g. `(F a) U b`). `Until` of two STATE predicates is shipped above
+  (constrained reachability); the general case is different. Unlike the qualitative engine, the quantitative
+  measure needs a DETERMINISTIC automaton for the formula — the nondeterministic Büchi automaton the GPVW
+  engine builds gives the wrong probability on the DTMC product — so it needs a Rabin/Safra determinization
+  (or a limit-deterministic construction), a larger build. `probability_ltl` raises `NotImplementedError`
+  outside the reducible fragment until then.
 - **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
   negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall or return
   a wrong finite value). `expected_reward_mdp` now GUARDS this: a zero/negative-cost step off the target on the

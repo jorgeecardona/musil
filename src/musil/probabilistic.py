@@ -43,6 +43,7 @@ from musil.ltl import (
     LTL,
     Always,
     Eventually,
+    Until,
     _push_negations,  # pyright: ignore[reportPrivateUsage]
     _state_predicate,  # pyright: ignore[reportPrivateUsage]
 )
@@ -676,9 +677,12 @@ def probability_ltl[S: Hashable](
       ``p`` state (a run visits every state of its absorbing BSCC infinitely often);
     - ``FG p`` (``Eventually(Always p)``) → the probability of absorption into a bottom SCC ENTIRELY inside
       ``p``.
+    - ``a U b`` (``Until``, both STATE predicates) → the CONSTRAINED (until) reachability: the probability of
+      reaching a ``b`` state without first passing through a ``¬a`` state — exactly ``reach_probability`` with
+      ``avoid=¬a``, no automaton needed.
 
     With ``moves`` (as in ``reach_probability_mdp``) the model is an MDP and the answer is the OPTIMAL
-    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / G / GF / FG fragment:
+    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / G / GF / FG / U fragment:
 
     - ``F p`` → max / min reachability of ``p``;
     - ``G p`` → ``1 - P_min(F ¬p)`` (max) / ``1 - P_max(F ¬p)`` (min);
@@ -687,6 +691,8 @@ def probability_ltl[S: Hashable](
       the dual ``1 - P_max(FG ¬p)``;
     - ``FG p`` (co-Büchi) → the max probability equals the max reachability to the region the scheduler can
       stay inside ``p`` forever (``_stay_within``); the min is the dual ``1 - P_max(GF ¬p)``.
+    - ``a U b`` → the max / min constrained reachability of ``b`` avoiding ``¬a`` (``reach_probability_mdp``
+      with ``avoid=¬a``).
 
     All exact, reusing the reachability solve, the BSCC / MEC / stay-within decompositions and (for the MDP)
     policy iteration; NO linear programming (that is only for the long-run AVERAGE reward, see
@@ -738,11 +744,18 @@ def probability_ltl[S: Hashable](
                 p = _state_predicate(inner)
                 if p is not None:
                     return (1 - reach_min(_negate(p))) if mx else (1 - reach_max(_negate(p)))
+            case Until(left=left, right=right):  # a U b = reach b without first entering ¬a (constrained reachability)
+                a = _state_predicate(left)
+                b = _state_predicate(right)
+                if a is not None and b is not None:
+                    return reach_probability_mdp(
+                        model, b, moves=moves, weight=weight, optimize=optimize, avoid=_negate(a), max_states=max_states
+                    )
             case _:
                 pass
         raise NotImplementedError(
-            f"probability_ltl over an MDP supports F/G/GF/FG of a state predicate (max and min); {formula} "
-            "needs the general probabilistic LTL engine (a deterministic automaton), not yet built"
+            f"probability_ltl over an MDP supports F/G/GF/FG of a state predicate and a U b (max and min); "
+            f"{formula} needs the general probabilistic LTL engine (a deterministic automaton), not yet built"
         )
 
     dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
@@ -763,11 +776,17 @@ def probability_ltl[S: Hashable](
             p = _state_predicate(inner)
             if p is not None:
                 return 1 - _dtmc_values(graph.states, dist, lambda s, _p=p: not _p(s))[init]
+        case Until(left=left, right=right):  # a U b = P(reach b without first entering ¬a): constrained reachability
+            a = _state_predicate(left)
+            b = _state_predicate(right)
+            if a is not None and b is not None:
+                until_dist = {s: ([] if (not a(s) and not b(s)) else d) for s, d in dist.items()}
+                return _dtmc_values(graph.states, until_dist, b)[init]
         case _:
             pass
     raise NotImplementedError(
-        f"probability_ltl supports F/G/GF/FG of a state predicate; {formula} needs the general probabilistic "
-        "LTL engine (a deterministic automaton for the formula), which is not yet built"
+        f"probability_ltl supports F/G/GF/FG of a state predicate and a U b; {formula} needs the general "
+        "probabilistic LTL engine (a deterministic automaton for the formula), which is not yet built"
     )
 
 

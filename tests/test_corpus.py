@@ -1005,8 +1005,11 @@ def test_probability_ltl_reducible_fragment_known_verdicts():
     assert probability_ltl(m, Always(Eventually(at_a))) == Fraction(1, 2)  # P(GF A): absorbed into {A,B}
     assert probability_ltl(m, Eventually(Always(at_a))) == Fraction(0)  # P(FG A): no BSCC inside {A}
     assert probability_ltl(m, Always(not_z)) == Fraction(1, 2)  # P(G !Z) = 1 - P(F Z)
-    with pytest.raises(NotImplementedError):  # general PLTL (Until) needs a deterministic automaton
-        probability_ltl(m, Until(at_a, not_z))
+    # a U b of two STATE predicates is constrained reachability, now supported: P(¬Z U A) = reach A before Z = 1/2
+    assert probability_ltl(m, Until(not_z, at_a)) == Fraction(1, 2)
+    assert probability_ltl(m, Until(not_z, at_a)) == reach_probability(m, _is("A"), avoid=_is("Z"))
+    with pytest.raises(NotImplementedError):  # Until with a TEMPORAL operand still needs the general engine
+        probability_ltl(m, Until(Eventually(at_a), not_z))
 
 
 def test_probability_ltl_mdp_full_fragment_max_and_min():
@@ -1050,6 +1053,11 @@ def test_probability_ltl_mdp_full_fragment_max_and_min():
     # G !Z: the scheduler can avoid Z forever (max 1) or dive into it (min 0)
     assert p(Always(not_z), choose, "max") == Fraction(1)
     assert p(Always(not_z), choose, "min") == Fraction(0)
+    # a U b (¬Z U A): steer to A (max 1) or into Z (min 0); the coin reaches A with 1/2
+    assert p(Until(not_z, at_a), choose, "max") == Fraction(1)
+    assert p(Until(not_z, at_a), choose, "min") == Fraction(0)
+    assert p(Until(not_z, at_a), coin, "max") == half
+    assert p(Until(not_z, at_a), coin, "min") == half
 
 
 def test_bounded_expected_reward_dtmc_and_mdp():

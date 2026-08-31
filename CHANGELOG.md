@@ -2,6 +2,18 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `probability_ltl` now supports `a U b` (until of two state predicates)
+
+- `probability_ltl(model, Until(a, b))` extends the reducible fragment beyond `F` / `G` / `GF` / `FG`. Strong
+  until of two STATE predicates is exactly constrained reachability — the probability of reaching a `b` state
+  without first passing through a `¬a` state — so it reduces directly to `reach_probability(b, avoid=¬a)`
+  (DTMC) and `reach_probability_mdp(b, avoid=¬a, optimize=...)` (MDP, max and min), with no automaton. This
+  corrects a documented imprecision: `PROBABILISTIC_NOTES.md` had listed `Until` under "needs a Safra/Rabin
+  determinization", but only NESTED until (a temporal operand, e.g. `(F a) U b`) does — until of state
+  predicates is a reachability query. Corpus pins `P(¬Z U A) = 1/2` against the constrained-reachability
+  answer for both DTMC and MDP (max/min), and still asserts `NotImplementedError` for an until with a temporal
+  operand.
+
 ### Tests — every example now runs end-to-end in the gate
 
 - Added the remaining nine `test_example_*.py` (byzantine_service, cosim_master_scaling, k8s_scheduler,
