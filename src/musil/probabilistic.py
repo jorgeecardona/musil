@@ -43,6 +43,7 @@ from musil.ltl import (
     LTL,
     Always,
     Eventually,
+    Next,
     Release,
     Until,
     WeakUntil,
@@ -674,6 +675,8 @@ def probability_ltl[S: Hashable](
     predicate ``p``:
 
     - ``F p`` → the reachability probability of ``p``;
+    - ``X p`` (``Next``) → the probability ``p`` holds at the NEXT step (a one-step push of the initial
+      distribution; an absorbing initial state self-loops, so it contributes ``[p(init)]``);
     - ``G p`` → ``1 - P(F ¬p)``;
     - ``GF p`` (``Always(Eventually p)``) → the probability of absorption into a bottom SCC that CONTAINS a
       ``p`` state (a run visits every state of its absorbing BSCC infinitely often);
@@ -689,10 +692,11 @@ def probability_ltl[S: Hashable](
       ``1 - P(reach ¬a∧¬b avoiding b)``. ``G p`` is also the special case ``p W false``.
 
     With ``moves`` (as in ``reach_probability_mdp``) the model is an MDP and the answer is the OPTIMAL
-    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / G / GF / FG / U / R / W
-    fragment:
+    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / X / G / GF / FG / U / R /
+    W fragment:
 
     - ``F p`` → max / min reachability of ``p``;
+    - ``X p`` → the max / min one-step probability of ``p``, over the initial state's moves;
     - ``G p`` → ``1 - P_min(F ¬p)`` (max) / ``1 - P_max(F ¬p)`` (min);
     - ``GF p`` (Büchi) → the max probability equals the max reachability to the states in a MAXIMAL END
       COMPONENT that contains a ``p`` state (reach such a component and cycle through ``p`` forever); the min is
@@ -780,11 +784,21 @@ def probability_ltl[S: Hashable](
                     return 1 - reach_probability_mdp(
                         model, _neither, moves=moves, weight=weight, optimize=dual, avoid=b, max_states=max_states
                     )
+            case Next(arg=inner):  # X p: the OPTIMAL one-step probability that p holds next (an absorbing move self-loops)
+                p = _state_predicate(inner)
+                if p is not None:
+                    p_init = Fraction(1) if p(init) else Fraction(0)
+                    vals = [
+                        p_init if not mv else sum((prob for prob, s2 in mv if p(s2)), Fraction(0))
+                        for mv in all_moves[init]
+                    ]
+                    return max(vals) if mx else min(vals)
             case _:
                 pass
         raise NotImplementedError(
-            f"probability_ltl over an MDP supports F/G/GF/FG of a state predicate and a U b / a R b (max and "
-            f"min); {formula} needs the general probabilistic LTL engine (a deterministic automaton), not yet built"
+            f"probability_ltl over an MDP supports F/X/G/GF/FG of a state predicate and a U b / a R b / a W b "
+            f"(max and min); {formula} needs the general probabilistic LTL engine (a deterministic automaton), "
+            "not yet built"
         )
 
     dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
@@ -823,11 +837,18 @@ def probability_ltl[S: Hashable](
             if a is not None and b is not None:  # inner ¬b U (¬a∧¬b): target ¬a∧¬b, absorbing when b (avoid ∧ not-target)
                 ww_dist = {s: ([] if b(s) else d) for s, d in dist.items()}
                 return 1 - _dtmc_values(graph.states, ww_dist, lambda s, _a=a, _b=b: not _a(s) and not _b(s))[init]
+        case Next(arg=inner):  # X p: the probability p holds at the next step (one-step push; absorbing init self-loops)
+            p = _state_predicate(inner)
+            if p is not None:
+                succ = dist[init]
+                if not succ:  # absorbing init keeps its mass (self-loop) — consistent with transient / GF-FG
+                    return Fraction(1) if p(init) else Fraction(0)
+                return sum((prob for prob, s2 in succ if p(s2)), Fraction(0))
         case _:
             pass
     raise NotImplementedError(
-        f"probability_ltl supports F/G/GF/FG of a state predicate and a U b / a R b; {formula} needs the general "
-        "probabilistic LTL engine (a deterministic automaton for the formula), which is not yet built"
+        f"probability_ltl supports F/X/G/GF/FG of a state predicate and a U b / a R b / a W b; {formula} needs "
+        "the general probabilistic LTL engine (a deterministic automaton for the formula), which is not yet built"
     )
 
 

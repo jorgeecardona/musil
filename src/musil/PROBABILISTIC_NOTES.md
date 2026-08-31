@@ -130,7 +130,8 @@ accelerator for large linear solves, never required).
 
 - **Probabilistic LTL, reducible fragment** — `probability_ltl(model, formula)`. The exact probability that a
   random DTMC run satisfies `formula`, for the shapes with a direct characterisation: `F p` = reachability of
-  `p`; `G p` = `1 - P(F ¬p)`; `GF p` = probability of absorption into a bottom SCC that CONTAINS a `p` state (a
+  `p`; `X p` = the probability `p` holds one step later (a one-step push of the initial distribution; an
+  absorbing initial state self-loops, so it contributes `[p(init)]`); `G p` = `1 - P(F ¬p)`; `GF p` = probability of absorption into a bottom SCC that CONTAINS a `p` state (a
   run visits every state of its absorbing BSCC infinitely often); `FG p` = absorption into a bottom SCC
   ENTIRELY inside `p`; `a U b` (both STATE predicates) = the CONSTRAINED (until) reachability of `b` avoiding
   `¬a`, i.e. `reach_probability` with `avoid=¬a` — no automaton needed, since strong until on state predicates
@@ -147,6 +148,8 @@ accelerator for large linear solves, never required).
   optimize="max"|"min")`. The optimal probability over all schedulers that a run satisfies `formula`, for the
   reducible fragment, all EXACT and with NO linear programming (that is only for the long-run AVERAGE below):
   - `F p` — max / min reachability (the existing policy iteration; min uses the `_s0_min` precomputation).
+  - `X p` — the max / min one-step probability of `p` over the initial state's moves (an absorbing move
+    self-loops, contributing `[p(init)]`).
   - `G p` — `1 - P_min(F ¬p)` (max), `1 - P_max(F ¬p)` (min).
   - `GF p` (Büchi) — max = max reachability to the states in a MAXIMAL END COMPONENT containing a `p` state
     (reach it, then cycle through `p` forever; `_maximal_end_components` by SCC-refinement, an absorbing state
@@ -165,10 +168,10 @@ accelerator for large linear solves, never required).
 
 ## Deferred (future layers, not blocking)
 
-- **General probabilistic LTL** (`Next`, leads-to, NESTED / disjoined temporal operators, and `Until` /
-  `Release` / `WeakUntil` whose operands are themselves temporal — e.g. `(F a) U b`). `Until`, `Release`, and
-  `WeakUntil` of two STATE predicates are shipped above (constrained reachability and its duals); the general
-  case is different. Unlike the qualitative engine, the quantitative
+- **General probabilistic LTL** (leads-to, NESTED / disjoined temporal operators, and `Next` / `Until` /
+  `Release` / `WeakUntil` whose operands are themselves temporal — e.g. `X(F a)`, `(F a) U b`). `Next`, `Until`,
+  `Release`, and `WeakUntil` of STATE predicates are shipped above (a one-step push, constrained reachability,
+  and its duals); the general case is different. Unlike the qualitative engine, the quantitative
   measure needs a DETERMINISTIC automaton for the formula — the nondeterministic Büchi automaton the GPVW
   engine builds gives the wrong probability on the DTMC product — so it needs a Rabin/Safra determinization
   (or a limit-deterministic construction), a larger build. `probability_ltl` raises `NotImplementedError`

@@ -1016,7 +1016,13 @@ def test_probability_ltl_reducible_fragment_known_verdicts():
     # a W b (WeakUntil) also reduces (b R (a∨b)): G p = p W false, and false W A = A-at-init = 0 (init is I)
     assert probability_ltl(m, WeakUntil(not_z, never)) == probability_ltl(m, Always(not_z))
     assert probability_ltl(m, WeakUntil(never, at_a)) == Fraction(0)
-    with pytest.raises(NotImplementedError):  # a temporal operand (in Until/Release/WeakUntil) needs the general engine
+    # X p (Next): probability p holds one step later. From I -> A or Z uniformly, X A = 1/2.
+    assert probability_ltl(m, Next(at_a)) == Fraction(1, 2)
+    # X p at an ABSORBING initial state self-loops (consistent with the GF/FG BSCC convention): X p = [p(init)].
+    absorbing: Model[Chain] = Model(init=Chain("A"), actions=[], terminal=lambda _s: True)
+    assert probability_ltl(absorbing, Next(at_a)) == Fraction(1)  # self-loop at A, so A holds next
+    assert probability_ltl(absorbing, Next(Atom[Chain]("Z", _is("Z")))) == Fraction(0)  # A is not Z
+    with pytest.raises(NotImplementedError):  # a temporal operand (in Next/Until/Release/WeakUntil) needs the general engine
         probability_ltl(m, Until(Eventually(at_a), not_z))
 
 
@@ -1075,6 +1081,10 @@ def test_probability_ltl_mdp_full_fragment_max_and_min():
     assert p(WeakUntil(not_z, never), choose, "max") == p(Always(not_z), choose, "max") == Fraction(1)
     assert p(WeakUntil(not_z, never), choose, "min") == p(Always(not_z), choose, "min") == Fraction(0)
     assert p(WeakUntil(not_z, never), coin, "max") == half and p(WeakUntil(not_z, never), coin, "min") == half
+    # X p (Next): the scheduler steers the first step. X A: pick win->A (max 1) or dead->Z (min 0); coin 1/2
+    assert p(Next(at_a), choose, "max") == Fraction(1)
+    assert p(Next(at_a), choose, "min") == Fraction(0)
+    assert p(Next(at_a), coin, "max") == half and p(Next(at_a), coin, "min") == half
 
 
 def test_bounded_expected_reward_dtmc_and_mdp():

@@ -2,6 +2,17 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `probability_ltl` now supports `X p` (next), completing every operator on state predicates
+
+- `probability_ltl(model, Next(p))` is the probability `p` holds at the next step — a one-step push of the
+  initial distribution (DTMC), or the max/min over the initial state's moves (MDP). An absorbing initial state
+  self-loops, so `X p` contributes `[p(init)]` there — consistent with how the layer's GF/FG BSCC analysis
+  already treats an absorbing state as a self-looping component (verified: `GF p = FG p = 1` at an absorbing
+  `p`-state). Corpus pins `X A = 1/2` on a uniform branch, the absorbing self-loop case (`X p = [p(init)]`), and
+  the MDP max/min. With F/G/GF/FG and U/R/W already shipped, **every LTL operator applied to state predicates is
+  now supported**; only operands that are themselves temporal (e.g. `X(F a)`) need the deferred
+  deterministic-automaton engine.
+
 ### Added — `probability_ltl` now supports `a W b` (weak until), completing U / R / W
 
 - `probability_ltl(model, WeakUntil(a, b))` finishes the binary temporal operators for state predicates. Weak
