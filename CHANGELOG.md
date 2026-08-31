@@ -2,6 +2,18 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Fixed — `expected_reward_mdp` refuses non-positive costs (unbounded), instead of a wrong finite value
+
+- The unbounded stochastic shortest/longest path assumes every step off the target costs strictly `> 0` (so an
+  improper policy accumulates infinite cost — the basis of policy iteration). A zero- or negative-cost step
+  silently returned a WRONG finite value (e.g. a negative-cost loop a min scheduler exploits forever gave a
+  finite number instead of `-inf`). `expected_reward_mdp` now enforces the documented contract: a non-positive
+  cost off the target on the unbounded path raises `ValueError` (matching the negative-weight guard's
+  refuse-rather-than-mislead philosophy). `steps=k` is a finite sum and is unaffected (accepts any cost). The
+  DTMC `expected_reward` (a linear solve, no SSP properness argument) is likewise unaffected. Corpus pins that
+  a negative-cost loop is refused unbounded but accepted with `steps=k`; `PROBABILISTIC_NOTES.md` notes exact
+  zero/negative-cost handling remains the deferred increment.
+
 ### Docs — clarify that `patterns.always` / `absent` report deadlocks (unlike `check_ltl(Always)`)
 
 - Following the `G`-is-pure-safety fix, `check_ltl(Always(p))` ignores deadlocks but the `always` / `absent`

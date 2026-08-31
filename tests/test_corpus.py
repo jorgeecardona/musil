@@ -594,6 +594,37 @@ def test_ssp_min_expected_attempts_is_one_over_p():
     assert expected_reward_mdp(m, is_win, moves=moves) == Fraction(2)
 
 
+def test_ssp_rejects_nonpositive_cost_unbounded_but_allows_it_bounded():
+    # The unbounded stochastic shortest path needs strictly positive step cost (an improper policy must cost
+    # infinity); a zero/negative-cost step off the target breaks that and would return a wrong finite value,
+    # so it is refused. A bounded horizon (steps=k) is a finite sum and accepts any cost.
+    start, win = Gamble("start"), Gamble("win")
+    m: Model[Gamble] = Model(
+        init=start,
+        actions=[
+            Action("go", enabled=lambda s: s.tag == "start", apply=lambda s: win),
+            Action("spin", enabled=lambda s: s.tag == "start", apply=lambda s: start),  # a loop off the target
+        ],
+        terminal=lambda s: s.tag == "win",
+    )
+
+    def singles(_s: Gamble, enabled: tuple[Action[Gamble], ...]) -> list[Sequence[Action[Gamble]]]:
+        return [[a] for a in enabled]
+
+    def is_win(s: Gamble) -> bool:
+        return s.tag == "win"
+
+    def cost(name: str, _s: Gamble) -> int:
+        return -1 if name == "spin" else 1  # a NEGATIVE-cost loop a min scheduler would exploit forever
+
+    with pytest.raises(ValueError, match="strictly POSITIVE"):
+        expected_reward_mdp(m, is_win, moves=singles, cost=cost, optimize="min")
+    with pytest.raises(ValueError, match="strictly POSITIVE"):
+        expected_reward_mdp(m, is_win, moves=singles, cost=cost, optimize="max")
+    # bounded is fine (finite sum): 3 steps of the -1 spin = -3
+    assert expected_reward_mdp(m, is_win, moves=singles, cost=cost, optimize="min", steps=3) == Fraction(-3)
+
+
 # --------------------------------------------------------------------------------------------------
 # 9b. MDP max expected reward (stochastic LONGEST path) — finite only when every scheduler is proper
 # --------------------------------------------------------------------------------------------------

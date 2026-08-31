@@ -160,8 +160,11 @@ accelerator for large linear solves, never required).
   it needs a Rabin/Safra determinization (or a limit-deterministic construction), a larger build.
   `probability_ltl` raises `NotImplementedError` outside the reducible fragment until then.
 - **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
-  negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall). Its own
-  increment; needs a corpus case that actually exercises the degenerate zero-cost cycle.
+  negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall or return
+  a wrong finite value). `expected_reward_mdp` now GUARDS this: a zero/negative-cost step off the target on the
+  UNBOUNDED path raises `ValueError` (refuse rather than return a wrong answer; `steps=k` is a finite sum and
+  is unaffected). Handling zero/negative costs EXACTLY (not just refusing) is the deferred increment — it needs
+  the end-component / zero-reward MEC treatment, and a corpus case that exercises the degenerate cycle.
 - **MDP long-run AVERAGE reward — efficient accelerator** (the oracle above is SHIPPED). The oracle enumerates
   every memoryless deterministic policy, which is exponential; the accelerator computes the same value in
   polynomial time. Two exact, dependency-free routes (neither needs z3); the layout below is the plan a future

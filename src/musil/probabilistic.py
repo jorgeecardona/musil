@@ -867,9 +867,13 @@ def expected_reward_mdp[S: Hashable](
     ``k`` steps elapse — a finite backward induction over the moves each step, always finite, so it needs no
     reachability guard (the "expected cost in the next ``k`` steps under the best/worst scheduler").
     With the default unit ``cost`` this is the min/max expected number of STEPS. ``moves``/``weight`` describe
-    the MDP exactly as in ``reach_probability_mdp``; ``cost`` must be POSITIVE (the default unit cost is), so
-    that a scheduler which fails to reach the target a.s. has infinite cost — the assumption both directions
-    rest on. Each policy is evaluated by an exact rational solve of ``E(s) = cost(s) + sum_s' P(s,s') E(s')``.
+    the MDP exactly as in ``reach_probability_mdp``; ``cost`` must be strictly POSITIVE off the target (the
+    default unit cost is), so that a scheduler which fails to reach the target a.s. has infinite cost — the
+    assumption both directions rest on. This is now ENFORCED: a zero- or negative-cost step off the target
+    raises ``ValueError`` (it would otherwise return a wrong finite value; the zero/negative-cost SSP is a
+    documented deferral). ``steps=k`` has NO such requirement (a bounded horizon is a well-defined finite sum
+    for any cost). Each policy is evaluated by an exact rational solve of ``E(s) = cost(s) + sum_s' P(s,s')
+    E(s')``.
 
     MIN is the stochastic shortest path. A proper policy must EXIST for the min to be finite: the
     max-reachability-optimal policy reaches the target almost surely from every state whose max reachability is
@@ -900,6 +904,7 @@ def expected_reward_mdp[S: Hashable](
     # Per state: each move's distribution AND its expected immediate cost, from the canonical edges.
     all_moves: dict[S, list[_Dist[S]]] = {}
     all_costs: dict[S, list[Fraction]] = {}
+    nonpositive_cost = False  # a step off the target that costs <= 0 -- breaks the SSP positive-cost assumption
     for s in graph.states:
         by_name = {name: nxt for name, nxt in graph.edges.get(s, ())}
         enabled = tuple(a for a in source(s) if a.enabled(s))
@@ -913,8 +918,11 @@ def expected_reward_mdp[S: Hashable](
             if total != 0:
                 for a in members:
                     p = _weight_of(w, a.name, s) / total
+                    ca = Fraction(c(a.name, s))
+                    if ca <= 0 and not target(s):  # a step off the target that does not cost > 0
+                        nonpositive_cost = True
                     acc[by_name[a.name]] = acc.get(by_name[a.name], Fraction(0)) + p
-                    move_cost += p * Fraction(c(a.name, s))
+                    move_cost += p * ca
             state_moves.append([(p, t) for t, p in acc.items()])
             state_costs.append(move_cost)
         all_moves[s] = state_moves if state_moves else [[]]
@@ -934,6 +942,16 @@ def expected_reward_mdp[S: Hashable](
                 for s in graph.states
             }
         return values[init]
+    # The unbounded stochastic shortest/longest path REQUIRES every step off the target to cost > 0 (so an
+    # improper policy accumulates infinite cost -- the assumption policy iteration rests on). A zero- or
+    # negative-cost step breaks it and would return a wrong finite value, so refuse (the zero/negative-cost
+    # SSP is a documented deferral, see PROBABILISTIC_NOTES.md; bounded steps=k has no such requirement).
+    if nonpositive_cost:
+        raise ValueError(
+            "expected_reward_mdp: cost must be strictly POSITIVE off the target for the unbounded expected "
+            "cost (a zero/negative-cost step breaks the stochastic-shortest-path assumption and would give a "
+            "wrong value). Use positive costs, or steps=k for a bounded horizon."
+        )
     if optimize == "min":
         # A proper policy must EXIST (max reachability 1); the max-optimal policy is a proper seed there.
         # States that cannot reach a.s. have infinite min cost.
