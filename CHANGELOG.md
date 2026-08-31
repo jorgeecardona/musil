@@ -2,6 +2,14 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Tests — run the four new examples end-to-end in the gate
+
+- Added `test_example_{monty_hall,gamblers_ruin,river_crossing,needham_schroeder}.py`, each running the real
+  example as a subprocess and asserting exit 0 (its internal exact-fraction / attack-found asserts held) plus
+  the headline output. This matches the existing one-subprocess-test-per-example pattern and guards each new
+  example's `__main__` (prints, `format_trace`, self-asserts), which the corpus model tests did not exercise.
+  (Nine pre-existing examples still lack such a test; a separate follow-up.)
+
 ### Docs — surface the new famous examples on the front page and in the textbook
 
 - The README safety section now points to `examples/needham_schroeder.py` as the flagship counterexample
