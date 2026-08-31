@@ -4,20 +4,23 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
-### Added — `musil.faults.crash_actions`: explicit-state crash/revive faults (#29)
+### Added — `musil.faults`: explicit-state crash/revive and partition/heal faults (#29)
 
+- New module `musil.faults` with two action factories for the explicit-state path (`check` / `explore` /
+  `check_open`) where most models live — retiring the byte-identical per-node fault edges distributed models
+  hand-write. Same lens style (`get`/`put`) as `musil.channels`.
 - `crash_actions(nodes, get_up=, set_up=, budget=, revive=)` builds crash (and optional revive) `Action`s
-  over a caller-declared node-liveness lens, for the explicit-state path (`check` / `explore` /
-  `check_open`) where most models live — retiring the byte-identical per-node `_crash` / `_revive` edges
-  distributed models hand-write. `budget` bounds the number of SIMULTANEOUS failures (a crash fires only
-  when fewer than `budget` nodes are already down); `revive=True` adds heal edges for reconvergence testing.
-  New module `musil.faults`, same lens style (`get`/`put`) as `musil.channels`.
-- Corpus pins a 3-node quorum mesh: with `budget=1` quorum (≥2 of 3 up) always holds and the space is 4
-  states (all-up + each single-down); with `budget=2` two crashes drop it below quorum, and the trace is the
-  two `fault:crash:*` edges.
-- Note: the issue referenced a `cohort_faults` (0.28) precedent, but no such helper exists in musil — this
-  is designed fresh against the `channels` factory convention. `partition_actions` (the other half of #29)
-  is a follow-up.
+  over a node-liveness lens. `budget` bounds the number of SIMULTANEOUS failures (a crash fires only when
+  fewer than `budget` nodes are already down); `revive=True` adds heal edges for reconvergence testing.
+- `partition_actions(splits, get_reach=, set_reach=, healed=)` builds partition/heal `Action`s over a
+  reachability lens: each caller-supplied split installs from the HEALED state (partitions do not stack),
+  and a single heal restores `healed` — the heal-able network-partition fault.
+- Corpus pins a 3-node quorum mesh for each: `crash_actions` with `budget=1` holds quorum (≥2 of 3 up) in 4
+  states and `budget=2` drops below it via two `fault:crash:*` edges; `partition_actions` with a `{0}|{1,2}`
+  split holds quorum in 2 states and an all-singletons split breaks it via the `fault:partition:0` edge.
+- Note: the issue referenced a `cohort_faults` (0.28) precedent, but no such helper exists in musil — both
+  factories are designed fresh against the `channels` factory convention (`partition_actions` adds an
+  explicit `healed=` for the full-reachability configuration).
 
 ### Added — fairness by action tag + fair-name validation (#27)
 

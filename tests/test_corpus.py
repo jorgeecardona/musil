@@ -39,6 +39,7 @@ from musil import (
     explore,
     explore_por,
     never,
+    partition_actions,
     path_to,
     por_sound,
     profile,
@@ -804,3 +805,41 @@ def test_crash_actions_budget_bounds_simultaneous_failures():
     assert not r.ok
     assert r.invariant == "quorum"
     assert r.action_names == ("fault:crash:0", "fault:crash:1")
+
+
+# --------------------------------------------------------------------------------------------------
+# 18. partition_actions — explicit-state network partition/heal faults (#29)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Net:
+    parts: frozenset[frozenset[int]]  # the current partition of {0,1,2} into reachable groups
+
+
+_HEALED = frozenset({frozenset({0, 1, 2})})
+_MAJORITY = frozenset({frozenset({0}), frozenset({1, 2})})  # {0} | {1,2}: the {1,2} side keeps a majority
+_ISOLATE = frozenset({frozenset({0}), frozenset({1}), frozenset({2})})  # all isolated: no majority anywhere
+
+
+def net_model(splits: list[frozenset[frozenset[int]]]) -> Model[Net]:
+    return Model(
+        init=Net(_HEALED),
+        actions=partition_actions(
+            splits, get_reach=lambda s: s.parts, set_reach=lambda s, r: Net(r), healed=_HEALED  # type: ignore[arg-type]
+        ),
+        invariants={"quorum-side": lambda s: any(len(g) >= 2 for g in s.parts)},
+        terminal=lambda s: False,
+    )
+
+
+def test_partition_actions_install_and_heal_faults():
+    # healed <-> {0}|{1,2}: 2 reachable states; quorum-side (some group >=2) holds in both.
+    m = net_model([_MAJORITY])
+    assert check(m).ok
+    assert len(explore(m).states) == 2
+    # A split into singletons breaks quorum-side -> check finds it via the partition edge.
+    r = check(net_model([_ISOLATE]))
+    assert not r.ok
+    assert r.invariant == "quorum-side"
+    assert r.action_names == ("fault:partition:0",)

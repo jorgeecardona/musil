@@ -2,9 +2,10 @@
 
 ``sim`` has a rich fault vocabulary (``Crash``, ``Partition``, ``FaultSchedule``), but it is reachable only
 from the discrete-event ``Simulator``. Models written for the explicit-state checker hand-roll the same
-crash / revive edges over and over. This kit builds those edges over a caller-declared projection of the
-state — the same lens style as ``channels`` (``get`` / ``put``) — so a distributed model gets its standard
-faults from one call instead of a per-node copy-paste.
+crash / revive / partition / heal edges over and over. This kit builds those edges over a caller-declared
+projection of the state — the same lens style as ``channels`` (``get`` / ``put``) — so a distributed model
+gets its standard faults from one call instead of a per-node copy-paste: ``crash_actions`` for node
+liveness, ``partition_actions`` for network reachability.
 
 Domain-free: nodes are any hashable ids, and the caller says how liveness is stored via ``get_up`` /
 ``set_up``. Splice the result into the model's ``actions`` alongside the protocol's own steps.
@@ -61,4 +62,46 @@ def crash_actions[S: Hashable](
                     apply=lambda s, node=node: set_up(s, node, True),
                 )
             )
+    return actions
+
+
+def partition_actions[S: Hashable](
+    splits: Iterable[Hashable],
+    *,
+    get_reach: Callable[[S], Hashable],
+    set_reach: Callable[[S, Hashable], S],
+    healed: Hashable,
+    name: str = "fault",
+) -> list[Action[S]]:
+    """Partition (and heal) actions over a caller-declared reachability field.
+
+    The model stores a reachability CONFIGURATION somewhere in its state — whatever shape the caller uses (a
+    per-node reachable-set map, a partition of the nodes into groups, a split label...). ``get_reach(state)``
+    reads it; ``set_reach(state, reach) -> S`` returns the state with it set (a lens the caller owns).
+    ``healed`` is the full-reachability configuration (typically the model's initial one; it must compare
+    equal via ``==`` to the healed state's field).
+
+    For each configuration in ``splits`` a ``{name}:partition:{i}`` action installs it — enabled only while
+    currently HEALED, so partitions do not stack — and a single ``{name}:heal`` action restores ``healed``
+    from any partitioned configuration. This is the heal-able network-partition fault: the system runs
+    partitioned, then the partition clears and it must reconverge. Keep these actions UNFAIR (do not tag them
+    or name them in ``fair`` / ``fair_strong``), like ``crash_actions``, so a liveness proof cannot lean on a
+    partition healing on its own."""
+    configs = list(splits)
+    actions: list[Action[S]] = [
+        Action(
+            name=f"{name}:partition:{i}",
+            enabled=lambda s: get_reach(s) == healed,
+            apply=lambda s, split=split: set_reach(s, split),
+        )
+        for i, split in enumerate(configs)
+    ]
+    if configs:
+        actions.append(
+            Action(
+                name=f"{name}:heal",
+                enabled=lambda s: get_reach(s) != healed,
+                apply=lambda s: set_reach(s, healed),
+            )
+        )
     return actions

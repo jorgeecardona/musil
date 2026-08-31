@@ -44,13 +44,15 @@ Model a message channel (reliable / lossy / duplicating; unordered, so reorderin
 
 ::: musil.channels
 
-## Faults — `crash_actions`
+## Faults — `crash_actions`, `partition_actions`
 
 Fault-injection action factories for the explicit-state path (`check` / `explore` / `check_open`), so a
 distributed model gets its standard faults from one call instead of a per-node copy-paste. `crash_actions`
 builds crash (and optional revive) edges over a caller-declared node-liveness lens (`get_up` / `set_up`),
-with `budget` bounding the number of simultaneous failures. Keep the fault actions unfair (do not tag them
-or name them in `fair`/`fair_strong`) so a liveness proof cannot lean on a fault being scheduled.
+with `budget` bounding the number of simultaneous failures; `partition_actions` builds partition/heal edges
+over a reachability lens (`get_reach` / `set_reach`), installing each caller-supplied split from the healed
+state and restoring `healed` on heal. Keep the fault actions unfair (do not tag them or name them in
+`fair`/`fair_strong`) so a liveness proof cannot lean on a fault being scheduled or healed.
 
 ::: musil.faults
 

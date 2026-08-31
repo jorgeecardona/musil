@@ -78,7 +78,7 @@ from musil.env import (
     check_liveness_open,
     check_open,
 )
-from musil.faults import crash_actions
+from musil.faults import crash_actions, partition_actions
 from musil.fsm import (
     declared_states,
     multi_status_field_actions,
@@ -266,6 +266,7 @@ __all__ = [
     "multi_status_field_actions",
     "never",
     "no_trace",
+    "partition_actions",
     "path_to",
     "por_sound",
     "profile",
