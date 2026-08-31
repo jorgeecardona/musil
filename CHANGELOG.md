@@ -2,6 +2,15 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Examples — induction (the counterexample-to-induction workflow)
+
+- `examples/induction.py`: the worked example `check_inductive` was missing (every other major capability has
+  one). A counter steps by two — reachable `{0,2,4,6,8}` — so `check` is green on `x <= 8`, but that invariant
+  is NOT inductive: from the unreachable odd pre-state `x = 7` one step reaches `x = 9`. `check_inductive`
+  returns exactly that counterexample-to-induction (`Counter(7) --step--> Counter(9)`), and strengthening the
+  invariant to `x <= 8 and x even` proves it at unbounded depth. The IC3/PDR workflow in miniature. Example +
+  docs page (new "Proof techniques" nav category) + subprocess test, so all 30 examples run in the gate.
+
 ### Docs — surface induction (`check_inductive`) in the README capability list
 
 - `check_inductive` (prove an invariant by k-induction so a pass holds at unbounded depth, with a

@@ -94,6 +94,8 @@ nav:
       - Service lifecycle: examples/service_lifecycle.md
     - Search & planning:
       - River crossing (wolf/goat/cabbage): examples/river_crossing.md
+    - Proof techniques:
+      - Induction (proving beyond the scope): examples/induction.md
     - Shared-memory concurrency:
       - Lost update: examples/lost_update.md
       - Producer–consumer: examples/producer_consumer.md
