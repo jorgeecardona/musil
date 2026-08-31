@@ -33,8 +33,10 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   the state space it lives in).
 - Corpus pins a document lifecycle where `published` is legitimately reachable (so a state-only `check` is
   green) yet a `force_publish` edge reaches it illegally — the edge invariant catches exactly that edge, and
-  `check_of` returns the identical verdict and trace. `check_all` covers state invariants + deadlock only;
-  edge support there is a follow-up.
+  `check_of` returns the identical verdict and trace.
+- `check_all` (the all-violations audit) now also checks edge invariants, bucketed in their own namespace so
+  an edge and a state invariant of the same name never collide; it reports state and edge violations together
+  in one pass. (It previously ignored them silently — an unsound-direction gap in an audit tool.)
 
 ### Added — `check_liveness_of`: liveness over a pre-built graph (#31)
 

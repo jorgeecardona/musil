@@ -115,9 +115,9 @@ class Model[S: Hashable]:
     actions_fn: Callable[[S], Iterable[Action[S]]] | None = None
     footprint: Callable[[S], Hashable] | None = None
     # EDGE (transition) invariants: name -> predicate over (before, action_name, after). Checked on every
-    # explored edge by ``check`` / ``check_of`` — for properties about the STEP, not the state (a state that
-    # is legitimately reachable, but reached by an illegal edge). See ``never`` for the common "forbid this
-    # transition" case. (``check_all`` covers state invariants + deadlock only, not edges yet.)
+    # explored edge by ``check`` / ``check_all`` / ``check_of`` — for properties about the STEP, not the state
+    # (a state that is legitimately reachable, but reached by an illegal edge). See ``never`` for the common
+    # "forbid this transition" case.
     edge_invariants: Mapping[str, EdgeInvariant[S]] = field(default_factory=dict[str, "EdgeInvariant[S]"])
 
     def initial_states(self) -> tuple[S, ...]:
@@ -622,6 +622,21 @@ def check_all[S: Hashable](
                     ok=False, states_explored=len(seen), kind="invariant",
                     invariant=name, reason=reason or None, trace=_trace_to(parent, states_by_id, sid),
                 )
+
+        if model.edge_invariants:  # off by default: recomputes successors only when edge invariants exist
+            for aname, nxt in _successors(source, canon, state):
+                for iname, einv in model.edge_invariants.items():
+                    everdict = einv(state, aname, nxt)
+                    if not (isinstance(everdict, str) or not everdict):
+                        continue  # holds
+                    ereason = everdict if isinstance(everdict, str) else None
+                    ekey = ("edge-invariant", bucket(iname, ereason))  # namespaced so it never collides
+                    if ekey not in found:
+                        found[ekey] = Result(
+                            ok=False, states_explored=len(seen), kind="edge-invariant", invariant=iname,
+                            reason=ereason or None,
+                            trace=(*_trace_to(parent, states_by_id, sid), Step(action=aname, state=nxt)),
+                        )
 
         fired, truncated = _expand(state, sid, source, canon, ident, seen, parent, states_by_id, frontier, max_states)
         if not fired and not model.terminal(state) and _DEADLOCK not in found:

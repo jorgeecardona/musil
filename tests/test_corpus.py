@@ -27,6 +27,7 @@ from musil import (
     assert_ok,
     assert_violates,
     check,
+    check_all,
     check_liveness,
     check_liveness_of,
     check_ltl,
@@ -737,3 +738,25 @@ def test_fairness_by_tag_matches_explicit_and_validates_names():
     # A fairness name matching no action is an error (the rename/typo hazard), not silently ignored.
     with pytest.raises(ValueError, match="match no action"):
         check_liveness(m, goal=at_goal, fair_strong=("typo_finish",))
+
+
+def test_check_all_reports_edge_and_state_violations_together():
+    # check_all (the all-violations audit) must not silently ignore edge invariants. This model breaks a
+    # STATE invariant (corrupt -> "bad") and an EDGE invariant (force_publish); the audit reports BOTH, each
+    # with its shortest trace, and they never collide in the bucketing.
+    m: Model[Doc] = Model(
+        init=Doc("draft"),
+        actions=[
+            Action("review", enabled=lambda s: s.stage == "draft", apply=lambda s: Doc("reviewed")),
+            Action("publish", enabled=lambda s: s.stage == "reviewed", apply=lambda s: Doc("published")),
+            Action("force_publish", enabled=lambda s: s.stage == "draft", apply=lambda s: Doc("published")),
+            Action("corrupt", enabled=lambda s: s.stage == "draft", apply=lambda s: Doc("bad")),
+        ],
+        invariants={"known-stage": lambda s: s.stage in ("draft", "reviewed", "published")},
+        edge_invariants={"no-force-publish": never("force_publish")},
+        terminal=lambda s: s.stage in ("published", "bad"),
+    )
+    kinds = {(r.kind, r.invariant) for r in check_all(m)}
+    assert ("edge-invariant", "no-force-publish") in kinds
+    assert ("invariant", "known-stage") in kinds
+    assert len(kinds) == 2
