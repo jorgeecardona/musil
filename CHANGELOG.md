@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Examples — Needham-Schroeder + Lowe's attack (a checker finding a famous security bug)
+
+- `examples/needham_schroeder.py`: model checking's most cited success. `check` on the original
+  Needham-Schroeder public-key protocol returns a counterexample whose trace *is* Gavin Lowe's 1995
+  man-in-the-middle attack (an authentication-invariant violation); `check` on Lowe's fix (message 2 names
+  the responder) is clean. The build follows the previous tick's design note: the intruder's knowledge is the
+  network (no separate message pool to explode), giving a bounded, sound Dolev-Yao intruder in **46 reachable
+  states**. Corpus pins both verdicts — attack found on the original, clean on the fix — the differential that
+  validates the model. This retires the deferral recorded in `NEEDHAM_SCHROEDER_NOTES.md`.
+
 ### Docs — Needham-Schroeder + Lowe's attack: vetted design note (build deferred one tick)
 
 - `src/musil/NEEDHAM_SCHROEDER_NOTES.md` records the full model for demonstrating Gavin Lowe's 1995

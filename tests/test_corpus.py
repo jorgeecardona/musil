@@ -1255,6 +1255,85 @@ def test_river_crossing_goal_is_reachable_in_seven_crossings():
 
 
 # --------------------------------------------------------------------------------------------------
+# 11c. Needham-Schroeder + Lowe's attack — check finds the MITM as a safety violation; the fix is clean
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class NSMsg:
+    tag: int
+    payload: tuple[str, ...]
+    enc: str
+
+
+@dataclass(frozen=True)
+class NSWorld:
+    seen: frozenset[NSMsg]
+    known: frozenset[str]
+    a_step: int = 0
+    a_partner: str = ""
+    b_step: int = 0
+    b_partner: str = ""
+
+
+def ns_model(*, fixed: bool) -> Model[NSWorld]:
+    # The intruder's knowledge IS the network: `seen` holds the (<=3) ciphertexts honest agents send, `known`
+    # the atoms it has derived (ids public; nonces only by decrypting messages sent to I). It can deliver a
+    # message if it can replay a seen ciphertext or fabricate one from known atoms. A bounded, sound Dolev-Yao
+    # intruder (46 reachable states). See src/musil/NEEDHAM_SCHROEDER_NOTES.md.
+    ids, nonces = ("A", "B", "I"), ("Na", "Nb", "Ni")
+
+    def producible(w: NSWorld, m: NSMsg) -> bool:
+        return m in w.seen or set(m.payload) <= w.known
+
+    def send(w: NSWorld, m: NSMsg) -> NSWorld:
+        known = w.known | set(m.payload) if m.enc == "I" else w.known
+        return replace(w, seen=w.seen | {m}, known=known)
+
+    def a_init(resp: str) -> Action[NSWorld]:
+        return Action(f"A_init_{resp}", enabled=lambda w: w.a_step == 0,
+                      apply=lambda w: replace(send(w, NSMsg(1, ("A", "Na"), resp)), a_step=1, a_partner=resp))
+
+    def b_respond(sender: str, nonce: str) -> Action[NSWorld]:
+        def apply(w: NSWorld) -> NSWorld:
+            payload = (nonce, "Nb", "B") if fixed else (nonce, "Nb")  # Lowe's fix: B names itself
+            return replace(send(w, NSMsg(2, payload, sender)), b_step=1, b_partner=sender)
+        return Action(f"B_resp_{sender}_{nonce}",
+                      enabled=lambda w: w.b_step == 0 and producible(w, NSMsg(1, (sender, nonce), "B")), apply=apply)
+
+    def a_complete(nb: str, resp: str) -> Action[NSWorld]:
+        def enabled(w: NSWorld) -> bool:
+            if w.a_step != 1:
+                return False
+            if fixed:
+                return resp == w.a_partner and producible(w, NSMsg(2, ("Na", nb, resp), "A"))
+            return producible(w, NSMsg(2, ("Na", nb), "A"))
+        return Action(f"A_comp_{nb}_{resp}", enabled=enabled,
+                      apply=lambda w: replace(send(w, NSMsg(3, (nb,), w.a_partner)), a_step=2))
+
+    actions: list[Action[NSWorld]] = [a_init("B"), a_init("I")]
+    actions += [b_respond(s, n) for s in ids for n in nonces]
+    actions += ([a_complete(nb, r) for nb in nonces for r in ids] if fixed else [a_complete(nb, "A") for nb in nonces])
+    actions.append(Action("B_comp", enabled=lambda w: w.b_step == 1 and producible(w, NSMsg(3, ("Nb",), "B")),
+                          apply=lambda w: replace(w, b_step=2)))
+    auth: Callable[[NSWorld], bool] = lambda w: not (w.b_step == 2 and w.b_partner == "A" and w.a_partner != "B")  # noqa: E731
+    return Model(init=NSWorld(seen=frozenset(), known=frozenset(ids) | {"Ni"}),
+                 actions=actions, invariants={"authentication": auth}, terminal=lambda w: True)
+
+
+def test_needham_schroeder_lowe_attack_found_and_fix_is_clean():
+    # The famous 1995 result: the original protocol has a man-in-the-middle attack that check finds as an
+    # authentication-invariant violation, and Lowe's fix (message 2 names the responder) removes it. Both
+    # verdicts are known independent of musil; this guards the safety checker + counterexample on a real bug.
+    broken = check(ns_model(fixed=False))
+    assert not broken.ok and broken.invariant == "authentication"
+    end = broken.trace[-1].state
+    assert end.b_step == 2 and end.b_partner == "A" and end.a_partner == "I"  # B fooled; A actually ran with I
+    assert "Nb" in end.known  # the intruder learned B's secret nonce
+    assert check(ns_model(fixed=True)).ok  # the fix is clean
+
+
+# --------------------------------------------------------------------------------------------------
 # 12. Negative-side assertion helpers — action_names / witness / assert_violates / truncated (#32)
 # --------------------------------------------------------------------------------------------------
 

@@ -103,6 +103,7 @@ nav:
       - Bank transfer: examples/bank_transfer.md
       - Vote tallying: examples/voting_tally.md
     - Distributed protocols:
+      - Needham-Schroeder + Lowe's attack: examples/needham_schroeder.md
       - Reconciliation under loss: examples/route_delivery.md
       - Partition + heal: examples/partition_heal.md
       - Alternating Bit Protocol: examples/alternating_bit.md
