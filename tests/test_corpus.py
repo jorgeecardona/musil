@@ -25,6 +25,7 @@ from musil import (
     LastAction,
     Model,
     Next,
+    Release,
     Result,
     Until,
     action_taken,
@@ -250,6 +251,45 @@ def test_traffic_light_ltl_via_check_ltl():
     assert check_ltl(m, Next(green)).ok
     assert not check_ltl(m, Next(red)).ok
     assert check_ltl(m, Until(known, green)).ok
+
+
+def _assert_engine_F_GF_agree[S: Hashable](m: Model[S], name: str, p: Callable[[S], bool]) -> None:
+    # Force F and GF through the GENERAL Büchi engine and compare to their reducible forms (which route to the
+    # proven check_liveness). F p == (true U p); GF p == G(true U p). These agree even on deadlocking models
+    # (the engine stutter-extends the trapped run exactly as check_liveness treats it).
+    a: LTL[S] = Atom(name, p)
+    always_true: LTL[S] = Atom[S]("true", lambda _s: True)
+    assert check_ltl(m, Until(always_true, a)).ok == check_ltl(m, Eventually(a)).ok  # F p
+    assert check_ltl(m, Always(Until(always_true, a))).ok == check_ltl(m, Always(Eventually(a))).ok  # GF p
+
+
+def _assert_engine_G_agrees[S: Hashable](m: Model[S], name: str, p: Callable[[S], bool]) -> None:
+    # G p == (false R p) through the engine vs the reduction Always(p) -> check. Only valid on DEADLOCK-FREE
+    # models: on a deadlocking model check reports the deadlock as a violation so the reduction says False,
+    # while the engine's stutter-extended G ignores it -- a known inconsistency, see LTL_NOTES.md.
+    a: LTL[S] = Atom(name, p)
+    never: LTL[S] = Atom[S]("false", lambda _s: False)
+    assert check_ltl(m, Release(never, a)).ok == check_ltl(m, Always(a)).ok
+
+
+def test_ltl_general_engine_agrees_with_the_reductions():
+    # The general Büchi engine (GPVW + nested-DFS + lasso -- the most complex LTL code) must agree with the
+    # proven check / check_liveness reductions on the reducible fragment. A disagreement is a soundness bug in
+    # the engine; this is the corpus's differential-oracle role (also for any future native port).
+    def both[S: Hashable](m: Model[S], name: str, p: Callable[[S], bool]) -> None:
+        _assert_engine_F_GF_agree(m, name, p)
+        _assert_engine_G_agrees(m, name, p)  # G is only differential-safe on deadlock-free models
+
+    both(light_model(), "green", lambda s: s.color == "green")
+    both(light_model(), "blue", lambda s: s.color == "blue")  # never holds
+    both(counter_model(5), "zero", lambda s: s.n == 0)
+    both(counter_model(5), "at3", lambda s: s.n == 3)
+    both(peterson_model(), "crit0", lambda s: s.pc[0] == "crit")
+    # A DEADLOCKING model: F and GF still agree (stutter-extension matches check_liveness on the trapped run).
+    # G is EXCLUDED here -- Always(p) -> check reports the deadlock, so it disagrees with the engine (a known
+    # semantic inconsistency documented in LTL_NOTES.md, not yet resolved).
+    _assert_engine_F_GF_agree(dining_naive_model(), "eat0", lambda s: s.pc[0] == "eating")
+    _assert_engine_F_GF_agree(dining_naive_model(), "always", lambda s: True)
 
 
 @dataclass(frozen=True)

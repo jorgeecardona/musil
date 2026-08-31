@@ -2,6 +2,20 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Hardening — LTL engine-vs-reduction differential, and a documented `G`-on-deadlock inconsistency
+
+- New corpus differential `test_ltl_general_engine_agrees_with_the_reductions`: forces `F` / `G` / `GF`
+  through the general Büchi engine (`true U p`, `false R p`, `G(true U p)`) and checks they match the proven
+  `check` / `check_liveness` reductions on classic models — the cross-check `LTL_NOTES.md` had called for,
+  strengthening the corpus's differential-oracle role (also for a future native port).
+- The differential surfaced a real inconsistency: on a DEADLOCKING model, `check_ltl(Always(p))` reduces to
+  `check`, which reports the deadlock as a violation, so it returns False even when `p` holds everywhere —
+  while the engine's stutter-extended `G p` (via `false R p`) returns True. So the semantically-equal formulas
+  `Always(p)` and `false R p` disagree on deadlocking models. `F`/`GF` are unaffected. Documented in
+  `LTL_NOTES.md` (KNOWN INCONSISTENCY) with the fix as a maintainer semantics decision (recommend: reduce
+  `Always(p)` to a pure invariant sweep with no deadlock detection, so equal formulas get equal verdicts);
+  the differential excludes `G` on the deadlocking model until it is resolved. No behaviour change yet.
+
 ### Added — `long_run_probability_mdp`: MDP steady-state fraction of time (fills the DTMC/MDP symmetry)
 
 - `long_run_probability_mdp(model, target, moves=..., optimize="max"|"min")` returns the exact max/min long-run
