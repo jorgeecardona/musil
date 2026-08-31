@@ -2,6 +2,17 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — Needham-Schroeder + Lowe's attack: vetted design note (build deferred one tick)
+
+- `src/musil/NEEDHAM_SCHROEDER_NOTES.md` records the full model for demonstrating Gavin Lowe's 1995
+  man-in-the-middle attack on the Needham-Schroeder public-key protocol as a safety-invariant counterexample:
+  the state representation, the honest and Dolev-Yao intruder actions, the authentication invariant, the
+  six-message attack trace, a soundness argument (the violation is reachable only via the real attack), and the
+  broken→attack / fixed→clean differential that validates it. Deferred one increment on a measured finding: the
+  naive persistent-network intruder explodes (a prototype truncated at 200k states before the responder's
+  actions were added), so the build needs a bounded-but-sound intruder (typed fabrication + consume-on-read)
+  prototyped under `max_states` first. Consistent with the enumeration limitation.
+
 ### Examples — River crossing (planning by reachability)
 
 - `examples/river_crossing.py`: the wolf/goat/cabbage puzzle, solved by using the checker as a PLANNER. Every
