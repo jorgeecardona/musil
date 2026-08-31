@@ -4,6 +4,16 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `examples/availability.py`: the steady-state / until / MDP-cost probabilistic answers, worked
+
+- A worked example for the three most recently shipped probabilistic capabilities, which had no example
+  (closing the "shipped features go unadopted" gap directly): `long_run_probability` (steady-state
+  availability of a service that cycles HEALTHY/DEGRADED/FAILED forever — `π(healthy) = 4/7`),
+  `reach_probability(..., avoid=...)` (the until-probability of FAILING before recovering — 1/2, vs plain
+  reachability 1), and `expected_reward_mdp` min/max (a STAGED vs DIRECT recovery strategy — min cost 2, max
+  3). Every answer is an exact `Fraction` matching a hand-computed closed form; the example asserts them and a
+  subprocess test pins them. `docs/examples/availability.md` renders the scenario. No new library code.
+
 ### Added — constrained (until) reachability: `avoid=` on `reach_probability` / `reach_probability_mdp`
 
 - The exact probability of the until property `P(¬avoid U target)` — reaching the target WITHOUT first
