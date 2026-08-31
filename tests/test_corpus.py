@@ -624,6 +624,38 @@ def test_constrained_reachability_mdp_min_max_with_avoid():
     assert reach_probability_mdp(m, _is("win"), moves=moves, optimize="max", avoid=_is("zero")) == Fraction(1)
 
 
+def test_negative_weight_is_rejected_across_probabilistic_functions():
+    # Weights are relative likelihoods normalised into a probability distribution; a negative one is never
+    # meaningful and would otherwise silently produce a bogus 'probability' (a spurious 0 here). Every entry
+    # point rejects it rather than returning a wrong quantitative answer.
+    m: Model[Chain] = Model(
+        init=Chain("a"),
+        actions=[
+            Action("win", enabled=_is("a"), apply=lambda s: Chain("win")),
+            Action("loop", enabled=_is("a"), apply=lambda s: Chain("a")),
+        ],
+        terminal=_is("win"),
+    )
+
+    def bad(name: str, _s: Chain) -> int:
+        return -1 if name == "loop" else 1
+
+    def one_move(_s: Chain, enabled: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
+        return [list(enabled)]
+
+    win = _is("win")
+    calls = (
+        lambda: reach_probability(m, win, weight=bad),
+        lambda: expected_reward(m, win, weight=bad),
+        lambda: reach_probability_mdp(m, win, moves=one_move, weight=bad),
+        lambda: expected_reward_mdp(m, win, moves=one_move, weight=bad),
+        lambda: long_run_probability(m, win, weight=bad),
+    )
+    for call in calls:
+        with pytest.raises(ValueError, match="weight must be non-negative"):
+            call()
+
+
 def test_profile_explores_the_same_reachable_set():
     # profile keeps its own instrumented loop (it times enabled/apply/canonicalize separately, which the
     # shared _successors kernel bundles). This pins its full-sweep reachable count to the corpus so it can

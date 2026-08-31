@@ -47,6 +47,17 @@ def _uniform(_name: str, _s: object) -> int:
     return 1
 
 
+def _weight_of[S](weight: Callable[[str, S], Fraction | int], name: str, state: S) -> Fraction:
+    """One action's weight as a NON-NEGATIVE ``Fraction``. Weights are relative likelihoods that normalise
+    into a probability distribution over successors, so a negative weight is never meaningful — it would
+    otherwise silently produce a bogus 'probability' (negative, or >1, or a spurious 0 when the weights sum to
+    zero). Raising here turns that into a clear error rather than a wrong quantitative answer."""
+    wt = Fraction(weight(name, state))
+    if wt < 0:
+        raise ValueError(f"probabilistic weight must be non-negative, but weight({name!r}, ...) = {wt}")
+    return wt
+
+
 def _solve_linear(matrix: list[list[Fraction]], rhs: list[Fraction]) -> list[Fraction]:
     """Solve ``matrix @ x = rhs`` exactly by Gauss-Jordan elimination over the rationals. ``matrix`` is
     square and non-singular here (it is ``I - P`` restricted to the states that can, but have not yet,
@@ -120,7 +131,7 @@ def _normalize[S: Hashable](
 ) -> _Dist[S]:
     """Turn ``(action_name, successor)`` contributions at ``state`` into a normalized distribution, summing
     the weight of edges that land on the same successor. Zero total weight -> empty (absorbing)."""
-    pairs = [(Fraction(weight(name, state)), nxt) for name, nxt in contributions]
+    pairs = [(_weight_of(weight, name, state), nxt) for name, nxt in contributions]
     total = sum((wt for wt, _ in pairs), Fraction(0))
     if total == 0:
         return []
@@ -144,8 +155,10 @@ def reach_probability[S: Hashable](
 
     At each state the enabled actions' ``weight(action_name, state)`` values are normalised into a
     probability distribution over the successors (edges to the same successor sum); the default weight is
-    ``1`` for every action, i.e. a uniform choice. States must be HASHABLE (the graph is explored). Returns
-    a ``fractions.Fraction`` — exact, no floating point.
+    ``1`` for every action, i.e. a uniform choice. A weight must be NON-NEGATIVE — a negative one raises
+    ``ValueError`` rather than silently producing a bogus probability (this holds for every function here that
+    takes a ``weight``). States must be HASHABLE (the graph is explored). Returns a ``fractions.Fraction`` —
+    exact, no floating point.
 
     ``avoid`` gives the CONSTRAINED (until) probability ``P(¬avoid U target)``: the probability of reaching
     ``target`` WITHOUT first entering an ``avoid`` state. An ``avoid`` state that is not itself a ``target``
@@ -219,9 +232,9 @@ def expected_reward[S: Hashable](
         i = index[s]
         a[i][i] = Fraction(1)
         edges = graph.edges.get(s, ())
-        total = sum(Fraction(w(name, s)) for name, _ in edges)
+        total = sum((_weight_of(w, name, s) for name, _ in edges), Fraction(0))
         for name, nxt in edges:
-            p = Fraction(w(name, s)) / total
+            p = _weight_of(w, name, s) / total
             b[i] += p * Fraction(c(name, s))  # expected immediate cost of this transition
             if not target(nxt):
                 a[i][index[nxt]] -= p
@@ -496,12 +509,12 @@ def expected_reward_mdp[S: Hashable](
         state_costs: list[Fraction] = []
         for group in moves(s, enabled):
             members = [a for a in group if a.name in by_name]
-            total = sum((Fraction(w(a.name, s)) for a in members), Fraction(0))
+            total = sum((_weight_of(w, a.name, s) for a in members), Fraction(0))
             acc: dict[S, Fraction] = {}
             move_cost = Fraction(0)
             if total != 0:
                 for a in members:
-                    p = Fraction(w(a.name, s)) / total
+                    p = _weight_of(w, a.name, s) / total
                     acc[by_name[a.name]] = acc.get(by_name[a.name], Fraction(0)) + p
                     move_cost += p * Fraction(c(a.name, s))
             state_moves.append([(p, t) for t, p in acc.items()])

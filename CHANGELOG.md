@@ -4,6 +4,15 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Fixed — probabilistic weights: reject a negative weight instead of returning a bogus probability
+
+- A negative `weight` silently produced a wrong answer: the weights are normalised into a probability
+  distribution, so a negative one yields a negative or `>1` "probability", or a spurious `0` when the weights
+  sum to zero (e.g. `reach_probability(..., weight=w)` returned `0` with no error). Every entry point that
+  takes a `weight` — `reach_probability`, `reach_probability_mdp`, `expected_reward`, `expected_reward_mdp`,
+  `long_run_probability` — now raises `ValueError` on a negative weight, via a shared `_weight_of` guard at
+  the single normalization point. Corpus pins that all five reject a negative weight.
+
 ### Added — `examples/availability.py`: the steady-state / until / MDP-cost probabilistic answers, worked
 
 - A worked example for the three most recently shipped probabilistic capabilities, which had no example
