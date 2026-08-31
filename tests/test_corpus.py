@@ -515,6 +515,56 @@ def test_mdp_max_and_min_reachability_pick_opposite_coins():
 
 
 # --------------------------------------------------------------------------------------------------
+# 6b. Monty Hall — switching wins 2/3, staying 1/3 (two fixed-policy DTMCs), the famous exact result
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Doors:
+    car: int = 0  # 0 until placed
+    opened: int = 0  # 0 until the host opens a goat
+    final: int = 0  # 0 until the player decides
+
+
+def monty_model(*, switch: bool) -> Model[Doors]:
+    # Player's pick fixed at door 1. Car uniform (three equal actions); host opens a goat != pick, != car
+    # (two equal actions when the pick hides the car, one otherwise); the strategy is baked into the model,
+    # so it cannot observe the car -- a fully-observable MDP policy could, which is exactly why Monty Hall is
+    # a DTMC per policy, not an MDP.
+    def place(d: int) -> Action[Doors]:
+        return Action(f"car{d}", enabled=lambda s: s.car == 0, apply=lambda s: Doors(car=d))
+
+    def open_goat(o: int) -> Action[Doors]:
+        return Action(
+            f"open{o}",
+            enabled=lambda s: s.car != 0 and s.opened == 0 and o != s.car,
+            apply=lambda s: Doors(car=s.car, opened=o),
+        )
+
+    def decide(s: Doors) -> Doors:
+        return Doors(car=s.car, opened=s.opened, final=(5 - s.opened) if switch else 1)
+
+    return Model(
+        init=Doors(),
+        actions=[
+            place(1), place(2), place(3), open_goat(2), open_goat(3),
+            Action("decide", enabled=lambda s: s.opened != 0 and s.final == 0, apply=decide),
+        ],
+        terminal=lambda s: s.final != 0,
+    )
+
+
+def test_monty_hall_switch_wins_two_thirds():
+    # Theory: switching wins iff your first pick (door 1) hid a goat, which is 2/3; staying wins iff it hid
+    # the car, 1/3. Pinned as a known-verdict oracle for the exact DTMC solver, independent of musil.
+    def won(s: Doors) -> bool:
+        return s.final != 0 and s.final == s.car
+
+    assert reach_probability(monty_model(switch=False), won) == Fraction(1, 3)
+    assert reach_probability(monty_model(switch=True), won) == Fraction(2, 3)
+
+
+# --------------------------------------------------------------------------------------------------
 # 7. Step-bounded reachability — geometric law P(reach within k) = 1 - (1/2)^k, known exactly
 # --------------------------------------------------------------------------------------------------
 

@@ -113,6 +113,7 @@ nav:
     - Temporal logic:
       - Arbiter fairness: examples/arbiter_fairness.md
     - Probabilistic:
+      - Monty Hall (exact 2/3): examples/monty_hall.md
       - Availability + recovery cost: examples/availability.md
       - Server utilisation (reward rates): examples/server_utilization.md
     - Scaling:

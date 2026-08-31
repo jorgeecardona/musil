@@ -2,6 +2,26 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Examples — Monty Hall (the exact 2/3 result)
+
+- `examples/monty_hall.py`: the famous switch-vs-stay problem as **two fixed-policy DTMCs**, deriving
+  `P(win | switch) = Fraction(2, 3)` and `P(win | stay) = Fraction(1, 3)` exactly (no sampling, no floating
+  point). A deliberate modelling note: it is a DTMC per strategy, not an MDP, because musil's MDP policies are
+  state-based and the state carries the car's position — a fully-observable scheduler could "see" the car and
+  win with probability 1, but the real player cannot, so the strategy is fixed in the model's structure. All
+  branching is uniform, so no `weight` function is needed. Corpus pins both closed forms; the docs page uses
+  the new Material features (content tabs, code annotations, a collapsible derivation).
+
+### Docs — modern Material features, and a `check_inductive` note in Limitations
+
+- Enabled a curated set of Material for MkDocs features (instant navigation, code annotations, linked content
+  tabs, collapsible `details`, richer inline formatting) — all shipped with `mkdocs-material`, no new
+  dependency. `mkdocs build --strict` stays green.
+- The README **Limitations** section now notes the one escape hatch on the *depth* axis: `check_inductive`
+  proves an invariant by k-induction so a pass holds at unbounded depth, but it still enumerates a bounded
+  `domain`, so an infinite value domain or an unbounded number of components still needs a symbolic solver. It
+  moves the bound from depth to state variables; it does not remove it.
+
 ### Added — `assert_probability`: the quantitative test-assertion helper
 
 - `assert_probability(actual, equals=/at_least=/at_most=, label=...)` asserts an exact probability or expected

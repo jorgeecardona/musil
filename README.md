@@ -278,7 +278,11 @@ deadlocks / stuck states and proving convergence.
 - **It enumerates states**, so it's for bounded models — a finite, not-too-large number of
   reachable states. Very large or infinite state spaces blow up (cap with `max_states`; the result
   flags `truncated`). Tools that reason symbolically instead of enumerating (TLA+'s Apalache, etc.)
-  scale further.
+  scale further. One escape hatch, on the *depth* axis: `check_inductive` proves an invariant by
+  k-induction over the transition relation, so a pass holds at unbounded depth (every reachable
+  state, not just the explored scope) — but it still enumerates a bounded `domain` of candidate
+  states, so an infinite value domain or an unbounded number of components still needs a symbolic
+  solver. It moves the bound from *depth* to *state variables*, it doesn't remove it.
 - **Exact search by design, never approximate.** A clean `check` is a proof that the *whole* reachable space
   was swept. musil deliberately has no approximate-search mode (SPIN's supertrace / bitstate hash-compaction):
   those trade a nonzero chance of missing a state for reaching larger spaces, and a checker whose "OK" might
