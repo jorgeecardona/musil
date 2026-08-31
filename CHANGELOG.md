@@ -4,6 +4,16 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `examples/distributed_kit.py`: the reconciler + fault kit, worked end to end
+
+- A worked example of the distributed-systems builders (`reconciler`, `crash_actions`) that most models
+  reach for, addressing the recurring "shipped features go unadopted" finding directly. Two verifiable
+  halves: (1) a controller whose `[]<>converged` HOLDS under a fair reconcile even as an unfair `glitch`
+  fault keeps resetting it, and FAILS with `fair=()` (the fault can starve reconcile forever) — showing the
+  fair-ours / unfair-faults discipline is what carries convergence; (2) a 3-node cluster whose quorum
+  invariant survives a crash `budget=1` but breaks at `budget=2`. The example asserts both verdicts; a
+  subprocess test pins them. No new library code.
+
 ### Added — `musil.doctor.scan`: spot hand-rolled patterns a shipped API already covers (#36)
 
 - `scan(source) -> list[Finding]` reads Python source with the standard-library `ast` (dependency-free, and
