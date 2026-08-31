@@ -20,7 +20,15 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   workflow models write while citing the zero-drift docs. Corpus pins a two-entry ledger: 2 entries × 2
   edges = 4 actions, 9 reachable states, and the `effect` keeps `balance == count of posted entries` (a
   cross-instance invariant). Gap #4 of the issue (the illegal-firing ghost flag) is already covered by the
-  edge invariants added earlier; `assert_covers_table` (a zero-drift table-coverage check) is a follow-up.
+  edge invariants added earlier.
+- `assert_covers_table(model, table, get=)` checks the zero-drift claim mechanically, replacing the
+  hand-rolled action-name test: over the reachable space, every step that changes the status must go to a
+  `dst` declared in `table[src]`, so the model can never make a transition the table forbids. It raises
+  `AssertionError` listing any undeclared `src -> dst` found. It checks CONFORMANCE (no forbidden
+  transition), not completeness — a declared edge may be legitimately unreachable or held off by an `also`
+  guard, so "every table edge is exercised" is left to the caller (`declared_states` / `terminal_states`
+  help). Corpus pins that a table-built ledger conforms and that a hand-written `draft -> closed` skip is
+  caught.
 
 ### Added — `musil.faults`: explicit-state crash/revive and partition/heal faults (#29)
 

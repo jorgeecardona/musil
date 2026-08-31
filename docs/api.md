@@ -70,7 +70,9 @@ Build a model straight from an allowed-transitions table, so it can't drift from
 carry an `effect(state, src, dst)` (side effects on other fields) and an `also(state)` extra guard beyond
 the table. `replicated_transition_actions` runs N copies of one table — one machine per instance, over a
 FLAT state (per-instance `get`/`set_status` projections) — so a system of interchangeable entities keeps
-cross-instance invariants expressible, where `compose`'s tuple state would not.
+cross-instance invariants expressible, where `compose`'s tuple state would not. `assert_covers_table`
+checks the zero-drift claim mechanically: over the reachable space, every status change conforms to the
+table (no transition the table forbids), so musil verifies it instead of a hand-rolled action-name test.
 
 ::: musil.fsm
 

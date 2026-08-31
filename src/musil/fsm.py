@@ -13,7 +13,7 @@ from collections.abc import Callable, Hashable, Iterable, Mapping, Set
 from dataclasses import replace
 from typing import Any
 
-from musil.core import Action
+from musil.core import Action, Model, explore
 
 # A transition table: from_state -> the set of states it may move to. Matches the shape of a typical
 # `ALLOWED[entity]` map. Values may be any set/frozenset/collection of strings.
@@ -180,3 +180,39 @@ def terminal_states(table: Table) -> set[str]:
     target that's never a source). Use to build a model's ``terminal`` predicate so a legitimate
     resting/sink state isn't reported as a deadlock."""
     return {s for s in declared_states(table) if not table.get(s)}
+
+
+def assert_covers_table[S: Hashable](
+    model: Model[S],
+    table: Table,
+    *,
+    get: Callable[[S], str],
+    max_states: int = 1_000_000,
+    message: str | None = None,
+) -> None:
+    """Assert the model CONFORMS to the transition ``table`` — the zero-drift claim checked by musil instead
+    of a hand-rolled action-name test.
+
+    Over the whole reachable space, every step that CHANGES the status (read by ``get``) must go from ``src``
+    to some ``dst`` in ``table[src]``: the model never makes a transition the table forbids. Actions built by
+    ``transition_actions`` / ``replicated_transition_actions`` cannot drift ABOVE the table by construction,
+    so this catches hand-written actions, a stale table, or an ``effect`` that produces an undeclared status
+    change. Raises ``AssertionError`` listing every undeclared ``(src -> dst)`` status transition found.
+
+    This checks CONFORMANCE (no forbidden transition), not completeness — a declared edge may be legitimately
+    unreachable or held off by an extra guard, so "every table edge is exercised" is left to the caller (who
+    knows which edges must be reachable); ``declared_states`` / ``terminal_states`` help build that check.
+    ``get`` is the same status projection you pass to ``transition_actions``."""
+    __tracebackhide__ = True
+    graph = explore(model, max_states=max_states)
+    undeclared: set[tuple[str, str]] = set()
+    for s in graph.states:
+        src = get(s)
+        for _name, nxt in graph.edges.get(s, ()):
+            dst = get(nxt)
+            if src != dst and dst not in table.get(src, frozenset()):
+                undeclared.add((src, dst))
+    if undeclared:
+        listing = ", ".join(f"{a} -> {b}" for a, b in sorted(undeclared))
+        head = f"model makes status transitions not declared in the table: {listing}"
+        raise AssertionError(f"{message}\n{head}" if message else head)

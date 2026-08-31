@@ -24,6 +24,7 @@ from musil import (
     Next,
     Result,
     Until,
+    assert_covers_table,
     assert_ok,
     assert_violates,
     check,
@@ -903,3 +904,28 @@ def test_replicated_transition_actions_flat_state_with_effects_and_guards():
     # side-effect keeps the cross-instance invariant, so the model is correct.
     assert len(explore(m).states) == 9
     assert check(m).ok
+
+
+def _entry0(s: Ledger) -> str:
+    return s.status[0]
+
+
+def _entry1(s: Ledger) -> str:
+    return s.status[1]
+
+
+def _skip0(s: Ledger) -> Ledger:
+    return replace(s, status=("closed", s.status[1]))
+
+
+def test_assert_covers_table_catches_undeclared_transitions():
+    # The table-built ledger conforms: each entry's status only ever moves along the declared edges.
+    m = ledger_model()
+    assert_covers_table(m, _LEDGER_TABLE, get=_entry0)
+    assert_covers_table(m, _LEDGER_TABLE, get=_entry1)
+
+    # A hand-written extra action that skips draft -> closed on entry 0 drifts ABOVE the table.
+    extra: Action[Ledger] = Action("0:skip", enabled=lambda s: s.status[0] == "draft", apply=_skip0)
+    bad: Model[Ledger] = replace(m, actions=[*m.actions, extra])
+    with pytest.raises(AssertionError, match="draft -> closed"):
+        assert_covers_table(bad, _LEDGER_TABLE, get=_entry0)

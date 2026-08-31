@@ -80,6 +80,7 @@ from musil.env import (
 )
 from musil.faults import crash_actions, partition_actions
 from musil.fsm import (
+    assert_covers_table,
     declared_states,
     multi_status_field_actions,
     protocol_actions,
@@ -220,6 +221,7 @@ __all__ = [
     "always",
     "areplay",
     "as_regression_test",
+    "assert_covers_table",
     "assert_ok",
     "assert_violates",
     "bounded_clock",
