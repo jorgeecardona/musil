@@ -2,6 +2,17 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `GeneralizedBuchi.degeneralize()` (generalized Büchi → single-set Büchi)
+
+- `GeneralizedBuchi.degeneralize() -> Buchi` implements the standard counter construction: one copy of the
+  automaton per acceptance set, advancing the counter when the current copy's set is visited, accepting in copy
+  0's set. It recognises the same ω-language — `degeneralize().has_accepting_run(g) == has_accepting_run(g)` for
+  every model — so a run visits the single accepting set infinitely often iff it visits every generalized set
+  infinitely often. With no acceptance sets, every infinite run accepts. This is **piece 1** of the general
+  probabilistic-LTL (LDBA) engine planned in `GENERAL_PLTL_NOTES.md` — a pure automata transformation, no
+  probability yet. Corpus pins language preservation on a toggling model for k=1 and k=2 formulas (and their
+  negations); a random-model property test in `test_core_ltl_properties.py` guards it broadly.
+
 ### Docs — general probabilistic LTL: vetted design note (LDBA, not Safra)
 
 - `src/musil/GENERAL_PLTL_NOTES.md` records the full design for the one remaining piece of the probabilistic

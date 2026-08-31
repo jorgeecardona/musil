@@ -583,6 +583,38 @@ class GeneralizedBuchi[S: Hashable]:
         # sits at index len(stem); the cycle steps follow it.
         return tuple(steps), len(stem)
 
+    def degeneralize(self) -> Buchi[S]:
+        """The equivalent single-set :class:`Buchi` automaton, by the standard counter construction: one copy
+        of the automaton per acceptance set, advancing the counter when the current copy's acceptance set is
+        visited, and accepting in copy 0's set. A run visits ``accepting`` infinitely often iff it completes a
+        full counter cycle infinitely often iff it visits EVERY ``accepting_sets`` set infinitely often — so
+        the result recognises the same ω-language over every model: ``degeneralize().has_accepting_run(g) ==
+        has_accepting_run(g)`` for any graph ``g``. With no acceptance sets, every infinite run accepts (all
+        states accepting). This is the front-end step toward a deterministic automaton for quantitative LTL
+        (an LDBA — see ``GENERAL_PLTL_NOTES.md``)."""
+        sets = self.accepting_sets
+        k = len(sets)
+        states: set[int] = set(self.initial)
+        for q, edges in self.transitions.items():
+            states.add(q)
+            states.update(q2 for _guard, q2 in edges)
+        for acc in sets:
+            states |= acc
+        if k == 0:  # "visit each of zero sets infinitely often" is vacuous: any infinite run accepts
+            return Buchi(initial=self.initial, accepting=frozenset(states), transitions=self.transitions)
+        ids = {(q, i): n for n, (q, i) in enumerate((q, i) for q in sorted(states) for i in range(k))}
+        transitions: dict[int, tuple[tuple[Callable[[S], bool], int], ...]] = {}
+        for q in states:
+            edges = self.transitions.get(q, ())
+            for i in range(k):
+                j = (i + 1) % k if q in sets[i] else i  # advance the counter when this copy's set is visited
+                transitions[ids[(q, i)]] = tuple((guard, ids[(q2, j)]) for guard, q2 in edges)
+        return Buchi(
+            initial=frozenset(ids[(q, 0)] for q in self.initial),
+            accepting=frozenset(ids[(q, 0)] for q in sets[0]),  # F_0 in copy 0: a full cycle just completed
+            transitions=transitions,
+        )
+
     @classmethod
     def from_ltl(cls, formula: LTL[S]) -> GeneralizedBuchi[S]:
         """Build the automaton that accepts exactly the model runs satisfying ``formula``, via the GPVW

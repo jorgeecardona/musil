@@ -17,9 +17,12 @@ from dataclasses import dataclass
 from musil import (
     Action,
     Always,
+    And,
     Atom,
     Eventually,
+    GeneralizedBuchi,
     Model,
+    Not,
     Release,
     Until,
     check,
@@ -104,3 +107,24 @@ def test_ltl_engine_agrees_with_reductions_over_random_models() -> None:
             assert check_ltl(m, Until(true_atom, a)).ok == check_ltl(m, Eventually(a)).ok  # F
             assert check_ltl(m, Release(never, a)).ok == check_ltl(m, Always(a)).ok  # G
             assert check_ltl(m, Always(Until(true_atom, a))).ok == check_ltl(m, Always(Eventually(a))).ok  # GF
+
+
+def test_degeneralize_preserves_has_accepting_run_over_random_models() -> None:
+    # degeneralize() (generalized Büchi -> single-set Büchi, the counter construction) must not change the
+    # ω-language: on every random model and formula, and for the formula AND its negation, the single-set
+    # automaton's emptiness verdict equals the generalized one's. The riskiest new automata code, so guard it
+    # broadly -- it will underpin the deterministic (LDBA) engine for quantitative LTL.
+    rng = random.Random(23)
+    for _ in range(40):
+        n = rng.randint(2, 4)
+        m = _random_model(rng, n)
+        g = explore(m)
+        for _ in range(3):
+            a = Atom[St]("p", _in_ids(frozenset(i for i in range(n) if rng.random() < 0.5)))
+            b = Atom[St]("q", _in_ids(frozenset(i for i in range(n) if rng.random() < 0.5)))
+            forms = (Eventually(a), Until(a, b), Always(Eventually(a)),
+                     And(Eventually(a), Eventually(b)), And(Always(Eventually(a)), Always(Eventually(b))))
+            for phi in forms:
+                for f in (phi, Not(phi)):
+                    gba = GeneralizedBuchi[St].from_ltl(f)
+                    assert gba.degeneralize().has_accepting_run(g) == gba.has_accepting_run(g)

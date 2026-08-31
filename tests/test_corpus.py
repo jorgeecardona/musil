@@ -19,12 +19,15 @@ from musil import (
     LTL,
     Action,
     Always,
+    And,
     Atom,
     Eventually,
+    GeneralizedBuchi,
     Implies,
     LastAction,
     Model,
     Next,
+    Not,
     Release,
     Result,
     Until,
@@ -1085,6 +1088,44 @@ def test_probability_ltl_mdp_full_fragment_max_and_min():
     assert p(Next(at_a), choose, "max") == Fraction(1)
     assert p(Next(at_a), choose, "min") == Fraction(0)
     assert p(Next(at_a), coin, "max") == half and p(Next(at_a), coin, "min") == half
+
+
+def test_degeneralize_preserves_the_generalized_buchi_language():
+    # Degeneralizing a generalized Büchi automaton (k acceptance sets, each visited infinitely often) to a
+    # single-set Büchi must recognise the SAME ω-language over every model -- has_accepting_run is invariant.
+    # Checked for formulas whose GBA has one AND two acceptance sets (each Eventually/Until contributes one),
+    # for both the formula and its negation, against a toggling a<->b model. First step toward the LDBA engine.
+    @dataclass(frozen=True)
+    class Toggle:
+        v: str
+
+    m: Model[Toggle] = Model(
+        init=Toggle("a"),
+        actions=[
+            Action("toB", enabled=lambda s: s.v == "a", apply=lambda s: Toggle("b")),
+            Action("toA", enabled=lambda s: s.v == "b", apply=lambda s: Toggle("a")),
+        ],
+        terminal=lambda s: False,
+    )
+    g = explore(m)
+    a = Atom[Toggle]("a", lambda s: s.v == "a")
+    b = Atom[Toggle]("b", lambda s: s.v == "b")
+    formulas: list[LTL[Toggle]] = [
+        Eventually(a), Until(a, b), Always(Eventually(a)), Eventually(Always(a)),
+        And(Eventually(a), Eventually(b)), And(Always(Eventually(a)), Always(Eventually(b))),
+    ]
+    for phi in formulas:
+        for f in (phi, Not(phi)):
+            gba = GeneralizedBuchi[Toggle].from_ltl(f)
+            assert gba.degeneralize().has_accepting_run(g) == gba.has_accepting_run(g)
+    # A k=2 case is genuinely exercised (F a & F b has two acceptance sets, so the counter construction runs):
+    two = GeneralizedBuchi[Toggle].from_ltl(And(Eventually(a), Eventually(b)))
+    assert len(two.accepting_sets) == 2
+    # Concrete verdicts on the toggling model: GF a is satisfiable (visits a i.o.), FG a is not (never stays).
+    gf = GeneralizedBuchi[Toggle].from_ltl(Always(Eventually(a)))
+    fg = GeneralizedBuchi[Toggle].from_ltl(Eventually(Always(a)))
+    assert gf.degeneralize().has_accepting_run(g)
+    assert not fg.degeneralize().has_accepting_run(g)
 
 
 def test_bounded_expected_reward_dtmc_and_mdp():

@@ -91,8 +91,9 @@ trust. On top, corpus known-verdicts for genuinely-nesting formulas with hand-co
 
 ## Incremental build plan (each a guarded tick)
 
-1. `GeneralizedBuchi → Buchi` degeneralisation + a corpus test that the Büchi accepts the same language as the
-   generalized one on the model (qualitative, reuses the existing emptiness check).
+1. **[DONE]** `GeneralizedBuchi.degeneralize() → Buchi` — the counter construction, tested (corpus + a
+   random-model property test) that the Büchi accepts the same ω-language as the generalized one on the model
+   (qualitative, reuses the existing emptiness check). Pure automata transformation, no probability.
 2. NBA → LDBA construction, as a pure automaton transformation, tested on finite lasso words (does the LDBA
    accept exactly the NBA's ω-language on the model's label alphabet?) and checked "suitable" (accepting part
    deterministic).
