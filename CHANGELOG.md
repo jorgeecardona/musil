@@ -2,6 +2,15 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — surface coverage & vacuity in the README capability list
+
+- The README "What it checks" section gained a "coverage & vacuity" entry: `coverage` (which actions never
+  fired, were always enabled, or only ever self-looped), `invariant_coverage` (candidate-vacuous invariants
+  never put at risk), `assert_covers`, and `portfolio_coverage`. This capability — the answer to "is a green
+  check meaningful?", which resolved the filed "a green check can't say what was exercised" issue — was
+  documented in the API reference but absent from the front-page capability list. README changes reach PyPI on
+  the next version bump.
+
 ### Docs — general-PLTL engine put ON HOLD with a risk assessment (piece 1 stays shipped)
 
 - `GENERAL_PLTL_NOTES.md` gains a "Risk assessment" section. The LDBA accepting-component construction has two

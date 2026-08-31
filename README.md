@@ -157,6 +157,14 @@ an event-iteration loop whose fixed point silently depends on which pending even
 different places is fine (that's what a latch is *for*); a start with an empty set never settles at
 all, which is a liveness question, not a confluence one.
 
+**Is a green check meaningful? — coverage & vacuity** — an `OK` verdict says only that nothing broke,
+not that the model *exercised* anything. `coverage(model)` reports which actions never fired, were
+always enabled, or only ever self-looped; `invariant_coverage(model)` flags invariants that are
+*candidate-vacuous* — never once put at risk, so they would pass even if they were wrong.
+`assert_covers` fails a test whose model left such a blind spot, and `portfolio_coverage` ratchets the
+union of coverage across a whole suite of models (blind spots can only shrink). See
+`examples/coverage_vacuity.py`.
+
 **Reading results in assertions** — `print(result)` renders the verdict; in test assertions, use
 the fields (both result types are truthy exactly when `ok`):
 
