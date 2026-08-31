@@ -68,8 +68,6 @@ cabildo issues show <slug>
 |---|---|---|---|---|---|
 | [check holds every state in RAM, so the reachable space must fit in memory](12-08-2026-check-holds-every-state-in-ram-so-the-reachable-space-must-fit.md) | core | M | inspect | open | — |
 | [Decide whether musil takes an optional Hypothesis dependency before building a strategy bridge](12-08-2026-decide-whether-musil-takes-an-optional-hypothesis-dependency-before-building-a-strategy.md) | core | M | inspect | open | — |
-| [Only three fixed liveness forms; no way to state an arbitrary temporal property](12-08-2026-only-three-fixed-liveness-forms-no-way-to-state-an-arbitrary-temporal.md) | liveness | L | test | open | — |
-| [Decide whether probabilistic (DTMC/MDP) checking belongs in musil at all](12-08-2026-decide-whether-probabilistic-dtmc-mdp-checking-belongs-in-musil-at-all.md) | metrics | L | inspect | open | — |
 
-_4 open — 4 open; 5 done. Generated; edit the files, then `cabildo issues reindex`._
+_2 open — 2 open; 7 done. Generated; edit the files, then `cabildo issues reindex`._
 <!-- END GENERATED INDEX -->

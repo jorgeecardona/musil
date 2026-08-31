@@ -1,12 +1,29 @@
 ---
 title: Only three fixed liveness forms; no way to state an arbitrary temporal property
-status: open
+status: done
 area: liveness
 owner: null
 filed: 2026-08-12
+fixed_in: 8786b92
 scope: L
 verify: test
 ---
+
+## Resolved (triaged 2026-08-31)
+
+The full LTL layer landed (`musil.ltl`, `fixed_in` names the first commit; completed over subsequent
+commits). `check_ltl(model, formula)` states ANY LTL property — `Not`/`And`/`Or`/`Next`/`Until`/`Always`/
+`Eventually`/`Release`/`WeakUntil` and nesting — via GPVW → generalized Büchi → product + SCC emptiness, with a
+lasso counterexample (`--- loops forever ---`) on failure. This EXCEEDS all three cheap subsets this issue
+proposed (caller-supplied automaton / safety-LTL / a couple more seedings).
+
+Critically, the failure mode this issue named — "a half-built LTL layer that accepts formulas it silently
+mis-translates" — was avoided by construction: the general Büchi engine is differential-tested against the
+proven reductions (`F`/`G`/`GF` forced through the engine equal their reducible forms) over random models and
+random predicates (`tests/test_core_ltl_properties.py`), the exact guard this issue demanded. The three fixed
+`check_liveness` forms and fairness are untouched and still used where they apply; `patterns` are sugar over the
+same engine. `verify: test` is satisfied — properties fail with a lasso and pass after the model is fixed
+(corpus + example `ltl_properties.py`). The upstream GitLab issue (#2 item 2) can be closed.
 
 Source: gitlab.com/jorgeecardona/musil issue #2 (item 2 of four), filed 2026-08-12.
 

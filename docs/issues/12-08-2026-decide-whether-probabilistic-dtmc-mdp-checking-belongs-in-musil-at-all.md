@@ -1,12 +1,34 @@
 ---
 title: Decide whether probabilistic (DTMC/MDP) checking belongs in musil at all
-status: open
+status: done
 area: metrics
 owner: null
 filed: 2026-08-12
+fixed_in: 9318d68
 scope: L
 verify: inspect
 ---
+
+## Resolved (triaged 2026-08-31)
+
+Decision: **yes**, and built as a SEPARATE exact layer (`musil.probabilistic`, `fixed_in` names the first
+commit). The design answers every "argument against" this issue raised, because it is EXACT, not approximate:
+
+- **"A different kind of answer / numeric error."** The layer computes exact rational probabilities
+  (`fractions.Fraction`) — reachability, expected reward, steady-state, transient, and PLTL for the
+  state-predicate fragment — by exact linear solves / policy iteration, NOT value iteration to a tolerance. So a
+  probabilistic result carries NO error bound and cannot be mistaken for an approximation; it is as exact as the
+  boolean verdict. Rendering is a `Fraction` (e.g. `4/7`), unmistakably exact.
+- **"Pure-Python value iteration is slow / numpy."** No numpy, no dependency — pure-Python exact arithmetic,
+  consistent with the dependency policy. The performance accelerator is explicitly deferred to Rust-later (a
+  differential-tested optimisation), NOT numpy, so the Hypothesis-style dependency question is not reopened.
+- **"PRISM/Storm exist."** True, but a user who already has a musil `Model` adds weights rather than
+  re-expressing it; the exact core stays exact (weights are relative likelihoods normalised to exact
+  distributions; boolean `check` is untouched — the "honest shape" this issue asked for).
+
+The recorded artifacts (`verify: inspect`): CHANGELOG, README ("exact DTMC/MDP probabilities"), and
+`PROBABILISTIC_NOTES.md`. Tolerance = none (exact); numpy = not taken. The upstream GitLab issue (#2 item 3)
+can be closed.
 
 Source: gitlab.com/jorgeecardona/musil issue #2 (item 3 of four), filed 2026-08-12. Filed here as a decision, like the Hypothesis item from #1, because the cost is to what musil *is* rather than to a module.
 
