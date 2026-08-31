@@ -2,6 +2,20 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — general probabilistic LTL: vetted design note (LDBA, not Safra)
+
+- `src/musil/GENERAL_PLTL_NOTES.md` records the full design for the one remaining piece of the probabilistic
+  layer: `probability_ltl` for formulas whose operands are themselves temporal (`X(F a)`, `(F a) U b`, boolean
+  combinations). Key decision: build a **limit-deterministic Büchi automaton (LDBA)**, not a full Safra/Rabin
+  determinization — an LDBA is sound for quantitative DTMC/MDP model checking and far simpler to construct
+  in-house, reusing the GPVW front-end (`GeneralizedBuchi.from_ltl`) plus the existing BSCC / MEC
+  decompositions and the exact reachability solve. The note gives the construction (subset + breakpoint
+  suspension), the soundness argument (a *suitable* LDBA makes the product a Markov chain again, where a plain
+  NBA has no well-defined measure), a built-in differential oracle (the engine must agree with the shipped
+  reductions on the whole `F/X/G/GF/FG/U/R/W` state-predicate fragment), and an incremental each-tick-green
+  build plan. Deferred as a deliberate multi-tick effort; `probability_ltl` keeps raising `NotImplementedError`
+  outside the reducible fragment until it lands.
+
 ### Added — `probability_ltl` now supports `X p` (next), completing every operator on state predicates
 
 - `probability_ltl(model, Next(p))` is the probability `p` holds at the next step — a one-step push of the

@@ -173,9 +173,13 @@ accelerator for large linear solves, never required).
   `Release`, and `WeakUntil` of STATE predicates are shipped above (a one-step push, constrained reachability,
   and its duals); the general case is different. Unlike the qualitative engine, the quantitative
   measure needs a DETERMINISTIC automaton for the formula — the nondeterministic Büchi automaton the GPVW
-  engine builds gives the wrong probability on the DTMC product — so it needs a Rabin/Safra determinization
-  (or a limit-deterministic construction), a larger build. `probability_ltl` raises `NotImplementedError`
-  outside the reducible fragment until then.
+  engine builds gives the wrong probability on the DTMC product. The full design is in `GENERAL_PLTL_NOTES.md`:
+  build a **limit-deterministic Büchi automaton (LDBA)**, NOT a full Safra/Rabin DRA — an LDBA is sound for
+  quantitative DTMC/MDP model checking and far simpler to construct in-house, reusing the GPVW front-end plus
+  the existing BSCC/MEC decompositions and reachability solve. It has a built-in differential oracle (the
+  engine must agree with the shipped reductions on the whole state-predicate fragment) and an incremental,
+  each-tick-green build plan. `probability_ltl` raises `NotImplementedError` outside the reducible fragment
+  until then.
 - **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
   negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall or return
   a wrong finite value). `expected_reward_mdp` now GUARDS this: a zero/negative-cost step off the target on the
