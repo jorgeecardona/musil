@@ -2,6 +2,14 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Tests — every example now runs end-to-end in the gate
+
+- Added the remaining nine `test_example_*.py` (byzantine_service, cosim_master_scaling, k8s_scheduler,
+  lost_update, mutex, open_system_composed, service_lifecycle, tcas, traffic_light), each running the real
+  example as a subprocess and asserting exit 0 plus a headline output line. With the four from the previous
+  entry, **all 29 examples are now executed by the test suite** — an example can no longer lint clean but
+  crash at runtime without CI noticing.
+
 ### Tests — run the four new examples end-to-end in the gate
 
 - Added `test_example_{monty_hall,gamblers_ruin,river_crossing,needham_schroeder}.py`, each running the real
