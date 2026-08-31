@@ -252,6 +252,18 @@ of the `test_*_musil.py` files that exist. Pure stdlib (`re` + `pathlib`); never
 
 ::: musil.citations
 
+## Action history — `with_last_action`
+
+Put the action that produced a state INTO the state, so a temporal property can name WHICH action was taken.
+A plain state says where the system is, not how it got there; `with_last_action(model)` augments each state to
+`LastAction(state, action)`, so `check_ltl` / `check_liveness` can express action-sequence properties like
+"every `request` is eventually followed by a `respond`" — `G(action_taken('request') -> F
+action_taken('respond'))` — which a state-only predicate cannot say and a safety-only edge invariant cannot
+make a liveness claim about. Every model field is lifted faithfully; `action_taken(name)` is the "the last
+action was `name`" predicate.
+
+::: musil.history
+
 ## Coverage tracing — `no_trace`
 
 A context manager that pauses the current thread's trace function (coverage or any `sys.settrace`

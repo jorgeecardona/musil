@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.history.with_last_action`: temporal properties over the action sequence
+
+- `with_last_action(model)` augments each state to `LastAction(state, action)` — the original state plus the
+  name of the action that produced it (`None` at an initial state) — so `check_ltl` / `check_liveness` can
+  express properties over WHICH action was taken: "every `request` is eventually followed by a `respond`" as
+  `G(action_taken('request') -> F action_taken('respond'))`. A state-only predicate cannot say "`request` was
+  just taken", and a safety-only edge invariant cannot make a liveness claim across a run. Every model field
+  is lifted faithfully (initial states get `action=None`; actions keep their `name`/`fair` tag and record
+  themselves on apply; invariants/terminal/edge_invariants/footprint read `.state`; `actions_fn` is lifted).
+  `action_taken(name)` is the "last action was `name`" predicate. Pure stdlib.
+- Corpus pins a request/respond protocol: `G(respond -> F reset)` holds, `G(request -> F respond)` fails (the
+  timeout loop can starve a response without fairness), and the safety verdict is preserved by the
+  augmentation. `LTL_NOTES.md` records that this is the substrate for the deferred action-fairness engine
+  (the weak/strong premises become plain LTL over `action_taken`/`enabled` atoms on the augmented model).
+
 ### Fixed — probabilistic weights: reject a negative weight instead of returning a bogus probability
 
 - A negative `weight` silently produced a wrong answer: the weights are normalised into a probability

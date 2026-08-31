@@ -93,6 +93,7 @@ from musil.fsm import (
     transition_actions,
 )
 from musil.graph import to_dot
+from musil.history import LastAction, action_taken, with_last_action
 from musil.induction import InductionResult, check_inductive
 from musil.liveness import LivenessResult, check_liveness, check_liveness_of
 from musil.ltl import (
@@ -197,6 +198,7 @@ __all__ = [
     "InductionResult",
     "Invariant",
     "InvariantCoverage",
+    "LastAction",
     "LivenessResult",
     "Model",
     "ModelDiff",
@@ -228,6 +230,7 @@ __all__ = [
     "WeakUntil",
     "absent",
     "acheck_refinement",
+    "action_taken",
     "always",
     "areplay",
     "as_regression_test",
@@ -312,5 +315,6 @@ __all__ = [
     "terminal_states",
     "to_dot",
     "transition_actions",
+    "with_last_action",
     "witness",
 ]

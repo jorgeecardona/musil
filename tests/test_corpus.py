@@ -20,10 +20,12 @@ from musil import (
     Atom,
     Eventually,
     Implies,
+    LastAction,
     Model,
     Next,
     Result,
     Until,
+    action_taken,
     assert_covers,
     assert_covers_table,
     assert_ok,
@@ -54,6 +56,7 @@ from musil import (
     replicated_transition_actions,
     responds,
     states_where,
+    with_last_action,
     witness,
 )
 
@@ -254,6 +257,43 @@ def test_check_ltl_refuses_fairness_on_the_general_engine():
         check_ltl(m, Until(known, green), fair=("go",))
     with pytest.raises(NotImplementedError, match="fairness"):
         check_ltl(m, Until(known, green), fair_strong=("go",))
+
+
+@dataclass(frozen=True)
+class RR:
+    st: str  # "idle", "requested", "done"
+
+
+def request_response_model() -> Model[RR]:
+    return Model(
+        init=RR("idle"),
+        actions=[
+            Action("request", enabled=lambda s: s.st == "idle", apply=lambda s: RR("requested")),
+            Action("respond", enabled=lambda s: s.st == "requested", apply=lambda s: RR("done")),
+            Action("timeout", enabled=lambda s: s.st == "requested", apply=lambda s: RR("idle")),
+            Action("reset", enabled=lambda s: s.st == "done", apply=lambda s: RR("idle")),
+        ],
+        terminal=lambda s: False,
+    )
+
+
+def test_with_last_action_enables_action_sequence_ltl():
+    # with_last_action puts the action that produced a state INTO the state, so an LTL property can name WHICH
+    # action was taken -- something a state-only predicate cannot say. Two known verdicts on a request/respond
+    # protocol, plus the safety verdict preserved by the augmentation.
+    m = request_response_model()
+    aug = with_last_action(m)
+    req = Atom[LastAction[RR]]("req", action_taken("request"))
+    resp = Atom[LastAction[RR]]("resp", action_taken("respond"))
+    reset = Atom[LastAction[RR]]("reset", action_taken("reset"))
+
+    # HOLDS: every respond is eventually followed by a reset (done's only action is reset).
+    assert check_ltl(aug, Always(Implies(resp, Eventually(reset)))).ok
+    # FAILS: a request need NOT be followed by a respond -- the timeout loop can starve it forever (no
+    # fairness). This is exactly the property action-fairness would later rescue.
+    assert not check_ltl(aug, Always(Implies(req, Eventually(resp)))).ok
+    # The augmentation only refines states by the action that reached them, so the safety verdict is unchanged.
+    assert check(aug).ok == check(m).ok
 
 
 def test_patterns_agree_with_check_ltl():

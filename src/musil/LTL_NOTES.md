@@ -17,8 +17,19 @@ so `check_ltl` REFUSES (`NotImplementedError`) when a non-empty `fair` / `fair_s
 irreducible formula, rather than silently dropping the assumption (which could report a counterexample a fair
 scheduler excludes). Composing fairness in the engine needs ACTION-labelled atoms in the product (the
 fairness premise `(GF enabled_a -> GF taken_a) -> φ` is over action occurrences, not state atoms), so the
-product must track the action taken and the automaton must range over action literals. That is the next LTL
-increment; until then the refusal keeps the surface sound.
+product must track the action taken and the automaton must range over action literals.
+
+**The substrate now exists: `musil.history.with_last_action`.** It augments the model so each state records
+the action that produced it (`LastAction(state, action)`), turning "action `a` was just taken" into the STATE
+predicate `action_taken('a')`. On the augmented model `taken(a)` is an ordinary atom and `enabled(a)` is a
+state predicate, so the weak/strong-fairness premises become plain LTL over state atoms — checkable by the
+EXISTING GPVW engine with no changes to the product. So the action-fairness engine reduces to: (1) augment
+with `with_last_action`; (2) build the fairness premise `∧_a fairness(a)` as LTL over `action_taken` /
+`enabled` atoms (weak: `FG enabled_a -> GF taken_a`; strong: `GF enabled_a -> GF taken_a`); (3) check
+`premise -> φ` on the augmented model; (4) map the `LastAction` counterexample back to the original states.
+That is the next LTL increment; until it lands the refusal keeps the surface sound, and callers wanting
+action-sequence properties WITHOUT fairness can already use `with_last_action` + `check_ltl` today (corpus:
+`test_with_last_action_enables_action_sequence_ltl`).
 
 ## The standard pipeline (what we are building)
 
