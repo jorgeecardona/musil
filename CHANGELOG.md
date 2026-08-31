@@ -23,8 +23,17 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   bare truthiness assert, e.g. `requests`' `response.ok`); `assert not X.ok` -> `assert_violates(X, ...)`;
   and `[s.action for s in X.trace ...]` -> `X.action_names`. Advisory, not a gate.
 - `tests/test_doctor.py` pins the matchers on known snippets (source -> expected finding), including that a
-  bare `assert x.ok` and code already using the shipped APIs are left alone. The `musil doctor <path>` CLI
-  wrapper (version-lag report, whole-tree scan, more matchers) is a follow-up on this core.
+  bare `assert x.ok` and code already using the shipped APIs are left alone.
+
+### Added — `musil doctor <path>` CLI + a `musil` console command
+
+- `python -m musil doctor <path>` scans a file or directory (recursively) with `musil.doctor.scan` and
+  prints `file:line:col: pattern: suggestion`; unreadable / un-parseable files are skipped and it always
+  exits 0 (advisory, not a gate). This is the runnable front end for the `scan` core — the thing consumers
+  actually invoke — completing #36's CLI half.
+- The package now installs a `musil` console entry point (`[project.scripts]`), so `musil doctor <path>`
+  works directly, and the existing `python -m musil <model.py> [--dot]` model-check path is unchanged (the
+  `doctor` subcommand is a backward-compatible addition). `tests/test_cli.py` covers both paths.
 
 ### Added — `portfolio_coverage` + `assert_covers`: suite-level coverage of a declared table (#35)
 
