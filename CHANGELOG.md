@@ -2,6 +2,14 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — surface induction (`check_inductive`) in the README capability list
+
+- `check_inductive` (prove an invariant by k-induction so a pass holds at unbounded depth, with a
+  counterexample-to-induction on failure) was mentioned only in the README Limitations caveat, not presented as
+  a first-class capability. Added a "What it checks" entry beside the coverage/vacuity one — the README
+  capability list now covers all the major verification modes (safety, concurrency, liveness, LTL,
+  probabilistic, confluence, coverage/vacuity, induction). README changes reach PyPI on the next version bump.
+
 ### Docs — surface coverage & vacuity in the README capability list
 
 - The README "What it checks" section gained a "coverage & vacuity" entry: `coverage` (which actions never

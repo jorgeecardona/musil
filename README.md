@@ -165,6 +165,15 @@ always enabled, or only ever self-looped; `invariant_coverage(model)` flags inva
 union of coverage across a whole suite of models (blind spots can only shrink). See
 `examples/coverage_vacuity.py`.
 
+**Prove it beyond the explored scope — induction** — a passing `check` is exhaustive only up to
+`max_states`. `check_inductive(model, invariant, domain)` instead proves the invariant by *k-induction*
+over the transition relation, so a pass holds at *unbounded* depth — every reachable state, at any
+scope, not just the states swept. It quantifies over a caller-supplied `domain` of candidate states
+(which must include unreachable ones, or it proves nothing beyond `check`), and on failure returns a
+*counterexample-to-induction* — a state that satisfies the invariant but has a successor that breaks it —
+so you strengthen the invariant rather than widen the scope. It still enumerates that domain, so an
+infinite value space (unbounded integers, unbounded components) still needs a symbolic solver.
+
 **Reading results in assertions** — `print(result)` renders the verdict; in test assertions, use
 the fields (both result types are truthy exactly when `ok`):
 
