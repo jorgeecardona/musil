@@ -791,6 +791,48 @@ def test_probability_ltl_mdp_full_fragment_max_and_min():
     assert p(Always(not_z), choose, "min") == Fraction(0)
 
 
+def test_bounded_expected_reward_dtmc_and_mdp():
+    # DTMC: a fair-coin retry loop. Expected attempts until delivered OR k steps is 2*(1-(1/2)^k), a known
+    # closed form; the unbounded value is 1/p = 2. A bounded horizon is always finite (no a.s. guard).
+    m: Model[Chain] = Model(
+        init=Chain("send"),
+        actions=[
+            Action("ack", enabled=_is("send"), apply=lambda s: Chain("done")),
+            Action("drop", enabled=_is("send"), apply=lambda s: Chain("send")),
+        ],
+        terminal=_is("done"),
+    )
+    done = _is("done")
+    assert expected_reward(m, done) == Fraction(2)  # unbounded 1/p
+    for k in range(5):
+        assert expected_reward(m, done, steps=k) == 2 * (1 - Fraction(1, 2) ** k)
+
+    # MDP: staged (cheap, two hops) vs direct (dear, one hop) recovery. Bounded min/max expected cost.
+    rec: Model[Chain] = Model(
+        init=Chain("F"),
+        actions=[
+            Action("staged", enabled=_is("F"), apply=lambda s: Chain("R")),
+            Action("direct", enabled=_is("F"), apply=lambda s: Chain("W")),
+            Action("finish", enabled=_is("R"), apply=lambda s: Chain("W")),
+        ],
+        terminal=_is("W"),
+    )
+    at_w = _is("W")
+
+    def singles(_s: Chain, en: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
+        return [[a] for a in en]
+
+    def cost(name: str, _s: Chain) -> int:
+        return {"staged": 1, "direct": 3, "finish": 1}[name]
+
+    assert expected_reward_mdp(rec, at_w, moves=singles, cost=cost, optimize="min") == Fraction(2)  # unbounded
+    assert expected_reward_mdp(rec, at_w, moves=singles, cost=cost, optimize="max") == Fraction(3)
+    # bounded: at k=1 min fits one staged step (=1), max takes direct to the target (=3); k>=2 min reaches (=2)
+    assert expected_reward_mdp(rec, at_w, moves=singles, cost=cost, optimize="min", steps=1) == Fraction(1)
+    assert expected_reward_mdp(rec, at_w, moves=singles, cost=cost, optimize="max", steps=1) == Fraction(3)
+    assert expected_reward_mdp(rec, at_w, moves=singles, cost=cost, optimize="min", steps=2) == Fraction(2)
+
+
 def test_profile_explores_the_same_reachable_set():
     # profile keeps its own instrumented loop (it times enabled/apply/canonicalize separately, which the
     # shared _successors kernel bundles). This pins its full-sweep reachable count to the corpus so it can

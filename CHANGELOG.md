@@ -2,6 +2,15 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — step-bounded expected reward: `steps=k` on `expected_reward` / `expected_reward_mdp`
+
+- `expected_reward` and `expected_reward_mdp` gain `steps=k`: the expected cost accumulated until the target is
+  reached OR `k` steps elapse — a finite backward induction (`E_0 = 0`, `E_i(s) = cost(s) + sum_s' P(s,s')
+  E_{i-1}(s')` for the DTMC, optimised over the moves for the MDP min/max). Always finite, so unlike the
+  unbounded expected reward it needs NO almost-sure / proper-policy guard. Mirrors the `steps=` already on
+  `reach_probability` / `reach_probability_mdp`. Corpus pins the closed form `E_k = 2(1 - (1/2)^k)` for a
+  fair-coin retry loop and the bounded min/max cost of a staged-vs-direct recovery MDP.
+
 ### Added — MDP probabilistic LTL: `probability_ltl(..., moves=...)` covers F / G / GF / FG, max AND min
 
 - `probability_ltl` gains a full MDP path (pass `moves=` as in `reach_probability_mdp`): the OPTIMAL

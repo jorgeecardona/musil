@@ -151,6 +151,21 @@ def _normalize[S: Hashable](
     return [(p, t) for t, p in acc.items()]
 
 
+def _immediate_cost[S: Hashable](
+    edges: Iterable[tuple[str, S]],
+    state: S,
+    weight: Callable[[str, S], Fraction | int],
+    cost: Callable[[str, S], Fraction | int],
+) -> Fraction:
+    """The expected COST of one step out of ``state``: each enabled action's ``cost`` weighted by its
+    normalized probability. Zero when the state has no outgoing edge (absorbing)."""
+    pairs = [(_weight_of(weight, name, state), name) for name, _ in edges]
+    total = sum((wt for wt, _ in pairs), Fraction(0))
+    if total == 0:
+        return Fraction(0)
+    return sum((wt / total * Fraction(cost(name, state)) for wt, name in pairs), Fraction(0))
+
+
 def _mdp_moves[S: Hashable](
     model: Model[S], graph: Graph[S], moves: Moves[S], weight: Callable[[str, S], Fraction | int]
 ) -> dict[S, list[_Dist[S]]]:
@@ -222,6 +237,7 @@ def expected_reward[S: Hashable](
     *,
     weight: Callable[[str, S], Fraction | int] | None = None,
     cost: Callable[[str, S], Fraction | int] | None = None,
+    steps: int | None = None,
     max_states: int = 1_000_000,
 ) -> Fraction:
     """The exact EXPECTED accumulated cost to first reach ``target`` from the model's initial state,
@@ -233,9 +249,14 @@ def expected_reward[S: Hashable](
     ``1``). Returns a ``fractions.Fraction`` — exact, no floating point, solving ``E(s) = 0`` on the target
     and ``E(s) = sum_s' P(s, s') (cost + E(s'))`` elsewhere.
 
-    The expectation is finite only if the target is reached ALMOST SURELY; otherwise it is infinite, so this
-    raises ``ValueError`` when ``reach_probability`` from the initial state is not exactly 1 (a scheduler-free
-    DTMC has a single value). Also raises ``ValueError`` if the exploration truncates at ``max_states``."""
+    With ``steps=k`` the answer is instead the expected cost accumulated until the target is reached OR ``k``
+    steps elapse, whichever comes first — a finite backward induction (``E_0 = 0``; ``E_i(s) = cost(s) + sum_s'
+    P(s,s') E_{i-1}(s')`` off the target). Always finite, so it needs no almost-sure-reachability guard; a
+    bounded horizon is the natural "expected cost in the next ``k`` steps" question. With ``steps=None`` (the
+    default) it is the unbounded expected cost to reach the target, which is finite only if the target is
+    reached ALMOST SURELY; otherwise it is infinite, so this raises ``ValueError`` when ``reach_probability``
+    from the initial state is not exactly 1. Also raises ``ValueError`` if the exploration truncates at
+    ``max_states`` or if ``steps`` is negative."""
     graph = explore(model, max_states=max_states)
     if graph.truncated:
         raise ValueError("expected_reward: exploration truncated at max_states; the expectation is inconclusive")
@@ -245,6 +266,16 @@ def expected_reward[S: Hashable](
     w = weight if weight is not None else _uniform
     c = cost if cost is not None else _uniform  # default cost 1 per step -> expected number of steps
     dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
+    if steps is not None:  # bounded horizon: a finite induction, always finite (no a.s. guard needed)
+        if steps < 0:
+            raise ValueError(f"expected_reward: steps must be non-negative, got {steps}")
+        ic = {s: _immediate_cost(graph.edges.get(s, ()), s, w, c) for s in graph.states}
+        values = dict.fromkeys(graph.states, Fraction(0))
+        for _ in range(steps):
+            values = {
+                s: (Fraction(0) if target(s) else ic[s] + _move_value(dist[s], values)) for s in graph.states
+            }
+        return values[init]
     if _dtmc_values(graph.states, dist, target)[init] != 1:
         raise ValueError(
             "expected_reward: the target is not reached almost surely from the initial state "
@@ -672,10 +703,15 @@ def expected_reward_mdp[S: Hashable](
     weight: Callable[[str, S], Fraction | int] | None = None,
     cost: Callable[[str, S], Fraction | int] | None = None,
     optimize: str = "min",
+    steps: int | None = None,
     max_states: int = 1_000_000,
 ) -> Fraction:
     """The exact MINIMAL (``optimize="min"``, default) or MAXIMAL (``optimize="max"``) expected accumulated
     cost to first reach ``target`` over all schedulers of the MDP — the stochastic shortest / longest path.
+
+    With ``steps=k`` the answer is instead the min/max expected cost accumulated until the target is reached OR
+    ``k`` steps elapse — a finite backward induction over the moves each step, always finite, so it needs no
+    reachability guard (the "expected cost in the next ``k`` steps under the best/worst scheduler").
     With the default unit ``cost`` this is the min/max expected number of STEPS. ``moves``/``weight`` describe
     the MDP exactly as in ``reach_probability_mdp``; ``cost`` must be POSITIVE (the default unit cost is), so
     that a scheduler which fails to reach the target a.s. has infinite cost — the assumption both directions
@@ -729,6 +765,21 @@ def expected_reward_mdp[S: Hashable](
             state_costs.append(move_cost)
         all_moves[s] = state_moves if state_moves else [[]]
         all_costs[s] = state_costs if state_costs else [Fraction(0)]
+    if steps is not None:  # bounded horizon: a finite induction over moves, always finite (no guard needed)
+        if steps < 0:
+            raise ValueError(f"expected_reward_mdp: steps must be non-negative, got {steps}")
+        pick = min if optimize == "min" else max
+        values = dict.fromkeys(graph.states, Fraction(0))
+        for _ in range(steps):
+            values = {
+                s: (
+                    Fraction(0)
+                    if target(s)
+                    else pick(all_costs[s][j] + _move_value(all_moves[s][j], values) for j in range(len(all_moves[s])))
+                )
+                for s in graph.states
+            }
+        return values[init]
     if optimize == "min":
         # A proper policy must EXIST (max reachability 1); the max-optimal policy is a proper seed there.
         # States that cannot reach a.s. have infinite min cost.

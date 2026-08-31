@@ -46,6 +46,12 @@ accelerator for large linear solves, never required).
   fixed point, so it is exact by construction and needs no `S0` precomputation (a bounded horizon cannot
   stall). `steps=0` is the indicator of the target; a DTMC is the single-move case. Corpus pins the
   geometric law `P(reach within k) = 1 - (1/2)^k` for a fair coin loop.
+- **Step-bounded expected reward** — `steps=k` on `expected_reward` and `expected_reward_mdp`. The expected
+  cost accumulated until the target is reached OR `k` steps elapse, by the same finite induction with an
+  immediate-cost term: `E_0 = 0`, `E_i(s) = cost(s) + sum_s' P(s,s') E_{i-1}(s')` (DTMC) or optimised over the
+  moves (MDP, min/max). Always finite, so unlike the unbounded expected reward it needs NO almost-sure /
+  proper-policy guard. Corpus pins the closed form `E_k = 2(1 - (1/2)^k)` for the fair-coin retry loop and the
+  bounded min/max cost of a staged-vs-direct recovery MDP.
 - **Constrained (until) reachability** — `avoid=` on either function. The probability of the until property
   `P(¬avoid U target)`: reaching the target WITHOUT first entering an `avoid` state. Reuses the existing
   0-sink mechanism exactly — an `avoid` (non-target) state is made absorbing with value 0 (empty distribution
