@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Hardening — metamorphic property tests for the core and LTL layers
+
+- New `tests/test_core_ltl_properties.py` extends the random-model differential approach to the
+  soundness-critical paths: `check_of(explore(m), m)` gives the same verdict (ok / kind / broken invariant) as
+  `check(m)` over 60 random models (independent traversal code), and the general Büchi engine agrees with the
+  proven reductions — `F`/`G`/`GF` forced through the engine (`true U p` / `false R p` / `G(true U p)`) equal
+  their reducible forms over 40 random models × random predicates (360 comparisons). This broadly exercises
+  the riskiest LTL code and confirms the `G`-is-pure-safety fix holds beyond the fixed corpus models. Pure
+  stdlib, fixed seed, fast.
+
 ### Hardening — metamorphic property tests for the probabilistic layer
 
 - New `tests/test_probabilistic_properties.py`: invariants that must hold on EVERY DTMC/MDP, checked over many
