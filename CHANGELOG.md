@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `assert_probability`: the quantitative test-assertion helper
+
+- `assert_probability(actual, equals=/at_least=/at_most=, label=...)` asserts an exact probability or expected
+  value meets a bound, raising `AssertionError` with the actual value on failure — the quantitative analog of
+  `assert_ok` / `assert_violates` / `assert_covers`, and the natural way to write the threshold properties a
+  stochastic system needs (`assert_probability(reach_probability(m, is_bad), at_most=Fraction(1, 100))`).
+  Bounds are `int`/`Fraction` only (not `float` — the layer is exact, and `Fraction(0.01) != 1/100`); at least
+  one bound is required. Corpus pins the thresholds, ranges, int bounds, failure messages, and the no-bound
+  usage error.
+
 ### Fixed — `expected_reward_mdp` refuses non-positive costs (unbounded), instead of a wrong finite value
 
 - The unbounded stochastic shortest/longest path assumes every step off the target costs strictly `> 0` (so an

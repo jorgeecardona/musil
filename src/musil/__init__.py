@@ -132,6 +132,7 @@ from musil.metrics import (
 from musil.patterns import absent, always, eventually, recurs, responds
 from musil.por import explore_por, independent, por_sound
 from musil.probabilistic import (
+    assert_probability,
     expected_reward,
     expected_reward_mdp,
     long_run_probability,
@@ -243,6 +244,7 @@ __all__ = [
     "assert_covers",
     "assert_covers_table",
     "assert_ok",
+    "assert_probability",
     "assert_violates",
     "bounded_clock",
     "canonical_by_fields",

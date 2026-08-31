@@ -139,8 +139,9 @@ probability weight, the reachable graph is a Markov chain and you can ask exact 
 - **Nondeterminism (MDP)** — every one of the above has an `..._mdp` form (or a `moves=` argument) giving the
   minimum or maximum over all schedulers.
 
-Everything is exact rational arithmetic. See `examples/lossy_retry.py`, `examples/availability.py`, and
-`examples/server_utilization.py`.
+Everything is exact rational arithmetic — assert on it in tests with `assert_probability(p, at_most=Fraction(1,
+100))` (thresholds, ranges, or exact equality, with a clear failure message). See `examples/lossy_retry.py`,
+`examples/availability.py`, and `examples/server_utilization.py`.
 
 **Where does it settle? — confluence** — `fixed_points(model)` reports, for each initial state
 *separately*, the distinct terminal states (no available step) its runs can end in. A single start

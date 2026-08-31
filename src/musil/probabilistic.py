@@ -56,6 +56,35 @@ type _Dist[S] = list[tuple[Fraction, S]]
 type Moves[S] = Callable[[S, tuple[Action[S], ...]], Iterable[Sequence[Action[S]]]]
 
 
+def assert_probability(
+    actual: Fraction,
+    *,
+    equals: Fraction | int | None = None,
+    at_least: Fraction | int | None = None,
+    at_most: Fraction | int | None = None,
+    label: str = "probability",
+) -> None:
+    """Assert an exact probability or expected value meets a bound, raising ``AssertionError`` with the actual
+    value on failure — the quantitative analog of ``assert_ok`` / ``assert_violates``. ``equals`` demands an
+    exact match; ``at_least`` / ``at_most`` demand a threshold (give both for a range). Bounds are ``int`` or
+    ``Fraction`` (NOT ``float`` — the whole point of the probabilistic layer is exact rational answers, and
+    ``Fraction(0.01) != 1/100``; write ``Fraction(1, 100)``). At least one bound is required.
+
+    Use it for the threshold properties a stochastic system needs::
+
+        assert_probability(reach_probability(model, is_bad), at_most=Fraction(1, 100), label="failure rate")
+        assert_probability(expected_reward(model, done), equals=Fraction(2), label="expected attempts")
+    """
+    if equals is None and at_least is None and at_most is None:
+        raise ValueError("assert_probability: give at least one of equals / at_least / at_most")
+    if equals is not None and actual != Fraction(equals):
+        raise AssertionError(f"{label}: expected == {Fraction(equals)}, got {actual}")
+    if at_least is not None and actual < Fraction(at_least):
+        raise AssertionError(f"{label}: expected >= {Fraction(at_least)}, got {actual}")
+    if at_most is not None and actual > Fraction(at_most):
+        raise AssertionError(f"{label}: expected <= {Fraction(at_most)}, got {actual}")
+
+
 def _uniform(_name: str, _s: object) -> int:
     return 1
 

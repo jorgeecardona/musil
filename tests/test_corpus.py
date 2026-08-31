@@ -33,6 +33,7 @@ from musil import (
     assert_covers,
     assert_covers_table,
     assert_ok,
+    assert_probability,
     assert_violates,
     check,
     check_all,
@@ -623,6 +624,25 @@ def test_ssp_rejects_nonpositive_cost_unbounded_but_allows_it_bounded():
         expected_reward_mdp(m, is_win, moves=singles, cost=cost, optimize="max")
     # bounded is fine (finite sum): 3 steps of the -1 spin = -3
     assert expected_reward_mdp(m, is_win, moves=singles, cost=cost, optimize="min", steps=3) == Fraction(-3)
+
+
+def test_assert_probability_thresholds_and_messages():
+    # The quantitative assertion helper: exact equality, thresholds, ranges, int bounds, and clear failure
+    # messages; no bound is a usage error.
+    p = Fraction(1, 3)
+    assert_probability(p, equals=Fraction(1, 3))
+    assert_probability(p, at_most=Fraction(1, 2))
+    assert_probability(p, at_least=Fraction(1, 4))
+    assert_probability(p, at_least=Fraction(1, 4), at_most=Fraction(1, 2))  # a range
+    assert_probability(Fraction(1), equals=1)  # int bounds accepted
+    with pytest.raises(AssertionError, match="expected =="):
+        assert_probability(p, equals=Fraction(1, 2), label="P")
+    with pytest.raises(AssertionError, match="expected <="):
+        assert_probability(p, at_most=Fraction(1, 4))
+    with pytest.raises(AssertionError, match="expected >="):
+        assert_probability(p, at_least=Fraction(1, 2))
+    with pytest.raises(ValueError, match="at least one"):
+        assert_probability(p)  # no bound given
 
 
 # --------------------------------------------------------------------------------------------------
