@@ -36,6 +36,7 @@ from musil import (
     expected_reward_mdp,
     explore,
     explore_por,
+    never,
     path_to,
     por_sound,
     profile,
@@ -635,3 +636,64 @@ def test_check_liveness_of_agrees_with_check_liveness():
     b2 = check_liveness_of(explore(fm), goal=done, goal_name="done", fair_strong=("g",))
     assert (a2.ok, a2.kind, a2.stem, a2.cycle) == (b2.ok, b2.kind, b2.stem, b2.cycle)
     assert not b2.ok  # sanity: it really is the fair counterexample
+
+
+# --------------------------------------------------------------------------------------------------
+# 15. Edge (transition) invariants — a property about the STEP, not the state (#25)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Doc:
+    stage: str  # "draft", "reviewed", "published"
+
+
+def _published_only_after_review(before: Doc, _action: str, after: Doc) -> bool:
+    return after.stage != "published" or before.stage == "reviewed"
+
+
+def doc_model(edge: bool) -> Model[Doc]:
+    # "published" is legitimately reachable (draft -> reviewed -> publish), but "force_publish" reaches it
+    # illegally from draft, skipping review. The bad EDGE, not the bad state, is the violation.
+    return Model(
+        init=Doc("draft"),
+        actions=[
+            Action("review", enabled=lambda s: s.stage == "draft", apply=lambda s: Doc("reviewed")),
+            Action("publish", enabled=lambda s: s.stage == "reviewed", apply=lambda s: Doc("published")),
+            Action("force_publish", enabled=lambda s: s.stage == "draft", apply=lambda s: Doc("published")),
+        ],
+        edge_invariants={"published-only-after-review": _published_only_after_review} if edge else {},
+        terminal=lambda s: s.stage == "published",
+    )
+
+
+def test_edge_invariant_catches_an_illegal_transition_a_state_check_misses():
+    # State-only check is GREEN -- "published" is a legitimately reachable state.
+    assert check(doc_model(edge=False)).ok
+
+    # With the edge invariant, the illegal force_publish edge is caught, with the offending step in the trace.
+    r = check(doc_model(edge=True))
+    assert not r.ok
+    assert r.kind == "edge-invariant"
+    assert r.invariant == "published-only-after-review"
+    assert r.action_names == ("force_publish",)
+    assert r.witness == Doc("published")
+
+    # check_of gives the identical edge-invariant verdict AND trace over a pre-built graph.
+    r_of = check_of(explore(doc_model(edge=True)), doc_model(edge=True))
+    assert (r_of.kind, r_of.invariant, r_of.trace) == (r.kind, r.invariant, r.trace)
+
+
+def test_never_forbids_a_transition_directly():
+    m = Model(
+        init=Doc("draft"),
+        actions=[
+            Action("review", enabled=lambda s: s.stage == "draft", apply=lambda s: Doc("reviewed")),
+            Action("publish", enabled=lambda s: s.stage == "reviewed", apply=lambda s: Doc("published")),
+            Action("force_publish", enabled=lambda s: s.stage == "draft", apply=lambda s: Doc("published")),
+        ],
+        edge_invariants={"no-force-publish": never("force_publish")},
+        terminal=lambda s: s.stage == "published",
+    )
+    r = check(m)
+    assert r.kind == "edge-invariant" and r.action_names == ("force_publish",)

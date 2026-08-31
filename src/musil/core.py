@@ -28,6 +28,9 @@ from typing import Any, Literal, NoReturn, Protocol, cast
 # ``if not inv(state)`` — a returned reason would wrongly read as "holds". Let ``check`` /
 # ``reachable_violations`` evaluate it, or build one with ``invariant_from_violations``.
 type Invariant[S] = Callable[[S], bool | str | None]
+# An EDGE (transition) invariant: (before, action_name, after) -> holds? A str is a violation carrying a
+# reason (as for state invariants); otherwise falsy is a violation. Checked on every explored edge.
+type EdgeInvariant[S] = Callable[[S, str, S], bool | str | None]
 
 
 def invariant_from_violations[S: Hashable](
@@ -105,6 +108,11 @@ class Model[S: Hashable]:
     terminal: Callable[[S], bool] = _never
     actions_fn: Callable[[S], Iterable[Action[S]]] | None = None
     footprint: Callable[[S], Hashable] | None = None
+    # EDGE (transition) invariants: name -> predicate over (before, action_name, after). Checked on every
+    # explored edge by ``check`` / ``check_of`` — for properties about the STEP, not the state (a state that
+    # is legitimately reachable, but reached by an illegal edge). See ``never`` for the common "forbid this
+    # transition" case. (``check_all`` covers state invariants + deadlock only, not edges yet.)
+    edge_invariants: Mapping[str, EdgeInvariant[S]] = field(default_factory=dict[str, "EdgeInvariant[S]"])
 
     def initial_states(self) -> tuple[S, ...]:
         init = self.init
@@ -218,6 +226,10 @@ class Result[S: Hashable]:
             return f"OK — {self.states_explored} states, no violations{cap}"
         if self.kind == "invariant":
             head = f"INVARIANT VIOLATED: {self.invariant}"
+            if self.reason:
+                head += f" — {self.reason}"
+        elif self.kind == "edge-invariant":
+            head = f"EDGE INVARIANT VIOLATED: {self.invariant} (on the last transition)"
             if self.reason:
                 head += f" — {self.reason}"
         elif self.kind == "ltl":
@@ -517,6 +529,17 @@ def check[S: Hashable](
                     trace=_trace_to(parent, states_by_id, sid),
                 )
 
+        if model.edge_invariants:  # off by default: this recomputes successors only when edge invariants exist
+            for name, nxt in _successors(source, canon, state):
+                for iname, einv in model.edge_invariants.items():
+                    verdict = einv(state, name, nxt)
+                    if isinstance(verdict, str) or not verdict:
+                        return Result(
+                            ok=False, states_explored=len(seen), kind="edge-invariant", invariant=iname,
+                            reason=(verdict or None) if isinstance(verdict, str) else None,
+                            trace=(*_trace_to(parent, states_by_id, sid), Step(action=name, state=nxt)),
+                        )
+
         fired, truncated = _expand(state, sid, source, canon, ident, seen, parent, states_by_id, frontier, max_states)
         if truncated:
             return Result(ok=True, states_explored=len(seen), truncated=True)
@@ -790,6 +813,16 @@ def check_of[S: Hashable](graph: Graph[S], model: Model[S]) -> Result[S]:
                 return Result(ok=False, states_explored=total, kind="invariant", invariant=name,
                               trace=_path_from_parents(parent, state))
         out = graph.edges.get(state, ())
+        if model.edge_invariants:
+            for name, nxt in out:
+                for iname, einv in model.edge_invariants.items():
+                    verdict = einv(state, name, nxt)
+                    if isinstance(verdict, str) or not verdict:
+                        return Result(
+                            ok=False, states_explored=total, kind="edge-invariant", invariant=iname,
+                            reason=(verdict or None) if isinstance(verdict, str) else None,
+                            trace=(*_path_from_parents(parent, state), Step(action=name, state=nxt)),
+                        )
         if not out and not graph.truncated and not model.terminal(state):
             return Result(ok=False, states_explored=total, kind="deadlock", trace=_path_from_parents(parent, state))
         for name, t in out:
@@ -797,6 +830,17 @@ def check_of[S: Hashable](graph: Graph[S], model: Model[S]) -> Result[S]:
                 parent[t] = (state, name)
                 frontier.append(t)
     return Result(ok=True, states_explored=total, truncated=graph.truncated)
+
+
+def never[S: Hashable](action: str, *, when: Callable[[S], bool] | None = None) -> EdgeInvariant[S]:
+    """An edge invariant that FORBIDS a transition: violated when ``action`` fires (optionally only from a
+    ``when`` before-state). The direct way to rule out an illegal step without a ghost flag on the state,
+    e.g. ``edge_invariants={"no-approve-unreviewed": never("approve", when=lambda s: not s.reviewed)}``."""
+
+    def edge_inv(before: S, name: str, _after: S) -> bool:
+        return not (name == action and (when is None or when(before)))
+
+    return edge_inv
 
 
 def path_to[S: Hashable](graph: Graph[S], state: S) -> tuple[Step[S], ...] | None:

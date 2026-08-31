@@ -4,6 +4,22 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — edge (transition) invariants: predicates over `(before, action, after)` (#25)
+
+- `Model.edge_invariants={name: fn(before, action_name, after) -> bool | str}` — invariants about the STEP,
+  not the state, for the case where the bad state is legitimately reachable but a particular EDGE into it is
+  illegal (TLA+'s action formula). Checked on every explored edge by `check` and `check_of`; the first
+  violation returns a `Result` with `kind="edge-invariant"`, the broken name in `invariant`, and the
+  offending transition as the last step of the shortest trace. Off by default (empty), and it recomputes
+  successors only when present, so models without edge invariants pay nothing.
+- `never(action, when=...)` — the direct "forbid this transition" edge invariant, replacing the ghost-flag
+  pattern (a state field set purely to turn "an illegal action fired" into a state predicate, which doubles
+  the state space it lives in).
+- Corpus pins a document lifecycle where `published` is legitimately reachable (so a state-only `check` is
+  green) yet a `force_publish` edge reaches it illegally — the edge invariant catches exactly that edge, and
+  `check_of` returns the identical verdict and trace. `check_all` covers state invariants + deadlock only;
+  edge support there is a follow-up.
+
 ### Added — `check_liveness_of`: liveness over a pre-built graph (#31)
 
 - `check_liveness_of(graph, goal=..., ...)` runs the liveness analysis over an already-explored `Graph`
