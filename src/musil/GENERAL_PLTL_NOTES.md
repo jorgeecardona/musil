@@ -96,6 +96,36 @@ accepting runs per model run → no well-defined measure). The engine is only as
 enforced, so the construction MUST be tested to preserve the language of the NBA and to keep the accepting
 part deterministic.
 
+## Risk assessment — why the accepting-component construction is NOT a safe autonomous increment
+
+Building the accepting component correctly is genuinely subtle, and getting it wrong corrupts every
+probability SILENTLY (a wrong number, not a crash). Two concrete traps make the "obvious" construction wrong:
+
+- **∃ vs ∀ acceptance.** The accepting component, after committing to an NBA state `q`, must accept "**∃** a run
+  from `q` visiting `F` infinitely often". The natural Miyano–Hayashi breakpoint construction tracks the SUBSET
+  of reachable NBA states and a breakpoint that empties when **all** tracked runs have passed through `F` — it
+  captures a **∀** (universal / co-Büchi-flavoured) condition, a DIFFERENT language. A breakpoint used naively
+  gives the wrong acceptance.
+- **Deterministic Büchi are strictly weaker than nondeterministic.** There is no deterministic Büchi automaton
+  for `FG a` in general, so the accepting component cannot be "the NBA determinised to a DBA". A *correct* LDBA
+  needs the specific master/slave machinery (Sickert–Esparza / Rabinizer: a deterministic master automaton for
+  the formula's structure, plus deterministic "slave" automata for its `G`-subformulas, with the jump choosing
+  which eventualities stabilise) — formula-structure-specific and intricate, not a generic NBA transformation.
+
+Compounding this: the pieces are **not piece-wise quantitatively testable**. Piece 2 can be checked only
+QUALITATIVELY (does the product still have an accepting run — language equivalence), which does NOT witness the
+measure-theoretic *suitability* the probability relies on. The only quantitative oracle (agreement with the
+shipped reductions on `F/X/G/GF/FG/U/R/W`, plus a few hand-computed nesting verdicts) exists only once the full
+DTMC path is wired — and it exercises the genuinely-new *nesting* behaviour only on the handful of
+hand-computed cases.
+
+**Conclusion.** This engine should be built **deliberately, end-to-end, against a reference** (a known-correct
+LDBA/Rabinizer construction to diff against), with the quantitative differential oracle as the gate — not
+committed as qualitatively-validated intermediate pieces through the autonomous per-tick loop, where a
+subtly-wrong accepting component would pass the qualitative test and ship a wrong probability. The autonomous
+loop should HOLD here: piece 1 (`degeneralize`) is sound and shipped; pieces 2–4 are a single focused,
+reference-guided effort. Prefer `NotImplementedError` (the current behaviour) over a fast, wrong number.
+
 ## Reuse — this is mostly assembly of existing parts
 
 - LTL → NBA: `GeneralizedBuchi.from_ltl` / `_gpvw` (`ltl.py`) — done.

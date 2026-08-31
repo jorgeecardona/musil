@@ -2,6 +2,20 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — general-PLTL engine put ON HOLD with a risk assessment (piece 1 stays shipped)
+
+- `GENERAL_PLTL_NOTES.md` gains a "Risk assessment" section. The LDBA accepting-component construction has two
+  silent-corruption traps: **∃-vs-∀ acceptance** (the accepting component must recognise "∃ a run visiting `F`
+  i.o.", but a naive Miyano–Hayashi breakpoint captures the ∀ / universal condition — a different language), and
+  **deterministic Büchi being strictly weaker than nondeterministic** (no DBA exists for `FG a`, so the
+  accepting part needs the intricate Sickert–Esparza master/slave machinery, not a generic determinisation).
+  Its pieces are also not piece-wise *quantitatively* testable — only qualitative language-equivalence until the
+  full DTMC path is wired — so a subtly-wrong automaton passes the qualitative test and ships a WRONG
+  probability. Therefore the engine must be built deliberately end-to-end against a reference (Rabinizer /
+  ltl2ldba) with the differential oracle as the gate, NOT as autonomous per-tick increments. Piece 1
+  (`degeneralize`) stays shipped and sound; `probability_ltl` keeps raising `NotImplementedError` for
+  genuinely-nesting formulas — the current, correct behaviour is preferred over a fast wrong number.
+
 ### Docs — general-PLTL plan corrected: determinise on-the-fly over model states, not `2^AP`
 
 - `GENERAL_PLTL_NOTES.md` gains an "Alphabet" section fixing an architectural assumption in the LDBA plan.
