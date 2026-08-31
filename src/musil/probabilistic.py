@@ -360,23 +360,33 @@ def expected_reward_mdp[S: Hashable](
     moves: Moves[S],
     weight: Callable[[str, S], Fraction | int] | None = None,
     cost: Callable[[str, S], Fraction | int] | None = None,
+    optimize: str = "min",
     max_states: int = 1_000_000,
 ) -> Fraction:
-    """The exact MINIMAL expected accumulated cost to first reach ``target`` over all schedulers of the MDP
-    (the stochastic shortest path). With the default unit ``cost`` this is the minimal expected number of
-    STEPS. ``moves``/``weight`` describe the MDP exactly as in ``reach_probability_mdp``; ``cost`` must be
-    POSITIVE (the default unit cost is), so that any scheduler which fails to reach the target a.s. has
-    infinite cost — the assumption stochastic shortest path rests on.
+    """The exact MINIMAL (``optimize="min"``, default) or MAXIMAL (``optimize="max"``) expected accumulated
+    cost to first reach ``target`` over all schedulers of the MDP — the stochastic shortest / longest path.
+    With the default unit ``cost`` this is the min/max expected number of STEPS. ``moves``/``weight`` describe
+    the MDP exactly as in ``reach_probability_mdp``; ``cost`` must be POSITIVE (the default unit cost is), so
+    that a scheduler which fails to reach the target a.s. has infinite cost — the assumption both directions
+    rest on. Each policy is evaluated by an exact rational solve of ``E(s) = cost(s) + sum_s' P(s,s') E(s')``.
 
-    Solved EXACTLY by policy iteration seeded with a PROPER policy: the max-reachability-optimal policy
-    reaches the target almost surely from every state whose max reachability is 1 (a convex combination of
-    values ``<= 1`` equal to 1 forces every successor to 1), so it is proper there and is a valid seed. The
-    iteration then minimises expected cost over the moves whose successors are all proper, each evaluation an
-    exact rational solve of ``E(s) = cost(s) + sum_s' P(s, s') E(s')``.
+    MIN is the stochastic shortest path. A proper policy must EXIST for the min to be finite: the
+    max-reachability-optimal policy reaches the target almost surely from every state whose max reachability is
+    1 (a convex combination of values ``<= 1`` equal to 1 forces every successor to 1), so it is proper there
+    and seeds the iteration, which then minimises over the moves whose successors are all proper.
 
-    Raises ``ValueError`` if no scheduler reaches ``target`` almost surely from the initial state (the min
-    expected cost is then infinite) or if the exploration truncates. ``optimize="max"`` is not offered:
-    maximal expected cost is infinite unless EVERY scheduler is proper (see PROBABILISTIC_NOTES.md)."""
+    MAX is the stochastic LONGEST path, finite only when EVERY policy is proper — otherwise a scheduler can
+    loop away from the target forever and the max is infinite. So the guard is MIN reachability 1 from the
+    initial state (no scheduler avoids the target); it implies min reachability 1 from every reachable state,
+    hence every policy is proper and the max over the finite policy space is finite. Any policy is then a valid
+    proper seed, and maximising policy iteration (each switch strictly RAISES a bounded, monotone value)
+    converges to the optimum (Bertsekas & Tsitsiklis SSP, the all-proper case).
+
+    Raises ``ValueError`` if the required reachability guard fails from the initial state (the expectation is
+    then infinite: min — no scheduler reaches a.s.; max — some scheduler avoids the target with positive
+    probability), if ``optimize`` is not ``"min"``/``"max"``, or if the exploration truncates."""
+    if optimize not in ("min", "max"):
+        raise ValueError(f"expected_reward_mdp: optimize must be 'min' or 'max', got {optimize!r}")
     graph = explore(model, max_states=max_states)
     if graph.truncated:
         raise ValueError("expected_reward_mdp: exploration truncated at max_states; the expectation is inconclusive")
@@ -408,27 +418,44 @@ def expected_reward_mdp[S: Hashable](
             state_costs.append(move_cost)
         all_moves[s] = state_moves if state_moves else [[]]
         all_costs[s] = state_costs if state_costs else [Fraction(0)]
-    # Proper states (a scheduler reaches the target a.s.) are exactly those with max reachability 1; the
-    # max-optimal policy is a proper seed there. States that cannot reach a.s. have infinite min cost.
-    reach_values, reach_policy = _reach_policy_iteration(
-        graph.states, all_moves, target, minimize=False, absorbing=set[S]()
-    )
-    if reach_values[init] != 1:
-        raise ValueError(
-            "expected_reward_mdp: no scheduler reaches the target almost surely from the initial state, "
-            "so the minimal expected cost is infinite"
+    if optimize == "min":
+        # A proper policy must EXIST (max reachability 1); the max-optimal policy is a proper seed there.
+        # States that cannot reach a.s. have infinite min cost.
+        reach_values, reach_policy = _reach_policy_iteration(
+            graph.states, all_moves, target, minimize=False, absorbing=set[S]()
         )
-    proper = {s for s in graph.states if reach_values[s] == 1}
+        if reach_values[init] != 1:
+            raise ValueError(
+                "expected_reward_mdp: no scheduler reaches the target almost surely from the initial state, "
+                "so the minimal expected cost is infinite"
+            )
+        proper = {s for s in graph.states if reach_values[s] == 1}
+        seed = reach_policy
+    else:  # max: EVERY policy must be proper (min reachability 1), else some scheduler loops away forever.
+        absorbing = _s0_min(graph.states, all_moves, target)
+        reach_values, _ = _reach_policy_iteration(
+            graph.states, all_moves, target, minimize=True, absorbing=absorbing
+        )
+        if reach_values[init] != 1:
+            raise ValueError(
+                "expected_reward_mdp: some scheduler avoids the target with positive probability from the "
+                "initial state, so the maximal expected cost is infinite"
+            )
+        # min reachability 1 from init => 1 from every reachable state => every policy proper; move 0 seeds.
+        proper = set(graph.states)
+        seed = {s: 0 for s in graph.states}
+
     unknown = [s for s in proper if not target(s)]
     idx = {s: i for i, s in enumerate(unknown)}
 
     def _safe(move: _Dist[S]) -> bool:
         return all(t in proper for _, t in move)  # a move a proper scheduler may take (no failure branch)
 
-    # Stochastic shortest path by policy iteration, seeded proper, restricted to safe moves. Each switch
-    # strictly lowers a finite expected cost, so it never picks an improper (infinite-cost) policy and
-    # terminates at the optimum (Bertsekas & Tsitsiklis, SSP).
-    policy = {s: reach_policy[s] for s in unknown}
+    # Stochastic shortest/longest path by policy iteration, seeded proper, restricted to safe moves. Each
+    # switch strictly moves a finite expected cost in the chosen direction, so it never picks an improper
+    # (infinite-cost) policy and terminates at the optimum (Bertsekas & Tsitsiklis, SSP).
+    minimizing = optimize == "min"
+    policy = {s: seed[s] for s in unknown}
     while True:
         n = len(unknown)
         a = [[Fraction(0) for _ in range(n)] for _ in range(n)]
@@ -450,7 +477,7 @@ def expected_reward_mdp[S: Hashable](
                 if not _safe(move):
                     continue
                 v = all_costs[s][i] + _move_value(move, e)
-                if v < best_c:
+                if (v < best_c) if minimizing else (v > best_c):
                     best_i, best_c = i, v
             if best_i != policy[s]:
                 policy[s] = best_i

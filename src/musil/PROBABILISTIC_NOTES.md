@@ -66,14 +66,23 @@ accelerator for large linear solves, never required).
   reach a.s. has infinite cost; the guard raises when `max reachability(init) != 1`. Corpus pins the
   retry-until-success minimal expected attempts `1/p`.
 
+- **MDP MAX expected reward** — `expected_reward_mdp(..., optimize="max")`. The maximal expected accumulated
+  cost over all schedulers (the stochastic LONGEST path). Finite only when EVERY scheduler is proper —
+  otherwise a scheduler loops away from the target forever and the max is infinite — so the guard is MIN
+  reachability `= 1` from the initial state (the existing `_s0_min` + minimizing `_reach_policy_iteration`),
+  which implies min reachability 1 from every reachable state and hence every policy proper. With every policy
+  proper, any policy is a valid seed (move 0) and the `_safe` restriction is trivially satisfied; maximizing
+  policy iteration (each switch strictly RAISES a bounded, monotone expected cost) converges to the optimum
+  over the finite policy space (Bertsekas & Tsitsiklis SSP, the all-proper case). Shares the min path's exact
+  rational evaluation `E(s) = cost(s) + sum_s' P(s,s') E(s')`. Corpus pins a fast-vs-slow MDP (`min = 1`,
+  `max = 2` steps) and the infinite guard (a self-loop `stall` move drops min reachability below 1, so max
+  raises while min stays 1).
+
 ## Deferred (future layers, not blocking)
 
-- **MDP MAX expected reward** and **zero/negative-cost SSP.** Maximal expected cost is infinite whenever any
-  scheduler can loop away from the target with positive probability, so it needs an "every scheduler is
-  proper" check (min reachability `= 1`) rather than the "exists a proper policy" the min case uses; and the
-  positive-cost SSP assumption above breaks with zero- or negative-cost cycles (an improper policy no longer
-  has infinite cost, so policy iteration can stall). Both are their own increments; each needs a corpus case
-  that actually exercises the degenerate cycle.
+- **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
+  negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall). Its own
+  increment; needs a corpus case that actually exercises the degenerate zero-cost cycle.
 - **Probabilistic LTL / long-run (steady-state) properties.** These reuse the LTL engine and the DTMC/MDP
   machinery but are a larger design; not started.
 

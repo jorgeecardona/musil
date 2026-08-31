@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `expected_reward_mdp(..., optimize="max")`: MDP maximal expected reward (stochastic longest path)
+
+- The maximal expected accumulated cost to first reach the target over all schedulers, exact over the
+  rationals. Finite only when EVERY scheduler is proper (else a scheduler loops away from the target and the
+  max is infinite), so it guards on MIN reachability 1 from the initial state — reusing the existing `_s0_min`
+  + minimizing `_reach_policy_iteration` — which implies every reachable state is proper. Any policy is then a
+  proper seed, and maximizing policy iteration (each switch strictly raises a bounded, monotone expected cost)
+  converges to the optimum (Bertsekas & Tsitsiklis SSP, all-proper case), sharing the min path's exact
+  evaluation. Raises when the guard fails (some scheduler avoids the target with positive probability, max is
+  infinite) or `optimize` is not `"min"`/`"max"`. Corpus pins a fast-vs-slow MDP (`min = 1`, `max = 2` steps)
+  and the infinite guard (a self-loop `stall` move drops min reachability below 1, so max raises, min stays 1).
+- `PROBABILISTIC_NOTES.md` moves MDP max expected reward from Deferred to Shipped; only zero/negative-cost SSP
+  and probabilistic-LTL/steady-state remain deferred.
+
 ### Added — the composed-components scaling benchmark + the symmetry recipe (#37)
 
 - `examples/cosim_master_scaling.py`: a generic co-simulation master over N interchangeable components (each

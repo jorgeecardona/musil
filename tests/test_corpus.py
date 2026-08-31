@@ -474,6 +474,47 @@ def test_ssp_min_expected_attempts_is_one_over_p():
     assert expected_reward_mdp(m, is_win, moves=moves) == Fraction(2)
 
 
+# --------------------------------------------------------------------------------------------------
+# 9b. MDP max expected reward (stochastic LONGEST path) — finite only when every scheduler is proper
+# --------------------------------------------------------------------------------------------------
+
+
+def _tag(tag: str) -> Callable[[Gamble], bool]:
+    return lambda s: s.tag == tag
+
+
+def test_ssp_max_expected_steps_and_the_infinite_guard():
+    # start chooses a FAST route (1 step to win) or a SLOW route (start -> mid -> win, 2 steps). Every
+    # scheduler reaches win almost surely, so both the min and the max expected number of steps are finite:
+    # min takes fast (= 1), max takes slow (= 2). A known verdict independent of musil.
+    start, mid, win = Gamble("start"), Gamble("mid"), Gamble("win")
+    actions = [
+        Action("fast", enabled=_tag("start"), apply=lambda s: win),
+        Action("slow", enabled=_tag("start"), apply=lambda s: mid),
+        Action("m_step", enabled=_tag("mid"), apply=lambda s: win),
+    ]
+    m: Model[Gamble] = Model(init=start, actions=actions, terminal=lambda s: s.tag == "win")
+
+    def singles(_s: Gamble, enabled: tuple[Action[Gamble], ...]) -> list[Sequence[Action[Gamble]]]:
+        return [[a] for a in enabled]  # each action is its own move: the scheduler picks fast vs slow
+
+    def is_win(s: Gamble) -> bool:
+        return s.tag == "win"
+
+    assert expected_reward_mdp(m, is_win, moves=singles, optimize="min") == Fraction(1)  # fast route
+    assert expected_reward_mdp(m, is_win, moves=singles, optimize="max") == Fraction(2)  # slow route
+
+    # Add a self-loop move at start: now a scheduler can STALL forever, so min reachability drops below 1 and
+    # the MAX expected cost is infinite -- the degenerate cycle the guard exists for. The guard raises; min is
+    # still 1 (a scheduler can still take fast).
+    stall: Model[Gamble] = replace(
+        m, actions=[*actions, Action("stall", enabled=_tag("start"), apply=lambda s: start)]
+    )
+    assert expected_reward_mdp(stall, is_win, moves=singles, optimize="min") == Fraction(1)
+    with pytest.raises(ValueError, match="maximal expected cost is infinite"):
+        expected_reward_mdp(stall, is_win, moves=singles, optimize="max")
+
+
 def test_profile_explores_the_same_reachable_set():
     # profile keeps its own instrumented loop (it times enabled/apply/canonicalize separately, which the
     # shared _successors kernel bundles). This pins its full-sweep reachable count to the corpus so it can
