@@ -4,6 +4,18 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.doctor.scan`: spot hand-rolled patterns a shipped API already covers (#36)
+
+- `scan(source) -> list[Finding]` reads Python source with the standard-library `ast` (dependency-free, and
+  it never imports or runs the code) and returns advisory `Finding`s — file positions plus the API to reach
+  for — closing the loop on the recurring finding that shipped features go unadopted. Detected today:
+  `assert X.ok, <msg>` -> `assert_ok(X)` (the message is the tell that distinguishes musil's idiom from a
+  bare truthiness assert, e.g. `requests`' `response.ok`); `assert not X.ok` -> `assert_violates(X, ...)`;
+  and `[s.action for s in X.trace ...]` -> `X.action_names`. Advisory, not a gate.
+- `tests/test_doctor.py` pins the matchers on known snippets (source -> expected finding), including that a
+  bare `assert x.ok` and code already using the shipped APIs are left alone. The `musil doctor <path>` CLI
+  wrapper (version-lag report, whole-tree scan, more matchers) is a follow-up on this core.
+
 ### Added — `portfolio_coverage` + `assert_covers`: suite-level coverage of a declared table (#35)
 
 - `portfolio_coverage(models_or_graphs, get=, declared=)` answers the question a single-model `coverage`

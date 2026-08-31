@@ -231,6 +231,16 @@ re-checked on every pipeline run.
 
 ::: musil.cache
 
+## Doctor — `scan`
+
+Spot hand-rolled patterns that a shipped musil API already covers. `scan(source)` reads Python source with
+the standard-library `ast` (dependency-free, and it never imports or runs the code) and returns advisory
+`Finding`s — file positions plus the API to reach for: `assert x.ok, str(x)` -> `assert_ok`, `assert not
+x.ok` -> `assert_violates`, the trace-name list-comprehension -> `Result.action_names`. Advisory, not a
+gate: it closes the loop on the recurring finding that shipped features go unadopted.
+
+::: musil.doctor
+
 ## Coverage tracing — `no_trace`
 
 A context manager that pauses the current thread's trace function (coverage or any `sys.settrace`

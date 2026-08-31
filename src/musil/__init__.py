@@ -70,6 +70,7 @@ from musil.core import (
 )
 from musil.counterexample import as_regression_test, minimize, replay_actions
 from musil.diffing import ModelDiff, diff
+from musil.doctor import Finding, scan
 from musil.env import (
     Assumption,
     EnvironmentSpec,
@@ -185,6 +186,7 @@ __all__ = [
     "EnvironmentSpec",
     "Eventually",
     "FaultSchedule",
+    "Finding",
     "FixedPoints",
     "GeneralizedBuchi",
     "Graph",
@@ -292,6 +294,7 @@ __all__ = [
     "replay_actions",
     "replicated_transition_actions",
     "responds",
+    "scan",
     "send",
     "simulate",
     "solution_cardinality",
