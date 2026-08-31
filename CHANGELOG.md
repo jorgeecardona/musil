@@ -4,6 +4,18 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `long_run_probability`: exact DTMC long-run / steady-state fraction of time
+
+- The exact fraction of time a DTMC spends in a target set in the limit (PRISM's steady-state / S operator), a
+  `Fraction`. A finite DTMC is absorbed almost surely into a bottom SCC (BSCC); inside each BSCC the long-run
+  fraction of time in a state is its stationary probability, so the answer is `sum_B reach(B) * sum_{s in B,
+  target(s)} pi_B(s)`. Reuses the proven `tarjan` for the BSCC decomposition and the exact `_dtmc_values` for
+  reachability to each BSCC; the stationary distribution is an exact rational solve (`_stationary`: `pi P =
+  pi`, `sum pi = 1`, Gauss-Jordan). Equals the time average even for a PERIODIC BSCC (the Cesàro limit, where
+  `P^n` does not converge); transient states carry zero long-run measure; a deadlock/absorbing state is its
+  own BSCC. Corpus pins the periodic 2-cycle (`1/2`), a biased chain (`1/3`), and a transient split into two
+  absorbing BSCCs (`1/2`; `1` for the whole absorbing set). No dependency.
+
 ### Added — `expected_reward_mdp(..., optimize="max")`: MDP maximal expected reward (stochastic longest path)
 
 - The maximal expected accumulated cost to first reach the target over all schedulers, exact over the

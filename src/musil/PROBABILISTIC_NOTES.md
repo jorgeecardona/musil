@@ -78,13 +78,26 @@ accelerator for large linear solves, never required).
   `max = 2` steps) and the infinite guard (a self-loop `stall` move drops min reachability below 1, so max
   raises while min stays 1).
 
+- **DTMC long-run / steady-state** — `long_run_probability(model, target, weight=...)`. The exact fraction
+  of time the DTMC spends in the target set in the limit (PRISM's steady-state / S operator). A finite DTMC is
+  absorbed almost surely into a bottom SCC (BSCC); inside each BSCC — a finite irreducible chain — the long-run
+  fraction of time in a state is its stationary probability. So the answer is `sum_B reach(B) * sum_{s in B,
+  target(s)} pi_B(s)`: BSCCs via the proven `tarjan`, reachability to each BSCC via the exact `_dtmc_values`,
+  and `pi_B` the exact stationary solve (`_stationary`: `pi P = pi`, `sum pi = 1`, one balance row replaced by
+  normalization, Gauss-Jordan). This equals the time average even for a PERIODIC BSCC (the Cesàro limit),
+  where `P^n` does not converge. Transient states carry zero long-run measure; a deadlock/absorbing state is
+  its own BSCC with mass 1. Corpus pins the periodic 2-cycle (`1/2`), a biased chain (`pi(A) = 1/3`), and a
+  transient split into two absorbing BSCCs (`1/2`, and `1` for the whole absorbing set).
+
 ## Deferred (future layers, not blocking)
 
 - **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
   negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall). Its own
   increment; needs a corpus case that actually exercises the degenerate zero-cost cycle.
-- **Probabilistic LTL / long-run (steady-state) properties.** These reuse the LTL engine and the DTMC/MDP
-  machinery but are a larger design; not started.
+- **Probabilistic LTL, and MDP steady-state.** Probabilistic LTL (the probability that a run satisfies a
+  temporal formula) reuses the LTL engine and the DTMC/MDP machinery but is a larger design; not started. The
+  DTMC long-run above does NOT yet cover the MDP case (min/max long-run over schedulers, which needs maximal
+  end components, not just BSCCs); its own increment.
 
 ## References
 

@@ -40,6 +40,7 @@ from musil import (
     expected_reward_mdp,
     explore,
     explore_por,
+    long_run_probability,
     never,
     partition_actions,
     path_to,
@@ -513,6 +514,62 @@ def test_ssp_max_expected_steps_and_the_infinite_guard():
     assert expected_reward_mdp(stall, is_win, moves=singles, optimize="min") == Fraction(1)
     with pytest.raises(ValueError, match="maximal expected cost is infinite"):
         expected_reward_mdp(stall, is_win, moves=singles, optimize="max")
+
+
+# --------------------------------------------------------------------------------------------------
+# 9c. DTMC long-run / steady-state — the exact fraction of time spent in a target set (known verdicts)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Chain:
+    tag: str
+
+
+def test_long_run_two_cycle_is_one_half_even_though_periodic():
+    # A <-> B, deterministic 2-cycle (period 2). P^n never converges, but the long-run TIME average does:
+    # exactly half the time in each state. long_run_probability uses the stationary distribution (= Cesàro
+    # average), so it returns 1/2 where a naive P^n limit would not exist.
+    m: Model[Chain] = Model(
+        init=Chain("A"),
+        actions=[
+            Action("toB", enabled=lambda s: s.tag == "A", apply=lambda s: Chain("B")),
+            Action("toA", enabled=lambda s: s.tag == "B", apply=lambda s: Chain("A")),
+        ],
+    )
+    assert long_run_probability(m, lambda s: s.tag == "A") == Fraction(1, 2)
+
+
+def test_long_run_biased_chain_matches_the_closed_form():
+    # A -> B always; from B, uniform over {toA, stay}, so P(B->A)=P(B->B)=1/2. Stationary of the two-state
+    # chain with P(A->B)=1, P(B->A)=1/2 is pi(A)=b/(a+b)=(1/2)/(3/2)=1/3, pi(B)=2/3 -- a known closed form.
+    m: Model[Chain] = Model(
+        init=Chain("A"),
+        actions=[
+            Action("toB", enabled=lambda s: s.tag == "A", apply=lambda s: Chain("B")),
+            Action("toA", enabled=lambda s: s.tag == "B", apply=lambda s: Chain("A")),
+            Action("stay", enabled=lambda s: s.tag == "B", apply=lambda s: Chain("B")),
+        ],
+    )
+    assert long_run_probability(m, lambda s: s.tag == "A") == Fraction(1, 3)
+    assert long_run_probability(m, lambda s: s.tag == "B") == Fraction(2, 3)
+
+
+def test_long_run_weights_absorption_across_two_bsccs():
+    # A transient start splits 1/2 to an absorbing X (self-loop) and 1/2 to an absorbing Y (self-loop). The
+    # long-run time in X is P(absorbed in X) * pi_X(X) = 1/2 * 1; the start itself is transient (measure 0).
+    m: Model[Chain] = Model(
+        init=Chain("I"),
+        actions=[
+            Action("left", enabled=lambda s: s.tag == "I", apply=lambda s: Chain("X")),
+            Action("right", enabled=lambda s: s.tag == "I", apply=lambda s: Chain("Y")),
+            Action("loopX", enabled=lambda s: s.tag == "X", apply=lambda s: Chain("X")),
+            Action("loopY", enabled=lambda s: s.tag == "Y", apply=lambda s: Chain("Y")),
+        ],
+    )
+    assert long_run_probability(m, lambda s: s.tag == "X") == Fraction(1, 2)
+    assert long_run_probability(m, lambda s: s.tag == "I") == Fraction(0)  # transient: no long-run time
+    assert long_run_probability(m, lambda s: s.tag in {"X", "Y"}) == Fraction(1)  # absorbed a.s.
 
 
 def test_profile_explores_the_same_reachable_set():

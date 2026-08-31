@@ -132,6 +132,7 @@ from musil.por import explore_por, independent, por_sound
 from musil.probabilistic import (
     expected_reward,
     expected_reward_mdp,
+    long_run_probability,
     reach_probability,
     reach_probability_mdp,
 )
@@ -277,6 +278,7 @@ __all__ = [
     "invariant_coverage_of",
     "invariant_from_violations",
     "known_models",
+    "long_run_probability",
     "metrics_of",
     "minimize",
     "multi_status_field_actions",

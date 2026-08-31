@@ -19,7 +19,10 @@ all schedulers, solved EXACTLY by policy iteration (each policy's value is an ex
 is improved until stable). Both functions take an optional ``steps=k`` for the exact probability of
 reaching the target WITHIN ``k`` transitions (a finite unrolling, no fixed point). ``expected_reward``
 answers the dual quantitative question: the exact expected accumulated cost (default: number of steps) to
-reach the target in a DTMC, finite only when the target is reached almost surely. See PROBABILISTIC_NOTES.md.
+reach the target in a DTMC, finite only when the target is reached almost surely. ``long_run_probability``
+answers the steady-state question: the exact fraction of time the DTMC spends in a target set in the limit,
+by decomposing into bottom SCCs and solving each one's stationary distribution exactly. See
+PROBABILISTIC_NOTES.md.
 """
 
 from __future__ import annotations
@@ -29,6 +32,7 @@ from fractions import Fraction
 from typing import Literal
 
 from musil.core import Action, Model, actions_source, explore
+from musil.liveness import tarjan
 
 # A distribution over successors: (probability, successor) pairs summing to 1 (empty = absorbing / no move).
 type _Dist[S] = list[tuple[Fraction, S]]
@@ -242,6 +246,75 @@ def _bounded_values[S: Hashable](
             for s in states
         }
     return values
+
+
+def _stationary[S: Hashable](bscc: Sequence[S], dist: Mapping[S, _Dist[S]]) -> dict[S, Fraction]:
+    """The unique stationary distribution of a bottom SCC — a finite irreducible DTMC — exact over the
+    rationals: the ``pi`` solving ``pi P = pi`` with ``sum pi = 1``. Set up as ``m`` equations — ``m - 1``
+    balance equations ``sum_s pi(s) (P(s, t) - [s == t]) = 0`` plus the normalization ``sum pi = 1`` replacing
+    the last (redundant) balance row — and solved by the shared Gauss-Jordan. A singleton BSCC (a self-loop
+    state, or an absorbing / deadlock state) reduces to the normalization alone, giving ``pi = 1`` there.
+    Being the stationary distribution, it is also the long-run fraction of time spent in each state, EQUAL to
+    the time average even for a periodic BSCC (where ``P^n`` does not converge but the Cesàro average does)."""
+    m = len(bscc)
+    idx = {s: i for i, s in enumerate(bscc)}
+    a = [[Fraction(0) for _ in range(m)] for _ in range(m)]
+    b = [Fraction(0) for _ in range(m)]
+    for i, t in enumerate(bscc):
+        if i < m - 1:  # balance row for t: sum_j pi_j * (P(s_j, t) - [s_j == t]) = 0
+            a[i][i] -= Fraction(1)  # the -[s == t] diagonal term
+            for j, s in enumerate(bscc):
+                for p, succ in dist[s]:
+                    if succ == t:
+                        a[i][j] += p
+        else:  # last row: normalization sum pi = 1 (replaces the redundant final balance equation)
+            for j in range(m):
+                a[i][j] = Fraction(1)
+            b[i] = Fraction(1)
+    solution = _solve_linear(a, b)
+    return {s: solution[idx[s]] for s in bscc}
+
+
+def long_run_probability[S: Hashable](
+    model: Model[S],
+    target: Callable[[S], bool],
+    *,
+    weight: Callable[[str, S], Fraction | int] | None = None,
+    max_states: int = 1_000_000,
+) -> Fraction:
+    """The exact long-run (steady-state) fraction of time the DTMC spends in ``target`` states, from the
+    initial state — the answer to "in the limit, what proportion of the time is the system in a target
+    state?" (PRISM's steady-state / S operator). A ``Fraction``, no floating point.
+
+    The reachable graph is a DTMC (each state's enabled actions' ``weight`` normalise into a distribution
+    over successors, as in ``reach_probability``). A finite DTMC is absorbed almost surely into one of its
+    BOTTOM strongly-connected components (BSCCs); inside each BSCC — a finite irreducible chain — the long-run
+    fraction of time in each state is its stationary probability. So the answer is, over the BSCCs ``B``, the
+    sum of ``P(the run is absorbed into B)`` times ``B``'s stationary mass on the target states:
+    ``sum_B reach(B) * sum_{s in B, target(s)} pi_B(s)``. Reachability to each BSCC reuses the exact DTMC
+    solve; ``pi_B`` is the exact stationary solve (``_stationary``). Transient states carry zero long-run
+    measure. An absorbing / deadlock state is treated as self-absorbing (it forms its own BSCC with mass 1).
+
+    Raises ``ValueError`` if the exploration truncates at ``max_states`` (the answer would be inconclusive).
+    Requires hashable states (the graph is explored)."""
+    graph = explore(model, max_states=max_states)
+    if graph.truncated:
+        raise ValueError("long_run_probability: exploration truncated at max_states; the answer is inconclusive")
+    w = weight if weight is not None else _uniform
+    dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
+    # SCCs over the DTMC support graph (an edge wherever the distribution puts positive probability).
+    support: dict[S, list[tuple[str, S]]] = {s: [("", t) for _, t in dist[s]] for s in graph.states}
+    total = Fraction(0)
+    for scc in tarjan(set(graph.states), support):
+        if any(t not in scc for s in scc for _, t in dist[s]):
+            continue  # not a BOTTOM SCC: a distribution edge leaves it, so the run does not stay here
+        pi = _stationary(list(scc), dist)
+        pi_on_target = sum((pi[s] for s in scc if target(s)), Fraction(0))
+        if pi_on_target == 0:
+            continue  # this BSCC holds no target state -> contributes no long-run time
+        reach_b = _dtmc_values(graph.states, dist, scc.__contains__)[graph.initial[0]]
+        total += reach_b * pi_on_target
+    return total
 
 
 def _s0_min[S: Hashable](
