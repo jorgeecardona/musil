@@ -237,9 +237,11 @@ def check_ltl[S: Hashable](
     """Check ``formula`` against ``model``, reducing the supported fragment onto ``check`` /
     ``check_liveness`` (see the module docstring). Returns a ``Result`` for the safety reductions and a
     ``LivenessResult`` for the liveness ones; both satisfy the ``Verdict`` protocol (``.ok`` + ``__str__``).
-    ``fair`` / ``fair_strong`` apply to the liveness reductions. Any formula outside the reducible shapes
-    is checked by the general Büchi engine over the stutter-extended reachable graph (a ``Result`` with
-    ``kind="ltl"`` on violation). On violation the ``Result`` carries a counterexample trace: the accepting
+    ``fair`` / ``fair_strong`` apply to the liveness reductions (F / GF / G(a -> F b)). Any formula outside
+    the reducible shapes is checked by the general Büchi engine over the stutter-extended reachable graph (a
+    ``Result`` with ``kind="ltl"`` on violation); that engine does not yet compose fairness, so passing a
+    non-empty ``fair`` / ``fair_strong`` with such a formula RAISES ``NotImplementedError`` rather than
+    silently dropping the assumption (which could report a counterexample a fair scheduler excludes). On violation the ``Result`` carries a counterexample trace: the accepting
     lasso of the ``Not(formula)`` automaton mapped back to model states — ``<init> -> ...(stem)... ->
     ...(cycle)`` — a concrete run that refutes the formula. Requires hashable states (the engine explores
     the graph)."""
@@ -268,6 +270,17 @@ def check_ltl[S: Hashable](
             return check_ltl(model, b, name=name, fair=fair, fair_strong=fair_strong, max_states=max_states)
         case _:
             pass
+    # The general engine does not yet compose fairness (that needs action-labelled atoms in the product;
+    # see LTL_NOTES.md). Fairness is honoured only for the reducible forms above, which route through
+    # check_liveness. Rather than silently DROP a fair/fair_strong assumption here -- which would return a
+    # verdict, and possibly a counterexample lasso, that a fair scheduler excludes -- REFUSE explicitly.
+    if (fair is not None and list(fair)) or (fair_strong is not None and list(fair_strong)):
+        raise NotImplementedError(
+            f"check_ltl cannot yet apply fairness to {formula}: it needs the general Büchi engine, which "
+            "does not compose fairness. Fairness (fair/fair_strong) is supported only for the reducible "
+            "forms F / GF / G(a -> F b); express the property in one of those shapes, or drop the "
+            "fairness assumption here."
+        )
     # General engine: model |= phi iff the automaton for Not(phi) has no accepting run over the
     # (stutter-extended) reachable graph. Covers Until/Release/Next/arbitrary nesting.
     graph = _stutter(explore(model, max_states=max_states))

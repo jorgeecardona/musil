@@ -7,9 +7,18 @@ SOUNDLY onto the existing proven primitives (`check`, `check_liveness`):
 - and any top-level conjunction of the above (`model |= a & b` iff `model |= a` and `model |= b`).
 
 Everything else — `Until`, `Release`, `Next` in general position, `F G`, disjunctions of temporal
-formulas, arbitrary nesting — raises `NotImplementedError` rather than returning a guessed verdict. This
-note is the plan for the general engine that will replace those refusals, built incrementally on top of
-the same AST, dependency-free (per the dependency policy: no z3, build it ourselves).
+formulas, arbitrary nesting — is now checked by the general Büchi engine (GPVW + nested-DFS emptiness over
+the stutter-extended reachable graph); the pipeline below is BUILT, not planned. Dependency-free per the
+dependency policy (no z3, built in-house).
+
+**One deferral remains: fairness on the general-engine path.** `fair` / `fair_strong` are honoured only for
+the reducible forms (they route through `check_liveness`). The general engine does not yet compose fairness,
+so `check_ltl` REFUSES (`NotImplementedError`) when a non-empty `fair` / `fair_strong` is passed with an
+irreducible formula, rather than silently dropping the assumption (which could report a counterexample a fair
+scheduler excludes). Composing fairness in the engine needs ACTION-labelled atoms in the product (the
+fairness premise `(GF enabled_a -> GF taken_a) -> φ` is over action occurrences, not state atoms), so the
+product must track the action taken and the automaton must range over action literals. That is the next LTL
+increment; until then the refusal keeps the surface sound.
 
 ## The standard pipeline (what we are building)
 

@@ -380,7 +380,7 @@ wheels = [
 
 [[package]]
 name = "musil"
-version = "0.34.28"
+version = "0.34.29"
 source = { editable = "." }
 
 [package.optional-dependencies]

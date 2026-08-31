@@ -239,6 +239,22 @@ def test_traffic_light_ltl_via_check_ltl():
     assert check_ltl(m, Until(known, green)).ok
 
 
+def test_check_ltl_refuses_fairness_on_the_general_engine():
+    # Fairness is honoured only for the reducible forms (F / GF / G(a -> F b)) via check_liveness. A formula
+    # that needs the general Büchi engine (here an Until) cannot yet compose fairness, so check_ltl REFUSES
+    # rather than silently returning a verdict that ignores the fair/fair_strong assumption (which could
+    # report a counterexample a fair scheduler excludes). Without fairness the engine runs normally.
+    m = light_model()
+    known = Atom[Light]("known", lambda s: s.color in {"red", "green", "yellow"})
+    green = Atom[Light]("green", lambda s: s.color == "green")
+    assert isinstance(check_ltl(m, Until(known, green)), Result)  # no fairness -> engine returns a Result
+    assert check_ltl(m, Until(known, green), fair=()).ok  # empty fairness is no constraint, not a refusal
+    with pytest.raises(NotImplementedError, match="fairness"):
+        check_ltl(m, Until(known, green), fair=("go",))
+    with pytest.raises(NotImplementedError, match="fairness"):
+        check_ltl(m, Until(known, green), fair_strong=("go",))
+
+
 def test_patterns_agree_with_check_ltl():
     # The liveness patterns are sugar over check_ltl: each must give the SAME verdict as the LTL formula it
     # builds, on a property that holds AND one that does not. Pinned so the two temporal surfaces can never

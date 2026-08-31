@@ -4,6 +4,18 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Fixed — `check_ltl`: refuse fairness on the general engine instead of silently dropping it
+
+- `fair` / `fair_strong` are honoured only for the reducible LTL forms (F / GF / G(a -> F b)), which route
+  through `check_liveness`. The general Büchi engine (Until / Release / Next / nesting) did not compose
+  fairness and silently IGNORED a `fair` / `fair_strong` argument — returning a verdict, and possibly a
+  counterexample lasso, that a fair scheduler would exclude. `check_ltl` now RAISES `NotImplementedError`
+  when a non-empty `fair` / `fair_strong` is passed with an irreducible formula, keeping the surface sound;
+  an empty `fair=()` is no constraint and still runs. The liveness patterns are unaffected (their formulas
+  always reduce). `LTL_NOTES.md` records the deferral: composing fairness in the engine needs action-labelled
+  atoms in the product (the premise `(GF enabled_a -> GF taken_a) -> φ` is over action occurrences), the next
+  LTL increment.
+
 ### Changed — BFS-loop unification (roadmap 1b): share successors on the edge-invariant path
 
 - On the edge-invariant path `check` and `check_all` computed every successor TWICE per state: once for the
