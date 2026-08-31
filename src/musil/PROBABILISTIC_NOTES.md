@@ -97,15 +97,27 @@ accelerator for large linear solves, never required).
   its own BSCC with mass 1. Corpus pins the periodic 2-cycle (`1/2`), a biased chain (`pi(A) = 1/3`), and a
   transient split into two absorbing BSCCs (`1/2`, and `1` for the whole absorbing set).
 
+- **Probabilistic LTL, reducible fragment** — `probability_ltl(model, formula)`. The exact probability that a
+  random DTMC run satisfies `formula`, for the shapes with a direct characterisation: `F p` = reachability of
+  `p`; `G p` = `1 - P(F ¬p)`; `GF p` = probability of absorption into a bottom SCC that CONTAINS a `p` state (a
+  run visits every state of its absorbing BSCC infinitely often); `FG p` = absorption into a bottom SCC
+  ENTIRELY inside `p`. Reuses the reachability solve and the BSCC decomposition (`_bscc_reach_sum`), and the
+  reducible-fragment matcher from `check_ltl` (`_push_negations` / `_state_predicate`). Corpus separates GF
+  from FG on a model with a `{A,B}` cycle where only `A` is the target: `P(GF A) = 1/2`, `P(FG A) = 0`.
+
 ## Deferred (future layers, not blocking)
 
+- **General probabilistic LTL** (`Until`, `Next`, leads-to, nested/ disjoined temporal operators). Unlike the
+  qualitative engine, the quantitative measure needs a DETERMINISTIC automaton for the formula — the
+  nondeterministic Büchi automaton the GPVW engine builds gives the wrong probability on the DTMC product — so
+  it needs a Rabin/Safra determinization (or a limit-deterministic construction), a larger build.
+  `probability_ltl` raises `NotImplementedError` outside the reducible fragment until then.
 - **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
   negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall). Its own
   increment; needs a corpus case that actually exercises the degenerate zero-cost cycle.
-- **Probabilistic LTL, and MDP steady-state.** Probabilistic LTL (the probability that a run satisfies a
-  temporal formula) reuses the LTL engine and the DTMC/MDP machinery but is a larger design; not started. The
-  DTMC long-run above does NOT yet cover the MDP case (min/max long-run over schedulers, which needs maximal
-  end components, not just BSCCs); its own increment.
+- **MDP steady-state.** The DTMC long-run above does NOT cover the MDP case (min/max long-run over
+  schedulers, which needs MAXIMAL END COMPONENTS — a scheduler can keep the run inside a sub-MDP forever —
+  not just BSCCs); its own increment.
 
 ## References
 

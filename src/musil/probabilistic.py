@@ -21,8 +21,9 @@ reaching the target WITHIN ``k`` transitions (a finite unrolling, no fixed point
 answers the dual quantitative question: the exact expected accumulated cost (default: number of steps) to
 reach the target in a DTMC, finite only when the target is reached almost surely. ``long_run_probability``
 answers the steady-state question: the exact fraction of time the DTMC spends in a target set in the limit,
-by decomposing into bottom SCCs and solving each one's stationary distribution exactly. See
-PROBABILISTIC_NOTES.md.
+by decomposing into bottom SCCs and solving each one's stationary distribution exactly. ``probability_ltl``
+answers the exact probability that a random DTMC run satisfies an LTL formula, for the reducible F / G / GF /
+FG fragment. See PROBABILISTIC_NOTES.md.
 """
 
 from __future__ import annotations
@@ -33,6 +34,15 @@ from typing import Literal
 
 from musil.core import Action, Model, actions_source, explore
 from musil.liveness import tarjan
+
+# intra-package reuse of the LTL normaliser + state-predicate compiler for the reducible PLTL fragment
+from musil.ltl import (
+    LTL,
+    Always,
+    Eventually,
+    _push_negations,  # pyright: ignore[reportPrivateUsage]
+    _state_predicate,  # pyright: ignore[reportPrivateUsage]
+)
 
 # A distribution over successors: (probability, successor) pairs summing to 1 (empty = absorbing / no move).
 type _Dist[S] = list[tuple[Fraction, S]]
@@ -337,6 +347,81 @@ def long_run_probability[S: Hashable](
         reach_b = _dtmc_values(graph.states, dist, scc.__contains__)[graph.initial[0]]
         total += reach_b * pi_on_target
     return total
+
+
+def _bscc_reach_sum[S: Hashable](
+    states: Sequence[S], dist: Mapping[S, _Dist[S]], init: S, keep: Callable[[frozenset[S]], bool]
+) -> Fraction:
+    """Sum of ``P(the run is absorbed into B)`` over the bottom SCCs ``B`` that satisfy ``keep`` — the exact
+    probability that the DTMC ends up cycling forever in one of the kept BSCCs. Used for the repeated- and
+    persistent-reachability probabilities (GF / FG of a state predicate)."""
+    support: dict[S, list[tuple[str, S]]] = {s: [("", t) for _, t in dist[s]] for s in states}
+    total = Fraction(0)
+    for scc in tarjan(set(states), support):
+        if any(t not in scc for s in scc for _, t in dist[s]):
+            continue  # not a bottom SCC
+        b = frozenset(scc)
+        if keep(b):
+            total += _dtmc_values(states, dist, b.__contains__)[init]
+    return total
+
+
+def probability_ltl[S: Hashable](
+    model: Model[S],
+    formula: LTL[S],
+    *,
+    weight: Callable[[str, S], Fraction | int] | None = None,
+    max_states: int = 1_000_000,
+) -> Fraction:
+    """The exact probability that a random run of the DTMC satisfies the LTL ``formula`` (PRISM's P operator),
+    a ``Fraction``. The reachable graph is a DTMC exactly as in ``reach_probability`` (``weight`` normalises
+    each state's enabled actions into a distribution; a negative weight raises).
+
+    Supports the fragment with a direct DTMC characterisation — ``formula`` a temporal operator applied to a
+    STATE predicate ``p`` (a boolean combination of atoms), namely:
+
+    - ``F p`` → the reachability probability of ``p``;
+    - ``G p`` → ``1 - P(F ¬p)``;
+    - ``GF p`` (``Always(Eventually p)``) → the probability of being absorbed into a bottom SCC that CONTAINS a
+      ``p`` state (a run visits every state of its absorbing BSCC infinitely often);
+    - ``FG p`` (``Eventually(Always p)``) → the probability of being absorbed into a bottom SCC ENTIRELY inside
+      ``p``.
+
+    All exact, reusing the reachability solve and the BSCC decomposition. Any other formula (``Until``,
+    ``Next``, a leads-to, nested temporal operators, disjunctions of temporal formulas) raises
+    ``NotImplementedError``: general probabilistic LTL needs a DETERMINISTIC automaton for the formula (the
+    nondeterministic Büchi automaton the qualitative engine builds gives the wrong measure on a DTMC product),
+    which is a larger construction (Safra/Rabin) not yet built. Raises ``ValueError`` if exploration truncates."""
+    phi = _push_negations(formula)
+    graph = explore(model, max_states=max_states)
+    if graph.truncated:
+        raise ValueError("probability_ltl: exploration truncated at max_states; the probability is inconclusive")
+    w = weight if weight is not None else _uniform
+    dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
+    init = graph.initial[0]
+    match phi:
+        case Always(arg=Eventually(arg=inner)):  # GF p
+            p = _state_predicate(inner)
+            if p is not None:
+                return _bscc_reach_sum(graph.states, dist, init, lambda b: any(p(s) for s in b))
+        case Eventually(arg=Always(arg=inner)):  # FG p
+            p = _state_predicate(inner)
+            if p is not None:
+                return _bscc_reach_sum(graph.states, dist, init, lambda b: all(p(s) for s in b))
+        case Eventually(arg=inner):  # F p
+            p = _state_predicate(inner)
+            if p is not None:
+                return _dtmc_values(graph.states, dist, p)[init]
+        case Always(arg=inner):  # G p = 1 - P(F !p)
+            p = _state_predicate(inner)
+            if p is not None:
+                return 1 - _dtmc_values(graph.states, dist, lambda s, _p=p: not _p(s))[init]
+        case _:
+            pass
+    raise NotImplementedError(
+        f"probability_ltl supports F/G/GF/FG of a state predicate; {formula} needs the general probabilistic "
+        "LTL engine (a deterministic automaton for the formula), which is not yet built"
+    )
 
 
 def _s0_min[S: Hashable](

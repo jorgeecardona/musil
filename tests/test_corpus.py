@@ -48,6 +48,7 @@ from musil import (
     path_to,
     por_sound,
     portfolio_coverage,
+    probability_ltl,
     profile,
     reach_probability,
     reach_probability_mdp,
@@ -717,6 +718,30 @@ def test_negative_weight_is_rejected_across_probabilistic_functions():
     for call in calls:
         with pytest.raises(ValueError, match="weight must be non-negative"):
             call()
+
+
+def test_probability_ltl_reducible_fragment_known_verdicts():
+    # I -> A or Z (1/2 each); A<->B is a 2-cycle with the target p={A}; Z absorbs. Two bottom SCCs: {A,B}
+    # (meets p, so GF p holds if absorbed there) and {Z} (no p). This separates GF from FG.
+    m: Model[Chain] = Model(
+        init=Chain("I"),
+        actions=[
+            Action("toA", enabled=_is("I"), apply=lambda s: Chain("A")),
+            Action("toZ", enabled=_is("I"), apply=lambda s: Chain("Z")),
+            Action("AtoB", enabled=_is("A"), apply=lambda s: Chain("B")),
+            Action("BtoA", enabled=_is("B"), apply=lambda s: Chain("A")),
+            Action("loopZ", enabled=_is("Z"), apply=lambda s: Chain("Z")),
+        ],
+        terminal=lambda s: False,
+    )
+    at_a = Atom[Chain]("A", _is("A"))
+    not_z = Atom[Chain]("notZ", lambda s: s.tag != "Z")
+    assert probability_ltl(m, Eventually(at_a)) == Fraction(1, 2)  # P(F A): reach A
+    assert probability_ltl(m, Always(Eventually(at_a))) == Fraction(1, 2)  # P(GF A): absorbed into {A,B}
+    assert probability_ltl(m, Eventually(Always(at_a))) == Fraction(0)  # P(FG A): no BSCC inside {A}
+    assert probability_ltl(m, Always(not_z)) == Fraction(1, 2)  # P(G !Z) = 1 - P(F Z)
+    with pytest.raises(NotImplementedError):  # general PLTL (Until) needs a deterministic automaton
+        probability_ltl(m, Until(at_a, not_z))
 
 
 def test_profile_explores_the_same_reachable_set():

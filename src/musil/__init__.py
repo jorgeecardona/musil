@@ -134,6 +134,7 @@ from musil.probabilistic import (
     expected_reward,
     expected_reward_mdp,
     long_run_probability,
+    probability_ltl,
     reach_probability,
     reach_probability_mdp,
 )
@@ -291,6 +292,7 @@ __all__ = [
     "path_to",
     "por_sound",
     "portfolio_coverage",
+    "probability_ltl",
     "profile",
     "protocol_actions",
     "protocol_operations",

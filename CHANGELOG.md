@@ -4,6 +4,17 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `probability_ltl`: exact probability a DTMC run satisfies an LTL formula (reducible fragment)
+
+- `probability_ltl(model, formula, weight=...)` returns the exact probability (a `Fraction`) that a random run
+  of the DTMC satisfies `formula`, for the shapes with a direct characterisation: `F p` = reachability of `p`;
+  `G p` = `1 - P(F ¬p)`; `GF p` = probability of absorption into a bottom SCC that CONTAINS a `p` state; `FG p`
+  = absorption into a bottom SCC ENTIRELY inside `p`. Reuses the reachability solve and the BSCC decomposition
+  (`_bscc_reach_sum`) and the reducible-fragment matcher from `check_ltl`. Any other formula (`Until`, `Next`,
+  leads-to, nested/disjoined temporal operators) raises `NotImplementedError`: general probabilistic LTL needs
+  a deterministic automaton for the formula (a Rabin/Safra construction), a larger build. Corpus separates GF
+  from FG on a `{A,B}` cycle where only `A` is the target: `P(GF A) = 1/2`, `P(FG A) = 0`, `P(F A) = 1/2`.
+
 ### Added — fair LTL on the general engine: `check_ltl(..., fair=/fair_strong=)` composes fairness
 
 - `check_ltl` now honours `fair` / `fair_strong` (weak / strong fairness by action name) for ANY formula, not
