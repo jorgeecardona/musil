@@ -4,6 +4,22 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `portfolio_coverage` + `assert_covers`: suite-level coverage of a declared table (#35)
+
+- `portfolio_coverage(models_or_graphs, get=, declared=)` answers the question a single-model `coverage`
+  cannot: how much of a declared external state machine does the WHOLE portfolio exercise? It reads the
+  transitions of a state FIELD across each edge (`get(before) -> get(after)`, so action naming is
+  irrelevant), unions them across every model, and diffs against the `declared` table — returning a
+  `PortfolioCoverage` with covered / dead / undeclared edges, covered / dead field values, and an exact
+  `ratio` (`Fraction`). A `Graph` is used as-is; a `Model` is explored.
+- `assert_covers(portfolio, declared, get=, ratio=, blind_spots=)` is the ratchet gate that fixes the
+  numerator-only "N transitions covered" test which let one suite rot 67% -> 56% while staying green. It
+  asserts: (1) no undeclared transition (the portfolio never exercises an edge the table forbids); (2) the
+  dead edges are EXACTLY the named `blind_spots` (a new dead edge is a regression; a covered blind spot must
+  be removed — the set can only shrink); (3) the coverage ratio meets the floor.
+- Corpus pins a two-model portfolio over a 4-edge table: the union covers all four (ratio 1), one model
+  alone covers half, and the gate rejects both a new unacknowledged dead edge and an undeclared transition.
+
 ### Added — `musil.reconciler`: the controller/reconciler shape as a builder (#23)
 
 - `reconciler(get_desired=, get_actual=, set_actual=)` returns `(converged, reconcile)` for the single most

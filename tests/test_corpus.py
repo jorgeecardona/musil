@@ -24,6 +24,7 @@ from musil import (
     Next,
     Result,
     Until,
+    assert_covers,
     assert_covers_table,
     assert_ok,
     assert_violates,
@@ -43,6 +44,7 @@ from musil import (
     partition_actions,
     path_to,
     por_sound,
+    portfolio_coverage,
     profile,
     reach_probability,
     reach_probability_mdp,
@@ -973,3 +975,54 @@ def test_reconciler_converges_under_reconcile_fairness_only():
     assert check_liveness(m, goal=converged, everywhere=True).ok
     # ...and fails without fairness: the idle self-loop can starve reconcile forever.
     assert not check_liveness(m, goal=converged, everywhere=True, fair=()).ok
+
+
+# --------------------------------------------------------------------------------------------------
+# 21. portfolio_coverage — how much of a declared table a SET of models exercises, with a ratchet (#35)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class St:
+    v: str
+
+
+_EXT_TABLE = {"a": frozenset({"b", "c"}), "b": frozenset({"a"}), "c": frozenset({"a"})}
+
+
+def _walk(*edges: tuple[str, str]) -> Model[St]:
+    # a model that only ever walks the given (src -> dst) value edges
+    acts = [
+        Action(f"{x}->{y}", enabled=lambda s, x=x: s.v == x, apply=lambda s, y=y: St(y)) for x, y in edges
+    ]
+    return Model(init=St("a"), actions=acts, terminal=lambda s: False)
+
+
+def _v(s: St) -> str:
+    return s.v
+
+
+def test_portfolio_coverage_unions_models_and_ratchets():
+    m1 = _walk(("a", "b"), ("b", "a"))  # covers a->b, b->a
+    m2 = _walk(("a", "c"), ("c", "a"))  # covers a->c, c->a
+
+    # Unioned over both models, all four declared edges are exercised: ratio 1, nothing dead.
+    both = portfolio_coverage([m1, m2], get=_v, declared=_EXT_TABLE)
+    assert both.dead_edges == frozenset()
+    assert both.ratio == Fraction(1)
+    assert both.covered_edges == frozenset({("a", "b"), ("b", "a"), ("a", "c"), ("c", "a")})
+
+    # m1 alone covers only half; the other two edges are dead.
+    one = portfolio_coverage([m1], get=_v, declared=_EXT_TABLE)
+    assert one.ratio == Fraction(1, 2)
+    assert one.dead_edges == frozenset({("a", "c"), ("c", "a")})
+
+    # Ratchet gate: full portfolio meets ratio 1.0; the m1-only suite needs its dead edges named exactly.
+    assert_covers([m1, m2], _EXT_TABLE, get=_v, ratio=1.0)
+    assert_covers([m1], _EXT_TABLE, get=_v, blind_spots={("a", "c"), ("c", "a")})
+    # A new uncovered edge that is NOT acknowledged in blind_spots is a regression the gate rejects.
+    with pytest.raises(AssertionError, match="newly uncovered"):
+        assert_covers([m1], _EXT_TABLE, get=_v, blind_spots={("a", "c")})
+    # A model exercising a transition the table forbids is drift the gate rejects.
+    with pytest.raises(AssertionError, match="not in the declared table"):
+        assert_covers([_walk(("a", "z"))], _EXT_TABLE, get=_v)

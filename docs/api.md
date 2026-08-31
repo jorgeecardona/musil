@@ -124,12 +124,16 @@ guarantees into the invariants. The result surface all `Assumption` objects that
 
 ::: musil.env
 
-## Metrics & coverage — `state_space_metrics`, `coverage`, `invariant_coverage`, `solution_cardinality`
+## Metrics & coverage — `state_space_metrics`, `coverage`, `invariant_coverage`, `solution_cardinality`, `portfolio_coverage`
 
 How big and how branchy a design's reachable behaviour is, how many reachable states satisfy a goal,
 and — because a green `check` does not say the behaviour you wrote was ever explored — which actions
 never fired, were always enabled, or only ever self-looped (`coverage`), and which invariants are
-load-bearing vs candidate-vacuous (`invariant_coverage`).
+load-bearing vs candidate-vacuous (`invariant_coverage`). `portfolio_coverage` asks the suite-level
+question a single model cannot — how much of a declared external state machine the WHOLE set of models
+exercises (reading state-field values across edges, unioned across the portfolio, diffed against the
+table) — and `assert_covers` is its ratchet gate: no undeclared transition, dead edges exactly the named
+blind spots (so they can only shrink), and a coverage-ratio floor.
 
 ::: musil.metrics
 

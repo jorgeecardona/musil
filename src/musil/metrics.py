@@ -17,8 +17,9 @@ Deliberately NOT a single fabricated "determinism score" — these are honest co
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Mapping
+from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass
+from fractions import Fraction
 
 from musil.core import Graph, Invariant, Model, actions_source, explore
 
@@ -304,3 +305,113 @@ def invariant_coverage[S: Hashable](model: Model[S], *, max_states: int = 1_000_
     space: ``check`` early-exits at the first violation, so its graph is partial and this would misjudge
     which invariants were ever threatened."""
     return invariant_coverage_of(explore(model, max_states=max_states), model)
+
+
+@dataclass(frozen=True, slots=True)
+class PortfolioCoverage:
+    """How much of a declared transition table a whole PORTFOLIO of models exercises — read from state-field
+    VALUES across edges (action naming is irrelevant), unioned across every model, and diffed against the
+    ``declared`` table. The question a *suite* asks that per-model ``coverage`` cannot: "what does the whole
+    portfolio prove about the real state machine?"
+
+    - ``covered_edges`` / ``dead_edges`` — declared ``(src, dst)`` field-transitions some model exercises /
+      that NO model in the portfolio exercises.
+    - ``undeclared_edges`` — field-transitions a model DOES make that the table does not declare: the
+      portfolio exercises a transition the external machine forbids (drift).
+    - ``covered_values`` / ``dead_values`` — declared field values seen / never seen across the portfolio.
+
+    ``ratio`` is covered declared edges over all declared edges (exact ``Fraction``) — the number a ratchet
+    gate floors so coverage cannot rot as the denominator grows."""
+
+    covered_edges: frozenset[tuple[str, str]]
+    dead_edges: frozenset[tuple[str, str]]
+    undeclared_edges: frozenset[tuple[str, str]]
+    covered_values: frozenset[str]
+    dead_values: frozenset[str]
+    declared_edges: frozenset[tuple[str, str]]
+
+    @property
+    def ratio(self) -> Fraction:
+        """Covered declared edges over all declared edges (1 if the table declares no edge)."""
+        return Fraction(len(self.covered_edges), len(self.declared_edges)) if self.declared_edges else Fraction(1)
+
+
+def portfolio_coverage[S: Hashable](
+    portfolio: Iterable[Model[S] | Graph[S]],
+    *,
+    get: Callable[[S], str],
+    declared: Mapping[str, Iterable[str]],
+    max_states: int = 1_000_000,
+) -> PortfolioCoverage:
+    """Union the state-field transitions exercised across a ``portfolio`` of models (or pre-built graphs) and
+    diff them against the ``declared`` transition table. ``get(state)`` reads the field whose values are the
+    external machine's states; ``declared`` maps each value to the values it may move to. A Model is explored;
+    a ``Graph`` is used as-is (share one ``explore`` across analyses). See :class:`PortfolioCoverage`."""
+    declared_edges = frozenset((src, dst) for src, dsts in declared.items() for dst in dsts)
+    declared_values = set(declared) | {dst for dsts in declared.values() for dst in dsts}
+    exercised_edges: set[tuple[str, str]] = set()
+    exercised_values: set[str] = set()
+    for item in portfolio:
+        graph = item if isinstance(item, Graph) else explore(item, max_states=max_states)
+        for s in graph.states:
+            src = get(s)
+            exercised_values.add(src)
+            for _name, t in graph.edges.get(s, ()):
+                dst = get(t)
+                exercised_values.add(dst)
+                if src != dst:
+                    exercised_edges.add((src, dst))
+    return PortfolioCoverage(
+        covered_edges=frozenset(exercised_edges & declared_edges),
+        dead_edges=frozenset(declared_edges - exercised_edges),
+        undeclared_edges=frozenset(exercised_edges - declared_edges),
+        covered_values=frozenset(exercised_values & declared_values),
+        dead_values=frozenset(declared_values - exercised_values),
+        declared_edges=declared_edges,
+    )
+
+
+def _fmt_edges(edges: frozenset[tuple[str, str]]) -> str:
+    return ", ".join(f"{a} -> {b}" for a, b in sorted(edges))
+
+
+def assert_covers[S: Hashable](
+    portfolio: Iterable[Model[S] | Graph[S]],
+    declared: Mapping[str, Iterable[str]],
+    *,
+    get: Callable[[S], str],
+    ratio: float = 0.0,
+    blind_spots: Iterable[tuple[str, str]] = (),
+    max_states: int = 1_000_000,
+    message: str | None = None,
+) -> PortfolioCoverage:
+    """Ratchet gate on portfolio coverage — the fix for a numerator-only "N transitions covered" gate that
+    lets real coverage rot as the denominator grows (a suite once fell 67% -> 56% while staying green).
+    Computes :func:`portfolio_coverage` and asserts, in order:
+
+    1. NO undeclared edge — the portfolio never exercises a transition the table forbids;
+    2. the dead (uncovered) declared edges are EXACTLY the acknowledged ``blind_spots`` — a new dead edge is a
+       regression that must be covered or explicitly acknowledged, and a blind spot that is now covered must
+       be removed (so the named set can only SHRINK, never grow);
+    3. the coverage ``ratio`` is at least the floor.
+
+    Raises ``AssertionError`` on the first failure and returns the report on success. This is the doctrine
+    (ratio floor + named blind-spot set) as one gate."""
+    __tracebackhide__ = True
+    report = portfolio_coverage(portfolio, get=get, declared=declared, max_states=max_states)
+    blind = frozenset(blind_spots)
+
+    def fail(reason: str) -> None:
+        raise AssertionError(f"{message}\n{reason}" if message else reason)
+
+    if report.undeclared_edges:
+        fail(f"portfolio exercises transitions not in the declared table: {_fmt_edges(report.undeclared_edges)}")
+    new_dead = report.dead_edges - blind
+    if new_dead:
+        fail(f"newly uncovered declared transitions (add coverage, or acknowledge in blind_spots): {_fmt_edges(new_dead)}")
+    stale = blind - report.dead_edges
+    if stale:
+        fail(f"blind_spots lists transitions that are now covered — remove them (the set must shrink): {_fmt_edges(stale)}")
+    if float(report.ratio) < ratio:
+        fail(f"coverage ratio {report.ratio} ({float(report.ratio):.3f}) is below the floor {ratio}")
+    return report
