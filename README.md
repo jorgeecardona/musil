@@ -74,6 +74,10 @@ An invariant returns `True` (holds) or `False` (broken). It may also return a st
 `reachable_violations(model)` lists *every* state-and-rule that breaks — a full audit, e.g. to
 enumerate which situations a new guard needs to rule out.
 
+The flagship example is model checking's most cited success: `check` on the Needham-Schroeder
+public-key protocol returns Gavin Lowe's 1995 man-in-the-middle attack as an authentication
+counterexample, and proves the fix clean. See `examples/needham_schroeder.py`.
+
 **Concurrency, for free** — give each actor's steps as actions and hand musil all of them. It tries
 every available step from every state, so every interleaving (every order the concurrent steps
 could run in) gets checked. That's how it finds races a normal test would only hit on an unlucky run:
@@ -140,7 +144,8 @@ probability weight, the reachable graph is a Markov chain and you can ask exact 
   minimum or maximum over all schedulers.
 
 Everything is exact rational arithmetic — assert on it in tests with `assert_probability(p, at_most=Fraction(1,
-100))` (thresholds, ranges, or exact equality, with a clear failure message). See `examples/lossy_retry.py`,
+100))` (thresholds, ranges, or exact equality, with a clear failure message). See `examples/monty_hall.py`
+(the exact 2/3 result), `examples/gamblers_ruin.py` (the canonical random walk), `examples/lossy_retry.py`,
 `examples/availability.py`, and `examples/server_utilization.py`.
 
 **Where does it settle? — confluence** — `fixed_points(model)` reports, for each initial state

@@ -74,6 +74,7 @@ Nodes that communicate over a network. Correctness depends on message ordering, 
 | [Partition + heal](examples/partition_heal.md) | A sustained partition wedges fire-and-forget forever; cold restart loses un-retried writes | `simulate`, `FaultSchedule`, `Partition`, `Crash` |
 | [Alternating Bit Protocol](examples/alternating_bit.md) | ABP is unsafe on an unordered link (it assumes FIFO); eventual delivery over loss needs strong, not weak, fairness | `channel_actions`, `check`, `check_liveness`, `fair_strong` |
 | [Leader election](examples/leader_election.md) | No quorum → two leaders (split brain); a majority gives safety; electing a leader can split-vote livelock (why Raft needs randomized timeouts) | `check`, `check_liveness` |
+| [Needham-Schroeder + Lowe's attack](examples/needham_schroeder.md) | A protocol believed correct for 17 years; `check` finds Lowe's 1995 man-in-the-middle attack as an authentication counterexample, and proves the fix clean | `check`, counterexample, bounded Dolev-Yao intruder |
 
 ---
 

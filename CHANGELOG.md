@@ -2,6 +2,14 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — surface the new famous examples on the front page and in the textbook
+
+- The README safety section now points to `examples/needham_schroeder.py` as the flagship counterexample
+  (Lowe's attack), and the probabilistic examples list adds Monty Hall and gambler's ruin. The executable
+  textbook (`docs/textbook.md`) gains a Needham-Schroeder row under Distributed protocols. Keeps the shop
+  window current with the examples shipped over the last few ticks (README changes reach PyPI on the next
+  version bump).
+
 ### Examples — Needham-Schroeder + Lowe's attack (a checker finding a famous security bug)
 
 - `examples/needham_schroeder.py`: model checking's most cited success. `check` on the original
