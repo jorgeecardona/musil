@@ -62,6 +62,7 @@ from musil import (
     replicated_transition_actions,
     responds,
     states_where,
+    transient_distribution,
     with_last_action,
     witness,
 )
@@ -676,6 +677,36 @@ def test_long_run_reward_average_rate():
     )
     assert long_run_reward(split, lambda s: {"X": 10, "Y": 2}.get(s.tag, 0)) == Fraction(6)
     assert long_run_reward(split, lambda s: -1 if s.tag == "Y" else 0) == Fraction(-1, 2)
+
+
+def test_transient_distribution_is_the_point_in_time_distribution():
+    # The distribution AFTER exactly k steps (not the limit, not "within k"). A fair-coin retry loop with an
+    # absorbing "done": pi_k(done) = 1-(1/2)^k, pi_k(send) = (1/2)^k (mass in an absorbing state stays put).
+    retry: Model[Chain] = Model(
+        init=Chain("send"),
+        actions=[
+            Action("ack", enabled=_is("send"), apply=lambda s: Chain("done")),
+            Action("drop", enabled=_is("send"), apply=lambda s: Chain("send")),
+        ],
+        terminal=_is("done"),
+    )
+    for k in range(5):
+        pi = transient_distribution(retry, k)
+        assert sum(pi.values()) == Fraction(1)  # always a probability distribution
+        assert pi[Chain("send")] == Fraction(1, 2) ** k
+        assert pi[Chain("done")] == 1 - Fraction(1, 2) ** k
+    # A periodic 2-cycle A <-> B: the point distribution ALTERNATES (all mass on one state), unlike the
+    # steady-state 1/2 each -- transient is not the limit.
+    cyc: Model[Chain] = Model(
+        init=Chain("A"),
+        actions=[
+            Action("toB", enabled=_is("A"), apply=lambda s: Chain("B")),
+            Action("toA", enabled=_is("B"), apply=lambda s: Chain("A")),
+        ],
+    )
+    assert transient_distribution(cyc, 0)[Chain("A")] == Fraction(1)
+    assert transient_distribution(cyc, 1)[Chain("B")] == Fraction(1)
+    assert transient_distribution(cyc, 2)[Chain("A")] == Fraction(1)
 
 
 def test_constrained_reachability_dtmc_avoid_changes_the_answer():

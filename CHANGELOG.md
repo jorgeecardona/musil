@@ -2,6 +2,17 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `transient_distribution`: exact point-in-time state distribution after k steps
+
+- `transient_distribution(model, steps, weight=...)` returns the exact probability distribution over states
+  AFTER EXACTLY `steps` transitions of the DTMC (PRISM's transient / instantaneous analysis) as `dict[state,
+  Fraction]` summing to 1 — a forward push `pi_0 = delta_init`, `pi_{i+1}(s') = sum_s pi_i(s) P(s,s')`, exact
+  and with no fixed point; an absorbing state keeps its mass. It is the point-in-time complement to the
+  steady-state limit (`long_run_probability`/`long_run_reward`) and to within-`k` reachability
+  (`reach_probability(steps=k)`): from it, "in a set AT step k" or "expected reward AT step k" follow by
+  summing. Corpus pins the fair-coin loop (`pi_k(done) = 1-(1/2)^k`) and a periodic 2-cycle whose point
+  distribution ALTERNATES, unlike its `1/2` steady state.
+
 ### Added — `long_run_reward`: exact DTMC long-run average reward (steady-state reward rate)
 
 - `long_run_reward(model, reward, weight=...)` returns the exact steady-state reward rate of a DTMC (PRISM's

@@ -46,6 +46,13 @@ accelerator for large linear solves, never required).
   fixed point, so it is exact by construction and needs no `S0` precomputation (a bounded horizon cannot
   stall). `steps=0` is the indicator of the target; a DTMC is the single-move case. Corpus pins the
   geometric law `P(reach within k) = 1 - (1/2)^k` for a fair coin loop.
+- **Transient (point-in-time) distribution** — `transient_distribution(model, steps)`. The exact state
+  distribution `dict[state, Fraction]` AFTER EXACTLY `steps` transitions (PRISM's transient / instantaneous
+  analysis), by the forward push `pi_0 = delta_init`, `pi_{i+1}(s') = sum_s pi_i(s) P(s,s')`. Exact, no fixed
+  point; an absorbing state keeps its mass. Point-in-time queries (probability in a set AT step k, expected
+  reward AT step k) follow by summing over the returned distribution — distinct from `reach_probability(steps=k)`
+  (WITHIN k) and from the steady-state limit. Corpus pins the fair-coin loop (`pi_k(done) = 1-(1/2)^k`) and a
+  periodic 2-cycle whose point distribution ALTERNATES (all mass on one state), unlike its `1/2` steady state.
 - **Step-bounded expected reward** — `steps=k` on `expected_reward` and `expected_reward_mdp`. The expected
   cost accumulated until the target is reached OR `k` steps elapse, by the same finite induction with an
   immediate-cost term: `E_0 = 0`, `E_i(s) = cost(s) + sum_s' P(s,s') E_{i-1}(s')` (DTMC) or optimised over the

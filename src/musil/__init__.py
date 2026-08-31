@@ -139,6 +139,7 @@ from musil.probabilistic import (
     probability_ltl,
     reach_probability,
     reach_probability_mdp,
+    transient_distribution,
 )
 from musil.profiling import ActionCost, Phase, Profile, profile
 from musil.reconciler import reconciler
@@ -320,6 +321,7 @@ __all__ = [
     "symmetry_reduction_sound",
     "terminal_states",
     "to_dot",
+    "transient_distribution",
     "transition_actions",
     "with_last_action",
     "witness",

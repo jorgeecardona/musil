@@ -233,6 +233,47 @@ def reach_probability[S: Hashable](
     ]
 
 
+def transient_distribution[S: Hashable](
+    model: Model[S],
+    steps: int,
+    *,
+    weight: Callable[[str, S], Fraction | int] | None = None,
+    max_states: int = 1_000_000,
+) -> dict[S, Fraction]:
+    """The exact probability distribution over states AFTER EXACTLY ``steps`` transitions of the DTMC, from the
+    initial state — ``dict[state, Fraction]`` summing to 1 (PRISM's transient / instantaneous analysis). A
+    forward push: ``pi_0`` puts all mass on the initial state (the first, if several); ``pi_{i+1}(s') = sum_s
+    pi_i(s) P(s, s')``. Exact, no fixed point — ``steps=0`` is the point mass on the initial state.
+
+    An absorbing / deadlock state (no outgoing edge) keeps its mass, so a run that has stopped there stays
+    counted. Point-in-time queries follow: ``sum(pi[s] for s in states if target(s))`` is the probability of
+    being in the target set AT step ``k`` — distinct from ``reach_probability(steps=k)``, which is the
+    probability of reaching it WITHIN ``k``. Raises ``ValueError`` if the exploration truncates or ``steps`` is
+    negative."""
+    graph = explore(model, max_states=max_states)
+    if graph.truncated:
+        raise ValueError("transient_distribution: exploration truncated at max_states; the answer is inconclusive")
+    if steps < 0:
+        raise ValueError(f"transient_distribution: steps must be non-negative, got {steps}")
+    w = weight if weight is not None else _uniform
+    dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
+    pi = dict.fromkeys(graph.states, Fraction(0))
+    pi[graph.initial[0]] = Fraction(1)
+    for _ in range(steps):
+        nxt = dict.fromkeys(graph.states, Fraction(0))
+        for s, mass in pi.items():
+            if mass == 0:
+                continue
+            successors = dist[s]
+            if not successors:  # absorbing / deadlock: the mass stays put
+                nxt[s] += mass
+            else:
+                for p, t in successors:
+                    nxt[t] += mass * p
+        pi = nxt
+    return pi
+
+
 def expected_reward[S: Hashable](
     model: Model[S],
     target: Callable[[S], bool],
