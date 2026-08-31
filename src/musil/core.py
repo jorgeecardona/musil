@@ -475,6 +475,35 @@ def _expand[S: Hashable](
     return fired, False
 
 
+def _extend_frontier[S: Hashable](
+    successors: Iterable[tuple[str, S]],
+    sid: Hashable,
+    ident: Callable[[S], Hashable],
+    seen: set[Hashable],
+    parent: dict[Hashable, tuple[Hashable, str] | None],
+    states_by_id: dict[Hashable, S],
+    frontier: list[S],
+    max_states: int,
+) -> tuple[bool, bool]:
+    """``_expand`` from ALREADY-COMPUTED successors: same frontier bookkeeping and ``(fired, truncated)``
+    contract, but the caller has already materialized the ``(name, canon(next))`` pairs — so the ONE place
+    check/check_all need the successors anyway (the edge-invariant scan) feeds the expansion instead of
+    ``_successors`` running a second time. Truncation matches ``_expand`` exactly: the pairs are in the same
+    order, deduped by identity, and the cap stops the walk at the same point."""
+    fired = False
+    for name, nxt in successors:
+        fired = True
+        nid = ident(nxt)
+        if nid not in seen:
+            seen.add(nid)
+            parent[nid] = (sid, name)
+            states_by_id[nid] = nxt
+            frontier.append(nxt)
+            if len(seen) >= max_states:
+                return fired, True
+    return fired, False
+
+
 def check[S: Hashable](
     model: Model[S],
     *,
@@ -535,8 +564,10 @@ def check[S: Hashable](
                     trace=_trace_to(parent, states_by_id, sid),
                 )
 
-        if model.edge_invariants:  # off by default: this recomputes successors only when edge invariants exist
+        if model.edge_invariants:  # off by default: compute successors ONCE here and reuse them to expand
+            successors: list[tuple[str, S]] = []
             for name, nxt in _successors(source, canon, state):
+                successors.append((name, nxt))
                 for iname, einv in model.edge_invariants.items():
                     verdict = einv(state, name, nxt)
                     if isinstance(verdict, str) or not verdict:
@@ -545,8 +576,13 @@ def check[S: Hashable](
                             reason=(verdict or None) if isinstance(verdict, str) else None,
                             trace=(*_trace_to(parent, states_by_id, sid), Step(action=name, state=nxt)),
                         )
-
-        fired, truncated = _expand(state, sid, source, canon, ident, seen, parent, states_by_id, frontier, max_states)
+            fired, truncated = _extend_frontier(
+                successors, sid, ident, seen, parent, states_by_id, frontier, max_states
+            )
+        else:
+            fired, truncated = _expand(
+                state, sid, source, canon, ident, seen, parent, states_by_id, frontier, max_states
+            )
         if truncated:
             return Result(ok=True, states_explored=len(seen), truncated=True)
         if not fired and not model.terminal(state):
@@ -623,8 +659,10 @@ def check_all[S: Hashable](
                     invariant=name, reason=reason or None, trace=_trace_to(parent, states_by_id, sid),
                 )
 
-        if model.edge_invariants:  # off by default: recomputes successors only when edge invariants exist
+        if model.edge_invariants:  # off by default: compute successors ONCE here and reuse them to expand
+            edge_successors: list[tuple[str, S]] = []
             for aname, nxt in _successors(source, canon, state):
+                edge_successors.append((aname, nxt))
                 for iname, einv in model.edge_invariants.items():
                     everdict = einv(state, aname, nxt)
                     if not (isinstance(everdict, str) or not everdict):
@@ -637,8 +675,13 @@ def check_all[S: Hashable](
                             reason=ereason or None,
                             trace=(*_trace_to(parent, states_by_id, sid), Step(action=aname, state=nxt)),
                         )
-
-        fired, truncated = _expand(state, sid, source, canon, ident, seen, parent, states_by_id, frontier, max_states)
+            fired, truncated = _extend_frontier(
+                edge_successors, sid, ident, seen, parent, states_by_id, frontier, max_states
+            )
+        else:
+            fired, truncated = _expand(
+                state, sid, source, canon, ident, seen, parent, states_by_id, frontier, max_states
+            )
         if not fired and not model.terminal(state) and _DEADLOCK not in found:
             found[_DEADLOCK] = Result(
                 ok=False, states_explored=len(seen), kind="deadlock", trace=_trace_to(parent, states_by_id, sid),

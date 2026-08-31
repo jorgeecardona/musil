@@ -692,6 +692,45 @@ def test_edge_invariant_catches_an_illegal_transition_a_state_check_misses():
     assert (r_of.kind, r_of.invariant, r_of.trace) == (r.kind, r.invariant, r.trace)
 
 
+@dataclass(frozen=True)
+class Ctr:
+    v: int = 0
+
+
+def _monotone(before: Ctr, _action: str, after: Ctr) -> bool:
+    return after.v == before.v + 1
+
+
+def _unbounded_ctr_edge() -> Model[Ctr]:
+    return Model(
+        init=Ctr(0),
+        actions=[Action("up", enabled=lambda s: True, apply=lambda s: Ctr(s.v + 1))],
+        edge_invariants={"monotone": _monotone},
+    )
+
+
+def _bounded_ctr_edge() -> Model[Ctr]:
+    return Model(
+        init=Ctr(0),
+        actions=[Action("up", enabled=lambda s: s.v < 4, apply=lambda s: Ctr(s.v + 1))],
+        edge_invariants={"monotone": _monotone},
+        terminal=lambda s: s.v == 4,
+    )
+
+
+def test_edge_invariant_expansion_truncates_and_covers_the_same_space():
+    # check/check_all now compute successors ONCE on the edge-invariant path and reuse them to expand
+    # (_extend_frontier), instead of running _successors twice. Pin the two properties that guards:
+    # (a) a runaway counter with a trivially-holding edge invariant stops at the cap (truncation honoured),
+    r = check(_unbounded_ctr_edge(), max_states=5)
+    assert r.ok and r.truncated and r.states_explored == 5
+    # (b) a bounded model sweeps exactly the reachable set explore builds -- no successor dropped or dup'd --
+    m = _bounded_ctr_edge()
+    assert check(m).ok  # the edge invariant holds on every real transition
+    assert check(m).states_explored == len(explore(m).states) == 5  # v in 0..4
+    assert check_all(m) == []  # exhaustive audit agrees: nothing broken
+
+
 def test_never_forbids_a_transition_directly():
     m = Model(
         init=Doc("draft"),

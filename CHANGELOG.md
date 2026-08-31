@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Changed — BFS-loop unification (roadmap 1b): share successors on the edge-invariant path
+
+- On the edge-invariant path `check` and `check_all` computed every successor TWICE per state: once for the
+  edge-invariant scan, again inside `_expand`. They now compute the `(name, canon(next))` list ONCE and feed
+  it to a new `_extend_frontier` primitive that does the frontier bookkeeping + `max_states` truncation from an
+  already-computed successor list. Fewer applies on that path; verdict, trace, and truncation are identical
+  (guarded by the existing edge-invariant + `check_of` differential cases and a new corpus case pinning
+  truncation-under-edge-invariants and same-reachable-set-as-`explore`). The soundness-critical successor
+  computation stays the single `_successors`.
+- `src/musil/BFS_UNIFICATION_NOTES.md` records the (1b) design decision: `check`/`check_all` are unified at the
+  primitive level (`_successors`, `_seed_frontier`, `_expand`, `_extend_frontier`); `explore` shares
+  `_successors` but keeps its own edge-recording loop; `profile` stays inlined so it can time each primitive.
+  A single driver loop for all four is deliberately NOT done: it would regress `check`'s check-before-expand
+  early-exit or delete `profile`'s per-primitive measurement.
+
 ### Added — `musil.citations`: model references must not dangle (#34)
 
 - A good practice is for production code to CITE the model that justifies a non-obvious design
