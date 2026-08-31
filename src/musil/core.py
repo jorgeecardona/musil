@@ -60,11 +60,17 @@ def _never(_state: object) -> bool:
 class Action[S: Hashable]:
     """A guarded, atomic transition. ``enabled`` decides if it can fire in a state; ``apply`` returns
     the resulting new state (states are immutable, so it never mutates). Keep both pure — the checker
-    calls them many times and assumes no side effects."""
+    calls them many times and assumes no side effects.
+
+    ``fair`` tags this action's fairness for ``check_liveness``: ``"weak"`` (weakly fair), ``"strong"``
+    (strongly fair), or ``None`` (unfair — a fault). With no explicit ``fair=`` / ``fair_strong=`` tuple,
+    ``check_liveness`` derives its fairness sets from these tags, so the fair-ours / unfair-faults
+    distinction lives on the action that knows what it is, not in a parallel name list kept in sync by hand."""
 
     name: str
     enabled: Callable[[S], bool]
     apply: Callable[[S], S]
+    fair: Literal["weak", "strong"] | None = None
 
 
 @dataclass(frozen=True, slots=True)

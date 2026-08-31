@@ -80,8 +80,8 @@ def check_liveness[S: Hashable](
     model: Model[S],
     *,
     goal: Callable[[S], bool],
-    fair: Iterable[str] = (),
-    fair_strong: Iterable[str] = (),
+    fair: Iterable[str] | None = None,
+    fair_strong: Iterable[str] | None = None,
     everywhere: bool = False,
     leadsto_from: Callable[[S], bool] | None = None,
     goal_name: str = "goal",
@@ -110,16 +110,50 @@ def check_liveness[S: Hashable](
     *continuously* enabled along a cycle must eventually be taken). ``fair_strong`` = strong fairness
     (an action enabled *infinitely often* — i.e. in any state of the cycle — must be taken); strong
     is the stronger assumption and rules out more cycles, so it can force a "flickering" action that
-    weak fairness cannot."""
+    weak fairness cannot.
+
+    Each of ``fair`` / ``fair_strong`` is a tuple of action NAMES, OR left as ``None`` (the default) to
+    DERIVE the set from the actions' own ``fair="weak"`` / ``fair="strong"`` tags — so the fair-ours /
+    unfair-faults split lives on the actions, not in a parallel list kept in sync by hand. An explicit tuple
+    is validated: a name matching no action raises ``ValueError`` (a silent no-match fails in the unsound
+    direction). Tags and validation apply to a static ``actions`` list; with ``actions_fn`` pass names
+    explicitly (they are then used unchecked)."""
+    weak, strong = _resolve_fairness(model, fair, fair_strong)
     return check_liveness_of(
         explore(model, max_states=max_states),
         goal=goal,
-        fair=fair,
-        fair_strong=fair_strong,
+        fair=weak,
+        fair_strong=strong,
         everywhere=everywhere,
         leadsto_from=leadsto_from,
         goal_name=goal_name,
     )
+
+
+def _resolve_fairness[S: Hashable](
+    model: Model[S], fair: Iterable[str] | None, fair_strong: Iterable[str] | None
+) -> tuple[frozenset[str], frozenset[str]]:
+    """Resolve the weak / strong fair action-name sets for ``check_liveness``. ``None`` DERIVES a set from
+    the actions' ``fair`` tags; an explicit iterable is used as given but VALIDATED — a name matching no
+    action raises, since a fairness name that silently matches nothing fails in the UNSOUND direction (an
+    action that should be fair is treated as unfair, or a filter accidentally grants fairness). Tags and
+    validation apply to a STATIC action list only; with ``actions_fn`` the names cannot be enumerated
+    statically, so an explicit set is used unchecked and ``None`` yields the empty set."""
+    if model.actions_fn is not None:
+        return frozenset(fair or ()), frozenset(fair_strong or ())
+    actions = list(model.actions)
+    names = {a.name for a in actions}
+    weak = frozenset(fair) if fair is not None else frozenset(a.name for a in actions if a.fair == "weak")
+    strong = (
+        frozenset(fair_strong) if fair_strong is not None else frozenset(a.name for a in actions if a.fair == "strong")
+    )
+    if fair is not None and (unknown := weak - names):
+        raise ValueError(f"check_liveness: fair names {sorted(unknown)} match no action (known: {sorted(names)})")
+    if fair_strong is not None and (unknown := strong - names):
+        raise ValueError(
+            f"check_liveness: fair_strong names {sorted(unknown)} match no action (known: {sorted(names)})"
+        )
+    return weak, strong
 
 
 def check_liveness_of[S: Hashable](

@@ -4,6 +4,22 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — fairness by action tag + fair-name validation (#27)
+
+- `Action(..., fair="weak" | "strong" | None)` — an action can carry its own fairness. When
+  `check_liveness` is called with no explicit `fair=` / `fair_strong=` tuple (now defaulting to `None`), it
+  DERIVES the weak/strong sets from these tags, so the fair-ours / unfair-faults split lives on the action
+  that knows what it is, instead of a parallel name list kept in sync by hand.
+- **Soundness fix:** an explicit `fair` / `fair_strong` name that matches no action now raises `ValueError`
+  instead of being silently ignored. A silent no-match fails in the unsound direction (an action that should
+  be fair is treated as unfair, or a `startswith`-style filter accidentally grants fairness and a real
+  violation disappears). Tags and validation apply to a static `actions` list; with `actions_fn` names are
+  passed explicitly and used unchecked. Backward-compatible: models without tags and callers passing valid
+  names are unchanged (all 359 prior tests pass).
+- Corpus pins that deriving from a `fair="strong"` tag equals passing the name explicitly, that an explicit
+  empty set overrides the tags (no fairness), and that a bad name raises. `musil.patterns` and `check_ltl`
+  still forward an explicit set (tag flow-through there is a follow-up).
+
 ### Added — edge (transition) invariants: predicates over `(before, action, after)` (#25)
 
 - `Model.edge_invariants={name: fn(before, action_name, after) -> bool | str}` — invariants about the STEP,

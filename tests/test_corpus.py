@@ -697,3 +697,43 @@ def test_never_forbids_a_transition_directly():
     )
     r = check(m)
     assert r.kind == "edge-invariant" and r.action_names == ("force_publish",)
+
+
+# --------------------------------------------------------------------------------------------------
+# 16. Fairness by action tag — derive fair sets from Action(fair=...), and validate names (#27)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Loop:
+    at: str  # "a", "b", "goal"
+
+
+def tagged_fairness_model() -> Model[Loop]:
+    # a <-> b loop; "finish" (b -> goal) is enabled infinitely often, so STRONG fairness forces it and the
+    # goal is reached. The action carries its own fair tag instead of a hand-maintained name tuple.
+    return Model(
+        init=Loop("a"),
+        actions=[
+            Action("work", enabled=lambda s: s.at == "a", apply=lambda s: Loop("b")),
+            Action("back", enabled=lambda s: s.at == "b", apply=lambda s: Loop("a")),
+            Action("finish", enabled=lambda s: s.at == "b", apply=lambda s: Loop("goal"), fair="strong"),
+        ],
+        terminal=lambda s: s.at == "goal",
+    )
+
+
+def test_fairness_by_tag_matches_explicit_and_validates_names():
+    m = tagged_fairness_model()
+
+    def at_goal(s: Loop) -> bool:
+        return s.at == "goal"
+
+    # Deriving from the "finish" strong tag equals passing fair_strong=("finish",) explicitly.
+    assert check_liveness(m, goal=at_goal).ok
+    assert check_liveness(m, goal=at_goal).ok == check_liveness(m, goal=at_goal, fair_strong=("finish",)).ok
+    # An explicit empty set overrides the tags -> no fairness -> the a<->b loop is a counterexample.
+    assert not check_liveness(m, goal=at_goal, fair_strong=()).ok
+    # A fairness name matching no action is an error (the rename/typo hazard), not silently ignored.
+    with pytest.raises(ValueError, match="match no action"):
+        check_liveness(m, goal=at_goal, fair_strong=("typo_finish",))
