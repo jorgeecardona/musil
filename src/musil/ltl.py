@@ -230,8 +230,8 @@ def check_ltl[S: Hashable](
     formula: LTL[S],
     *,
     name: str = "ltl",
-    fair: Iterable[str] = (),
-    fair_strong: Iterable[str] = (),
+    fair: Iterable[str] | None = None,
+    fair_strong: Iterable[str] | None = None,
     max_states: int = 1_000_000,
 ) -> Result[S] | LivenessResult[S]:
     """Check ``formula`` against ``model``, reducing the supported fragment onto ``check`` /

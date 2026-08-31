@@ -733,8 +733,11 @@ def test_fairness_by_tag_matches_explicit_and_validates_names():
     # Deriving from the "finish" strong tag equals passing fair_strong=("finish",) explicitly.
     assert check_liveness(m, goal=at_goal).ok
     assert check_liveness(m, goal=at_goal).ok == check_liveness(m, goal=at_goal, fair_strong=("finish",)).ok
+    # The tags flow through the patterns sugar too (eventually -> check_ltl -> check_liveness).
+    assert eventually(m, at_goal, name="goal").ok
     # An explicit empty set overrides the tags -> no fairness -> the a<->b loop is a counterexample.
     assert not check_liveness(m, goal=at_goal, fair_strong=()).ok
+    assert not eventually(m, at_goal, name="goal", fair_strong=()).ok
     # A fairness name matching no action is an error (the rename/typo hazard), not silently ignored.
     with pytest.raises(ValueError, match="match no action"):
         check_liveness(m, goal=at_goal, fair_strong=("typo_finish",))

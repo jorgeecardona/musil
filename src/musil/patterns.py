@@ -72,8 +72,8 @@ def eventually[S: Hashable](
     p: Callable[[S], bool],
     *,
     name: str = "P",
-    fair: Iterable[str] = (),
-    fair_strong: Iterable[str] = (),
+    fair: Iterable[str] | None = None,
+    fair_strong: Iterable[str] | None = None,
     max_states: int = 1_000_000,
 ) -> LivenessResult[S]:
     """Existence: ``<>p`` — every run from an initial state eventually reaches a ``p``-state. Sugar for
@@ -88,8 +88,8 @@ def recurs[S: Hashable](
     p: Callable[[S], bool],
     *,
     name: str = "P",
-    fair: Iterable[str] = (),
-    fair_strong: Iterable[str] = (),
+    fair: Iterable[str] | None = None,
+    fair_strong: Iterable[str] | None = None,
     max_states: int = 1_000_000,
 ) -> LivenessResult[S]:
     """Recurrence: ``[]<>p`` — every run reaches ``p`` infinitely often (past any point, ``p`` recurs).
@@ -107,8 +107,8 @@ def responds[S: Hashable](
     response: Callable[[S], bool],
     *,
     name: str = "response",
-    fair: Iterable[str] = (),
-    fair_strong: Iterable[str] = (),
+    fair: Iterable[str] | None = None,
+    fair_strong: Iterable[str] | None = None,
     max_states: int = 1_000_000,
 ) -> LivenessResult[S]:
     """Response: ``[](trigger -> <>response)`` — whenever ``trigger`` holds, ``response`` eventually

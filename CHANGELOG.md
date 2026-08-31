@@ -17,8 +17,10 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   passed explicitly and used unchecked. Backward-compatible: models without tags and callers passing valid
   names are unchanged (all 359 prior tests pass).
 - Corpus pins that deriving from a `fair="strong"` tag equals passing the name explicitly, that an explicit
-  empty set overrides the tags (no fairness), and that a bad name raises. `musil.patterns` and `check_ltl`
-  still forward an explicit set (tag flow-through there is a follow-up).
+  empty set overrides the tags (no fairness), and that a bad name raises.
+- The tags flow through the `musil.patterns` sugar (`eventually` / `recurs` / `responds`) and `check_ltl`
+  too: their `fair` / `fair_strong` now default to `None` (forwarded to `check_liveness`), so a tagged model
+  gets its fairness whether you call `check_liveness` directly or via a pattern.
 
 ### Added — edge (transition) invariants: predicates over `(before, action, after)` (#25)
 
