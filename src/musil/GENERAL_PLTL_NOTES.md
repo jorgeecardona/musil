@@ -35,11 +35,34 @@ a DTMC/MDP product, and is far smaller and simpler to construct than a Safra DRA
 for probabilistic LTL (it is what Storm/PRISM-games use via `Rabinizer`/`ltl2ldba`). So: **build an LDBA, not a
 DRA.**
 
+## Alphabet: determinise ON-THE-FLY over model states, not model-agnostically over 2^AP
+
+A textbook LDBA construction determinises over the propositional alphabet `2^AP` (subsets of the formula's
+atoms). musil's automata cannot be determinised that way *from the automaton object alone*: `_gpvw` compiles
+each tableau node's literals (`q.old`) into an OPAQUE guard via `_label_guard(q.old)`, and `Buchi` /
+`GeneralizedBuchi` store only that `Callable[[S], bool]` — the symbolic `2^AP` label is gone. So the subset /
+breakpoint construction has no symbolic letters to branch on.
+
+Two ways out; **(a) is recommended** for musil's bounded setting:
+
+- **(a) On-the-fly product determinisation (recommended).** Determinise against the MODEL's reachable states as
+  the alphabet — finite, and the guards are evaluable there. Steps 2 and 3 below MERGE into one construction
+  over product states `(s, D)`, where `D` is the LDBA state (a subset of NBA states, or a breakpoint pair). The
+  automaton part advances as a pure function of the SOURCE model state `s` — `D' = {q' : q∈D, (guard,q')∈δ(q),
+  guard(s)}` — so for any fixed model run the automaton run is deterministic (exactly the limit-determinism the
+  measure needs). The model part still branches to its probabilistic successors. This never materialises a
+  model-agnostic LDBA; it builds the deterministic product directly, which is all the probability needs.
+- **(b) Symbolic automaton.** Extend `Buchi` to keep each state's literal label (the `q.old` set), then
+  determinise model-agnostically over `2^AP`. Cleaner/reusable (an inspectable LDBA object) but invasive (new
+  representation, `_gpvw` must emit labels). Deferred; only worth it if a standalone LDBA is wanted.
+
+So the build below is the on-the-fly product variant: the hard part (the breakpoint construction for the
+accepting component) is unchanged; the alphabet is the model's states, and everything happens on the product.
+
 ## The construction
 
-1. **LTL → NBA** — reuse the GPVW front-end: `GeneralizedBuchi.from_ltl(φ)` then degeneralise the generalized
-   acceptance to a single Büchi set (the standard counter/degeneralisation; a small `GeneralizedBuchi → Buchi`
-   helper — `Buchi` already exists). Front-end is done; this is glue.
+1. **LTL → NBA** — reuse the GPVW front-end: `GeneralizedBuchi.from_ltl(φ)` then `degeneralize()` to a single
+   Büchi set (**DONE** — the counter construction, `ltl.py`). Front-end complete.
 2. **NBA → LDBA (suspension / breakpoint construction)** — two parts joined by a guessing jump:
    - **Initial part** `Q₁`: a deterministic *subset* construction over the NBA states (powerset of reachable
      NBA states under the model's labels). No acceptance here.
@@ -78,7 +101,8 @@ part deterministic.
 - LTL → NBA: `GeneralizedBuchi.from_ltl` / `_gpvw` (`ltl.py`) — done.
 - BSCC decomposition, MEC (`_maximal_end_components`), stay-within, the exact reachability linear solve and MDP
   policy iteration: all in `probabilistic.py` — the accepting analysis is a thin acceptance predicate on top.
-- The genuinely NEW code is step 2 (NBA → LDBA) and the product wiring.
+- The genuinely NEW code is the on-the-fly deterministic product (subset + breakpoint over the model alphabet)
+  and the accepting-component predicate; the reachability/BSCC/MEC machinery is all reused.
 
 ## The built-in differential oracle
 
@@ -94,12 +118,18 @@ trust. On top, corpus known-verdicts for genuinely-nesting formulas with hand-co
 1. **[DONE]** `GeneralizedBuchi.degeneralize() → Buchi` — the counter construction, tested (corpus + a
    random-model property test) that the Büchi accepts the same ω-language as the generalized one on the model
    (qualitative, reuses the existing emptiness check). Pure automata transformation, no probability.
-2. NBA → LDBA construction, as a pure automaton transformation, tested on finite lasso words (does the LDBA
-   accept exactly the NBA's ω-language on the model's label alphabet?) and checked "suitable" (accepting part
-   deterministic).
-3. DTMC engine: product + accepting-BSCC reachability; wire into `probability_ltl` behind the existing
-   `NotImplementedError` fall-through. Land the differential oracle vs the reductions first (must stay green),
-   then the nesting known-verdicts.
+2. **On-the-fly deterministic product** over the model's reachable-state alphabet (subset construction for the
+   initial part; a `(current, owed)` breakpoint for the accepting part; the single jump). This is the crux.
+   Because the guards are opaque (see "Alphabet" above), this is a MODEL-relative construction, not a
+   standalone automaton — so its first, purely-qualitative test is: for random models, the product's
+   `has_accepting_run` (does an accepting path exist) equals the NBA's — i.e. determinisation preserved the
+   ω-language. Also assert "suitable": from each accepting-component product state, at most one automaton
+   successor per source model state (deterministic). If this test cannot stay green, STOP and note — a wrong
+   automaton silently corrupts every future probability. Genuinely hard; may itself take more than one tick,
+   with the breakpoint construction landed and tested before any probability is wired.
+3. DTMC engine: turn the deterministic product into a DTMC, find accepting BSCCs, sum reach-probability; wire
+   into `probability_ltl` behind the existing `NotImplementedError` fall-through. Land the differential oracle
+   vs the reductions FIRST (must stay green), then the nesting known-verdicts.
 4. MDP engine: accepting-MEC max reachability + the min dual.
 
 If any tick cannot keep the differential green, STOP and note — a wrong probability is worse than a

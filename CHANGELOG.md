@@ -2,6 +2,17 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — general-PLTL plan corrected: determinise on-the-fly over model states, not `2^AP`
+
+- `GENERAL_PLTL_NOTES.md` gains an "Alphabet" section fixing an architectural assumption in the LDBA plan.
+  A textbook determinisation branches over the propositional alphabet `2^AP`, but musil's `_gpvw` compiles each
+  tableau node's literals into an OPAQUE guard (`_label_guard(q.old)`), and `Buchi` / `GeneralizedBuchi` keep
+  only that `Callable` — the symbolic label is gone, so the automaton cannot be determinised model-agnostically
+  from the object alone. The corrected plan determinises ON-THE-FLY over the model's reachable-state alphabet
+  (finite, guards evaluable): the LDBA's subset + breakpoint construction runs directly on product states
+  `(s, D)`, merging former steps 2 and 3. The hard part (the breakpoint construction) is unchanged; found by
+  inspecting `_gpvw` before building the wrong (model-agnostic) shape.
+
 ### Added — `GeneralizedBuchi.degeneralize()` (generalized Büchi → single-set Büchi)
 
 - `GeneralizedBuchi.degeneralize() -> Buchi` implements the standard counter construction: one copy of the
