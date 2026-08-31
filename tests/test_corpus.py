@@ -467,6 +467,18 @@ def test_fair_walk_reach_probability_is_i_over_n():
         assert reach_probability(walk_model(i, n), lambda s: s.pos == n) == Fraction(i, n)
 
 
+def test_biased_walk_reach_probability_matches_closed_form():
+    # Theory: with the up-step weighted p and the down q, P(reach N before 0 | start i) is
+    # (1-(q/p)^i)/(1-(q/p)^N). Up weighted 2:1 gives q/p=1/2; start 2 of 5 -> (1-1/4)/(1-1/32) = 24/31.
+    # Guards the WEIGHTED DTMC solver against the biased-walk closed form.
+    n = 5
+
+    def w(name: str, _s: Walk) -> int:
+        return 2 if name == "up" else 1
+
+    assert reach_probability(walk_model(2, n), lambda s: s.pos == n, weight=w) == Fraction(24, 31)
+
+
 # --------------------------------------------------------------------------------------------------
 # 6. Two-gamble MDP — the max scheduler picks the better coin; exact value known by hand
 # --------------------------------------------------------------------------------------------------

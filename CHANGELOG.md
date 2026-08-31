@@ -2,6 +2,15 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Examples — Gambler's ruin (the canonical absorbing random walk)
+
+- `examples/gamblers_ruin.py`: the textbook 1-D random walk between two absorbing barriers, deriving three
+  classical closed forms exactly — fair-game goal probability `i / N` (`reach_probability`), expected duration
+  `i * (N - i)` (`expected_reward` with cost 1 per step), and the biased-walk goal probability
+  `(1 - (q/p)^i) / (1 - (q/p)^N)` via integer `weight`s (`24/31` for `p = 2/3`, start 2 of 5). The corpus
+  already pinned the fair `i/N` and the `i(N-i)` duration; this adds the biased-walk closed form. Docs page
+  uses content tabs (fair vs biased) and a collapsible martingale derivation.
+
 ### Examples — Monty Hall (the exact 2/3 result)
 
 - `examples/monty_hall.py`: the famous switch-vs-stay problem as **two fixed-policy DTMCs**, deriving
