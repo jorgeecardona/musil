@@ -4,6 +4,24 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — richer transition builders: `effect` / `also`, and `replicated_transition_actions` (#26)
+
+- `transition_actions` gains two keyword arguments: `effect(state, src, dst)` runs after the status change
+  and returns the state with side effects on OTHER fields applied (so a transition is not limited to
+  swapping the status field), and `also(state)` is an extra guard ANDed with "currently in `src`" for a
+  cross-cutting precondition the table itself does not encode. Backward-compatible (both default to `None`).
+- `replicated_transition_actions(table, instances, get=, set_status=, effect=, also=)` runs N copies of one
+  transition table — one machine per instance — over a FLAT state, for a system of interchangeable entities
+  (entries, replicas, jobs) that all obey the same lifecycle. `instances` is an `int` N or an iterable of
+  keys; the projections are per-instance (`get(s, key)` / `set_status(s, key, dst)` / `effect(s, key, src,
+  dst)` / `also(s, key)`). Unlike `compose` (which forces a `Composite` tuple state), the state stays a flat
+  dataclass, so cross-instance invariants (`a + b == 0`) remain expressible.
+- Retires the hand-written triple loop + `_ENTRY_FIELDS` / per-instance index helpers that multi-entity
+  workflow models write while citing the zero-drift docs. Corpus pins a two-entry ledger: 2 entries × 2
+  edges = 4 actions, 9 reachable states, and the `effect` keeps `balance == count of posted entries` (a
+  cross-instance invariant). Gap #4 of the issue (the illegal-firing ghost flag) is already covered by the
+  edge invariants added earlier; `assert_covers_table` (a zero-drift table-coverage check) is a follow-up.
+
 ### Added — `musil.faults`: explicit-state crash/revive and partition/heal faults (#29)
 
 - New module `musil.faults` with two action factories for the explicit-state path (`check` / `explore` /

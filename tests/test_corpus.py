@@ -9,7 +9,7 @@ correctness, not merely "unchanged"."""
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fractions import Fraction
 
 import pytest
@@ -46,6 +46,7 @@ from musil import (
     reach_probability,
     reach_probability_mdp,
     recurs,
+    replicated_transition_actions,
     responds,
     states_where,
     witness,
@@ -843,3 +844,62 @@ def test_partition_actions_install_and_heal_faults():
     assert not r.ok
     assert r.invariant == "quorum-side"
     assert r.action_names == ("fault:partition:0",)
+
+
+# --------------------------------------------------------------------------------------------------
+# 19. replicated_transition_actions — N entities on one table, with per-instance effects/guards (#26)
+# --------------------------------------------------------------------------------------------------
+
+
+_LEDGER_TABLE: dict[str, frozenset[str]] = {
+    "draft": frozenset({"posted"}),
+    "posted": frozenset({"closed"}),
+    "closed": frozenset(),
+}
+
+
+@dataclass(frozen=True)
+class Ledger:
+    status: tuple[str, str]  # two entries share one lifecycle table
+    balance: int  # a side-effect field the transitions move
+    period_open: bool = True
+
+
+def ledger_model() -> Model[Ledger]:
+    def get(s: Ledger, i: Hashable) -> str:
+        assert isinstance(i, int)
+        return s.status[i]
+
+    def set_status(s: Ledger, i: Hashable, dst: str) -> Ledger:
+        assert isinstance(i, int)
+        return replace(s, status=tuple(dst if j == i else x for j, x in enumerate(s.status)))  # type: ignore[arg-type]
+
+    def effect(s: Ledger, _i: Hashable, _frm: str, to: str) -> Ledger:
+        return replace(s, balance=s.balance + 1) if to == "posted" else s  # posting moves the balance
+
+    def also(s: Ledger, _i: Hashable) -> bool:
+        return s.period_open  # a cross-cutting guard the table itself does not encode
+
+    return Model(
+        init=Ledger(("draft", "draft"), 0),
+        actions=replicated_transition_actions(
+            _LEDGER_TABLE, 2, get=get, set_status=set_status, effect=effect, also=also
+        ),
+        # the effect keeps balance == number of entries that have posted (a cross-instance invariant that a
+        # Composite tuple state could not express as flatly)
+        invariants={"balance-tracks-posted": lambda s: s.balance == sum(1 for st in s.status if st in ("posted", "closed"))},
+        terminal=lambda s: all(st == "closed" for st in s.status),
+    )
+
+
+def test_replicated_transition_actions_flat_state_with_effects_and_guards():
+    m = ledger_model()
+    # 2 entries x 2 edges (draft->posted, posted->closed) = 4 actions.
+    assert len(m.actions) == 4  # type: ignore[arg-type]
+    assert {a.name for a in m.actions} == {  # type: ignore[union-attr]
+        "0:draft->posted", "0:posted->closed", "1:draft->posted", "1:posted->closed",
+    }
+    # Each entry independently in {draft, posted, closed} -> 3 x 3 = 9 reachable states, and the balance
+    # side-effect keeps the cross-instance invariant, so the model is correct.
+    assert len(explore(m).states) == 9
+    assert check(m).ok

@@ -9,7 +9,7 @@ frozen dataclass with a ``status`` field plus whatever other variables your inva
 
 from __future__ import annotations
 
-from collections.abc import Callable, Hashable, Mapping, Set
+from collections.abc import Callable, Hashable, Iterable, Mapping, Set
 from dataclasses import replace
 from typing import Any
 
@@ -25,21 +25,67 @@ def transition_actions[S: Hashable](
     *,
     get: Callable[[S], str],
     with_status: Callable[[S, str], S],
+    effect: Callable[[S, str, str], S] | None = None,
+    also: Callable[[S], bool] | None = None,
     name: Callable[[str, str], str] = lambda src, dst: f"{src}->{dst}",
 ) -> list[Action[S]]:
     """One Action per declared ``src -> dst`` edge. ``get`` reads the current status from a state;
-    ``with_status`` returns a new state with the status set to ``dst`` (states are immutable)."""
+    ``with_status`` returns a new state with the status set to ``dst`` (states are immutable).
+
+    ``effect(state, src, dst)`` runs AFTER the status change and returns the state with any side effects on
+    OTHER fields applied (moving a balance, stamping a timestamp) — so a transition is not limited to
+    swapping the status field. ``also(state)`` is an extra guard ANDed with "currently in ``src``", for a
+    cross-cutting precondition the table itself does not encode (e.g. only post while the period is open)."""
     actions: list[Action[S]] = []
     for src, dsts in table.items():
         for dst in dsts:
-            actions.append(
-                Action(
-                    name=name(src, dst),
-                    # default-arg capture pins src/dst per loop iteration (avoid late-binding).
-                    enabled=lambda s, _src=src: get(s) == _src,
-                    apply=lambda s, _dst=dst: with_status(s, _dst),
-                )
-            )
+            # default-arg capture pins src/dst per loop iteration (avoid late-binding); get/with_status/
+            # effect/also are loop-invariant.
+            def _apply(s: S, src: str = src, dst: str = dst) -> S:
+                moved = with_status(s, dst)
+                return effect(moved, src, dst) if effect is not None else moved
+
+            def _enabled(s: S, src: str = src) -> bool:
+                return get(s) == src and (also is None or also(s))
+
+            actions.append(Action(name=name(src, dst), enabled=_enabled, apply=_apply))
+    return actions
+
+
+def replicated_transition_actions[S: Hashable](
+    table: Table,
+    instances: int | Iterable[Hashable],
+    *,
+    get: Callable[[S, Hashable], str],
+    set_status: Callable[[S, Hashable, str], S],
+    effect: Callable[[S, Hashable, str, str], S] | None = None,
+    also: Callable[[S, Hashable], bool] | None = None,
+    name: Callable[[Hashable, str, str], str] = lambda key, src, dst: f"{key}:{src}->{dst}",
+) -> list[Action[S]]:
+    """``N`` copies of ONE transition ``table`` — one state machine per instance — over a FLAT state, for a
+    system of interchangeable entities (entries, replicas, jobs) that all obey the same lifecycle.
+
+    ``instances`` is either an ``int`` ``N`` (keys ``0..N-1``) or an explicit iterable of keys. Unlike
+    ``compose`` (which forces a ``Composite`` tuple state), the state stays a flat dataclass, so cross-
+    instance invariants (``a + b == 0``, "at most one entry posting") remain expressible. The projections are
+    per-instance: ``get(state, key)`` reads instance ``key``'s status; ``set_status(state, key, dst)`` sets
+    it. ``effect(state, key, src, dst)`` applies per-instance side effects after the status change, and
+    ``also(state, key)`` is a per-instance extra guard — exactly as in ``transition_actions`` but indexed by
+    the instance."""
+    keys = list(range(instances)) if isinstance(instances, int) else list(instances)
+    actions: list[Action[S]] = []
+    for key in keys:
+        for src, dsts in table.items():
+            for dst in dsts:
+
+                def _apply(s: S, key: Hashable = key, src: str = src, dst: str = dst) -> S:
+                    moved = set_status(s, key, dst)
+                    return effect(moved, key, src, dst) if effect is not None else moved
+
+                def _enabled(s: S, key: Hashable = key, src: str = src) -> bool:
+                    return get(s, key) == src and (also is None or also(s, key))
+
+                actions.append(Action(name=name(key, src, dst), enabled=_enabled, apply=_apply))
     return actions
 
 

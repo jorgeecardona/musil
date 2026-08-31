@@ -64,9 +64,13 @@ whether a green result covers the whole model or only the first `horizon` ticks.
 
 ::: musil.clock
 
-## FSM bridge — `transition_actions`, `status_field_actions`
+## FSM bridge — `transition_actions`, `status_field_actions`, `replicated_transition_actions`
 
-Build a model straight from an allowed-transitions table, so it can't drift from the code.
+Build a model straight from an allowed-transitions table, so it can't drift from the code. A transition may
+carry an `effect(state, src, dst)` (side effects on other fields) and an `also(state)` extra guard beyond
+the table. `replicated_transition_actions` runs N copies of one table — one machine per instance, over a
+FLAT state (per-instance `get`/`set_status` projections) — so a system of interchangeable entities keeps
+cross-instance invariants expressible, where `compose`'s tuple state would not.
 
 ::: musil.fsm
 
