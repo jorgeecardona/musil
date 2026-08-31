@@ -27,6 +27,7 @@ concurrent actors) for the first invariant violation or deadlock, with the short
 
 from musil.cache import check_cached, clear_verdict_cache
 from musil.channels import channel_actions, fifo_channel_actions, fifo_send, send
+from musil.citations import Citation, dangling_citations, find_citations, known_models
 from musil.clock import BoundedClock, bounded_clock
 from musil.compose import Composite, compose
 from musil.conformance import (
@@ -175,6 +176,7 @@ __all__ = [
     "BaseNode",
     "BoundedClock",
     "Buchi",
+    "Citation",
     "Composite",
     "ConformanceResult",
     "Context",
@@ -253,6 +255,7 @@ __all__ = [
     "coverage",
     "coverage_of",
     "crash_actions",
+    "dangling_citations",
     "declared_states",
     "diff",
     "enumerate_actions",
@@ -263,6 +266,7 @@ __all__ = [
     "explore_por",
     "fifo_channel_actions",
     "fifo_send",
+    "find_citations",
     "fixed_points",
     "footprint_sound",
     "format_trace",
@@ -272,6 +276,7 @@ __all__ = [
     "invariant_coverage",
     "invariant_coverage_of",
     "invariant_from_violations",
+    "known_models",
     "metrics_of",
     "minimize",
     "multi_status_field_actions",

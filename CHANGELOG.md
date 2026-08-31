@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.citations`: model references must not dangle (#34)
+
+- A good practice is for production code to CITE the model that justifies a non-obvious design
+  (`... — test_mesh_membership_musil`); it fails silently when the pointer rots (code cites a model file that
+  no longer exists anywhere). `find_citations(source) -> list[Citation]` locates the references with a regex
+  (so it sees comments and prose, not only identifiers), and `dangling_citations(source, known)` reports the
+  ones whose model name is not in `known` — typically `known_models(test_tree)`, the stems of the
+  `test_*_musil.py` files that exist. Pure stdlib (`re` + `pathlib`); never imports or runs the scanned code.
+  The reference shape (`test_*_musil`) is the default; `pattern=` overrides it.
+- `python -m musil citations <path>... [--pattern P]` runs it as a gate: it resolves every citation under the
+  given paths against the model files that exist there and exits 1 iff one dangles (0 when all resolve),
+  printing `file:line: dangling model citation: <name>`. A companion to `musil doctor` on the same CLI.
+- `tests/test_citations.py` pins finding, word-boundary handling, dangling-vs-known, filesystem resolution,
+  and a custom pattern; `tests/test_cli.py` pins the gate's exit codes (1 on a dangling ref, 0 when clean).
+
 ### Added — `examples/distributed_kit.py`: the reconciler + fault kit, worked end to end
 
 - A worked example of the distributed-systems builders (`reconciler`, `crash_actions`) that most models

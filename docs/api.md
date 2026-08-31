@@ -241,6 +241,17 @@ gate: it closes the loop on the recurring finding that shipped features go unado
 
 ::: musil.doctor
 
+## Citations — `find_citations`, `dangling_citations`
+
+Keep "the models are the spec" honest: when production code cites the model that justifies a non-obvious
+design (`... — test_mesh_membership_musil`), the citation must resolve to a model that exists. `find_citations`
+locates the references (a regex, so it sees comments and prose, not only identifiers) and `dangling_citations`
+reports the ones whose model name is not in the `known` set — typically `known_models(test_tree)`, the stems
+of the `test_*_musil.py` files that exist. Pure stdlib (`re` + `pathlib`); never imports or runs the code. The
+`musil citations <path>... [--pattern P]` CLI runs it as a gate (exit 1 iff a citation dangles).
+
+::: musil.citations
+
 ## Coverage tracing — `no_trace`
 
 A context manager that pauses the current thread's trace function (coverage or any `sys.settrace`
