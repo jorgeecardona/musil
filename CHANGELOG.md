@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `probability_ltl` now supports `a R b` (release of two state predicates)
+
+- `probability_ltl(model, Release(a, b))` completes the binary temporal operators for state predicates. Release
+  is the until dual, `a R b = ¬(¬a U ¬b)`, so `P(a R b) = 1 - P(¬a U ¬b) = 1 - reach_probability(¬b, avoid=a)`
+  (DTMC), and for an MDP the max/min flips: `P_max(a R b) = 1 - P_min(¬a U ¬b)`, `P_min(a R b) = 1 - P_max(...)`
+  — again no automaton. `G p` is the special case `false R p`, and the corpus cross-checks
+  `probability_ltl(Release(false, p))` against `probability_ltl(Always(p))` for the DTMC and for the MDP (max
+  and min), plus a non-trivial `a R b` against the closed-form `1 - P(¬a U ¬b)`. Nested release (a temporal
+  operand) still raises `NotImplementedError`.
+
 ### Added — `probability_ltl` now supports `a U b` (until of two state predicates)
 
 - `probability_ltl(model, Until(a, b))` extends the reducible fragment beyond `F` / `G` / `GF` / `FG`. Strong

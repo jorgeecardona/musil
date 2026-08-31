@@ -43,6 +43,7 @@ from musil.ltl import (
     LTL,
     Always,
     Eventually,
+    Release,
     Until,
     _push_negations,  # pyright: ignore[reportPrivateUsage]
     _state_predicate,  # pyright: ignore[reportPrivateUsage]
@@ -680,9 +681,13 @@ def probability_ltl[S: Hashable](
     - ``a U b`` (``Until``, both STATE predicates) → the CONSTRAINED (until) reachability: the probability of
       reaching a ``b`` state without first passing through a ``¬a`` state — exactly ``reach_probability`` with
       ``avoid=¬a``, no automaton needed.
+    - ``a R b`` (``Release``, both STATE predicates) → the until dual ``1 - P(¬a U ¬b)``: ``b`` holds until
+      (and including) the step ``a`` first holds, or forever if ``a`` never does. ``G p`` is the special case
+      ``false R p``.
 
     With ``moves`` (as in ``reach_probability_mdp``) the model is an MDP and the answer is the OPTIMAL
-    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / G / GF / FG / U fragment:
+    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / G / GF / FG / U / R
+    fragment:
 
     - ``F p`` → max / min reachability of ``p``;
     - ``G p`` → ``1 - P_min(F ¬p)`` (max) / ``1 - P_max(F ¬p)`` (min);
@@ -693,6 +698,7 @@ def probability_ltl[S: Hashable](
       stay inside ``p`` forever (``_stay_within``); the min is the dual ``1 - P_max(GF ¬p)``.
     - ``a U b`` → the max / min constrained reachability of ``b`` avoiding ``¬a`` (``reach_probability_mdp``
       with ``avoid=¬a``).
+    - ``a R b`` → ``1 - P_min(¬a U ¬b)`` (max) / ``1 - P_max(¬a U ¬b)`` (min), the until dual.
 
     All exact, reusing the reachability solve, the BSCC / MEC / stay-within decompositions and (for the MDP)
     policy iteration; NO linear programming (that is only for the long-run AVERAGE reward, see
@@ -751,11 +757,19 @@ def probability_ltl[S: Hashable](
                     return reach_probability_mdp(
                         model, b, moves=moves, weight=weight, optimize=optimize, avoid=_negate(a), max_states=max_states
                     )
+            case Release(left=left, right=right):  # a R b = ¬(¬a U ¬b); P_max(a R b) = 1 - P_min(¬a U ¬b), and dual
+                a = _state_predicate(left)
+                b = _state_predicate(right)
+                if a is not None and b is not None:
+                    dual = "min" if mx else "max"
+                    return 1 - reach_probability_mdp(
+                        model, _negate(b), moves=moves, weight=weight, optimize=dual, avoid=a, max_states=max_states
+                    )
             case _:
                 pass
         raise NotImplementedError(
-            f"probability_ltl over an MDP supports F/G/GF/FG of a state predicate and a U b (max and min); "
-            f"{formula} needs the general probabilistic LTL engine (a deterministic automaton), not yet built"
+            f"probability_ltl over an MDP supports F/G/GF/FG of a state predicate and a U b / a R b (max and "
+            f"min); {formula} needs the general probabilistic LTL engine (a deterministic automaton), not yet built"
         )
 
     dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
@@ -782,10 +796,16 @@ def probability_ltl[S: Hashable](
             if a is not None and b is not None:
                 until_dist = {s: ([] if (not a(s) and not b(s)) else d) for s, d in dist.items()}
                 return _dtmc_values(graph.states, until_dist, b)[init]
+        case Release(left=left, right=right):  # a R b = ¬(¬a U ¬b) = 1 - P(reach ¬b avoiding a)
+            a = _state_predicate(left)
+            b = _state_predicate(right)
+            if a is not None and b is not None:  # ¬a U ¬b: target ¬b, absorbing when a ∧ b (avoid ∧ not-target)
+                rel_dist = {s: ([] if (a(s) and b(s)) else d) for s, d in dist.items()}
+                return 1 - _dtmc_values(graph.states, rel_dist, lambda s, _b=b: not _b(s))[init]
         case _:
             pass
     raise NotImplementedError(
-        f"probability_ltl supports F/G/GF/FG of a state predicate and a U b; {formula} needs the general "
+        f"probability_ltl supports F/G/GF/FG of a state predicate and a U b / a R b; {formula} needs the general "
         "probabilistic LTL engine (a deterministic automaton for the formula), which is not yet built"
     )
 

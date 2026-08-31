@@ -139,8 +139,8 @@ probability weight, the reachable graph is a Markov chain and you can ask exact 
   in a set, or the long-run average of a reward rate), and `transient_distribution` (the exact state
   distribution after exactly `k` steps).
 - **Probabilistic LTL** — `probability_ltl` (the probability a random run satisfies `F` / `G` / `GF` / `FG` of
-  a state predicate, or the until `a U b` of two state predicates — the constrained reachability of `b` avoiding
-  `¬a`).
+  a state predicate, or the until `a U b` / release `a R b` of two state predicates — constrained reachability
+  and its dual).
 - **Nondeterminism (MDP)** — every one of the above has an `..._mdp` form (or a `moves=` argument) giving the
   minimum or maximum over all schedulers.
 

@@ -1008,7 +1008,11 @@ def test_probability_ltl_reducible_fragment_known_verdicts():
     # a U b of two STATE predicates is constrained reachability, now supported: P(¬Z U A) = reach A before Z = 1/2
     assert probability_ltl(m, Until(not_z, at_a)) == Fraction(1, 2)
     assert probability_ltl(m, Until(not_z, at_a)) == reach_probability(m, _is("A"), avoid=_is("Z"))
-    with pytest.raises(NotImplementedError):  # Until with a TEMPORAL operand still needs the general engine
+    # a R b of two STATE predicates is the until dual, also supported: G p = false R p, and 1 - P(¬a U ¬b)
+    never = Atom[Chain]("false", lambda _s: False)
+    assert probability_ltl(m, Release(never, not_z)) == probability_ltl(m, Always(not_z))  # G(¬Z) = false R ¬Z
+    assert probability_ltl(m, Release(at_a, not_z)) == 1 - reach_probability(m, _is("Z"), avoid=_is("A"))
+    with pytest.raises(NotImplementedError):  # a temporal operand (in Until or Release) still needs the general engine
         probability_ltl(m, Until(Eventually(at_a), not_z))
 
 
@@ -1058,6 +1062,11 @@ def test_probability_ltl_mdp_full_fragment_max_and_min():
     assert p(Until(not_z, at_a), choose, "min") == Fraction(0)
     assert p(Until(not_z, at_a), coin, "max") == half
     assert p(Until(not_z, at_a), coin, "min") == half
+    # a R b (Release), the until dual: G ¬Z = false R ¬Z, cross-checked against Always both max and min
+    never = Atom[Chain]("false", lambda _s: False)
+    assert p(Release(never, not_z), choose, "max") == p(Always(not_z), choose, "max") == Fraction(1)
+    assert p(Release(never, not_z), choose, "min") == p(Always(not_z), choose, "min") == Fraction(0)
+    assert p(Release(never, not_z), coin, "max") == half and p(Release(never, not_z), coin, "min") == half
 
 
 def test_bounded_expected_reward_dtmc_and_mdp():
