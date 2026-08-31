@@ -42,6 +42,8 @@ from musil import (
     expected_reward_mdp,
     explore,
     explore_por,
+    fixed_points,
+    fixed_points_of,
     long_run_probability,
     never,
     partition_actions,
@@ -930,6 +932,32 @@ def test_check_liveness_of_agrees_with_check_liveness():
     b2 = check_liveness_of(explore(fm), goal=done, goal_name="done", fair_strong=("g",))
     assert (a2.ok, a2.kind, a2.stem, a2.cycle) == (b2.ok, b2.kind, b2.stem, b2.cycle)
     assert not b2.ok  # sanity: it really is the fair counterexample
+
+
+def test_fixed_points_of_agrees_with_fixed_points():
+    # fixed_points_of is the graph-first fixed_points (as check_of is to check): it must give the identical
+    # per-initial settlement over a pre-built graph. Pinned on a confluent latch (two starts settle in two
+    # different places, each deterministically) and a non-confluent race (one start settles two ways).
+    latch: Model[Light] = Model(
+        init=[Light("red"), Light("green")],
+        actions=[
+            Action("r-done", enabled=lambda s: s.color == "red", apply=lambda s: Light("red-done")),
+            Action("g-done", enabled=lambda s: s.color == "green", apply=lambda s: Light("green-done")),
+        ],
+    )
+    race: Model[Light] = Model(
+        init=Light("red"),
+        actions=[
+            Action("a", enabled=lambda s: s.color == "red", apply=lambda s: Light("a-done")),
+            Action("b", enabled=lambda s: s.color == "red", apply=lambda s: Light("b-done")),
+        ],
+    )
+    for m in (latch, race):
+        of = fixed_points_of(explore(m))
+        assert of.by_init == fixed_points(m).by_init  # identical settlement
+        assert of.confluent == fixed_points(m).confluent
+    assert fixed_points_of(explore(latch)).confluent  # latch: each start settles in one place
+    assert not fixed_points_of(explore(race)).confluent  # race: the order-dependent settlement
 
 
 # --------------------------------------------------------------------------------------------------

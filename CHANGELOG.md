@@ -4,6 +4,15 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `fixed_points_of`: graph-first `fixed_points` over a pre-built graph (completes #31)
+
+- `fixed_points_of(graph)` computes the per-initial structural fixed points (the distinct no-outgoing-edge
+  terminals reachable from each initial) over an ALREADY-explored `Graph`, instead of re-exploring from each
+  initial — the graph-first counterpart to `fixed_points`, as `check_of` is to `check`, so several analyses
+  can share one `explore`. Returns the same `FixedPoints` (with `.confluent`) and carries the graph's
+  `truncated`. Corpus pins that it agrees with `fixed_points` on a confluent latch and a non-confluent race.
+  This is the last of #31's graph-first variants (`check_of` / `check_liveness_of` already shipped).
+
 ### Added — `probability_ltl`: exact probability a DTMC run satisfies an LTL formula (reducible fragment)
 
 - `probability_ltl(model, formula, weight=...)` returns the exact probability (a `Fraction`) that a random run

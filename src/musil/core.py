@@ -986,6 +986,34 @@ def fixed_points[S: Hashable](
     return FixedPoints(by_init=by_init, truncated=truncated)
 
 
+def fixed_points_of[S: Hashable](graph: Graph[S]) -> FixedPoints[S]:
+    """Graph-first ``fixed_points``: the per-initial structural fixed points over an ALREADY-explored
+    ``graph`` instead of re-exploring from each initial — the graph-first counterpart to ``fixed_points`` (as
+    ``check_of`` is to ``check``), so several analyses can share one ``explore``. For each initial state, the
+    distinct STRUCTURAL terminals (a state with no outgoing edge) reachable from it, by forward BFS over the
+    graph's edges.
+
+    Equals ``fixed_points(model)`` on a graph built by ``explore(model)`` with the same ``canonicalize`` (the
+    corpus pins this), and carries the graph's ``truncated`` — a truncated graph is inconclusive, so
+    ``confluent`` is then False. Structural terminal is independent of ``model.terminal`` (the question is
+    where the dynamics STOP, not which stops are declared legitimate), which is why this needs only the graph."""
+    terminals = frozenset(s for s in graph.states if not graph.edges.get(s, ()))
+    by_init: dict[S, frozenset[S]] = {}
+    for s0 in graph.initial:
+        seen = {s0}
+        frontier = [s0]
+        head = 0
+        while head < len(frontier):
+            state = frontier[head]
+            head += 1
+            for _name, t in graph.edges.get(state, ()):
+                if t not in seen:
+                    seen.add(t)
+                    frontier.append(t)
+        by_init[s0] = frozenset(s for s in seen if s in terminals)
+    return FixedPoints(by_init=by_init, truncated=graph.truncated)
+
+
 def symmetry_reduction_sound[S: Hashable](
     model: Model[S],
     canonicalize: Callable[[S], S],
