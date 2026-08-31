@@ -90,6 +90,7 @@ nav:
       - Arbiter fairness: examples/arbiter_fairness.md
     - Probabilistic:
       - Availability + recovery cost: examples/availability.md
+      - Server utilisation (reward rates): examples/server_utilization.md
     - Scaling:
       - Composed components + symmetry: examples/cosim_scaling.md
   - Open systems: open-systems.md

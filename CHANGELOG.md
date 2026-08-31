@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `examples/server_utilization.py`: reward-rate answers (steady-state / transient / policy), worked
+
+- A worked example for the three newest reward-RATE capabilities, which had no example: a server that is BUSY
+  or IDLE. `long_run_reward` gives the steady-state utilisation (`2/3`) and a revenue rate (`19/3`);
+  `transient_distribution` gives the warm-up `P(BUSY at step k)` climbing toward `2/3` (`0, 1/2, 5/8, 21/32,
+  85/128`); and `long_run_reward_mdp` gives the best/worst long-run utilisation when a scheduler chooses an ECO
+  vs TURBO regime at each busy step (`max = 2/3` ECO, `min = 1/2` TURBO). The example asserts the exact
+  fractions and a subprocess test pins them; `docs/examples/server_utilization.md` renders it. No new library
+  code.
+
 ### Added — `long_run_reward_mdp`: exact MDP long-run average reward (reference oracle)
 
 - `long_run_reward_mdp(model, reward, moves=..., optimize="max"|"min")` returns the exact max/min steady-state
