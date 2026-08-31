@@ -15,7 +15,11 @@ reduction of the temporal fragment onto ``check_liveness``. So the lowering live
 extend it there and every pattern follows), and a pattern is by construction the same verdict as its LTL
 formula (pinned in the corpus). The two SAFETY patterns stay direct ``check`` calls: ``G(state)`` is just an
 invariant, and they expose ``canonicalize`` / ``key`` that the safety reduction inside ``check_ltl`` does
-not forward, so routing them through it would drop those options for no gain.
+not forward, so routing them through it would drop those options for no gain. Because ``always`` / ``absent``
+go through ``check``, they ALSO report a DEADLOCK (an undeclared dead-end) as a failure — the safety-check
+surface, "``p`` invariant AND no deadlock". This deliberately differs from the pure-LTL ``check_ltl(Always
+(p))``, which is a safety property that IGNORES deadlocks (deadlock-freedom is a separate concern; see
+``LTL_NOTES.md``). Use the pattern for a safety check, ``check_ltl(Always(p))`` for LTL ``G p``.
 
 Each returns whatever its underlying check returns (a ``Result`` for the safety patterns, a
 ``LivenessResult`` for the liveness ones); both satisfy the ``Verdict`` protocol (``.ok`` + ``__str__``),
@@ -46,7 +50,9 @@ def always[S: Hashable](
     key: Callable[[S], Hashable] | None = None,
 ) -> Result[S]:
     """Universality: ``p`` holds in EVERY reachable state. Lowers to ``check`` with ``p`` as the sole
-    invariant; the ``Result`` carries the shortest trace to a state where ``p`` fails."""
+    invariant, so it ALSO reports a deadlock (an undeclared dead-end) as a failure — the safety-check surface.
+    This differs from ``check_ltl(Always(p))``, the pure-LTL ``G p``, which ignores deadlocks; use that for LTL
+    safety. The ``Result`` carries the shortest trace to a state where ``p`` fails (or to the deadlock)."""
     return check(replace(model, invariants={name: p}), max_states=max_states, canonicalize=canonicalize, key=key)
 
 
@@ -59,7 +65,8 @@ def absent[S: Hashable](
     canonicalize: Callable[[S], S] | None = None,
     key: Callable[[S], Hashable] | None = None,
 ) -> Result[S]:
-    """Absence: ``p`` holds in NO reachable state. Lowers to ``check`` with ``not p`` as the invariant."""
+    """Absence: ``p`` holds in NO reachable state. Lowers to ``check`` with ``not p`` as the invariant, so
+    (like ``always``) it also reports a deadlock as a failure — the safety-check surface, not pure LTL."""
 
     def never(state: S) -> bool:
         return not p(state)

@@ -2,6 +2,15 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — clarify that `patterns.always` / `absent` report deadlocks (unlike `check_ltl(Always)`)
+
+- Following the `G`-is-pure-safety fix, `check_ltl(Always(p))` ignores deadlocks but the `always` / `absent`
+  patterns lower to `check` and so still report a deadlock as a failure. The pattern docstrings and the
+  `patterns` module docstring now spell out that distinction (the patterns are the safety-check surface: "`p`
+  invariant AND no deadlock"; `check_ltl(Always(p))` is LTL `G p`, which ignores deadlocks). A corpus
+  assertion pins that `always(deadlocking_model, true)` reports `kind="deadlock"` while `check_ltl(Always(true))`
+  holds. Docstring-only, no behaviour change.
+
 ### Release — 0.34.46 republishes the corrected README (PyPI long-description)
 
 - The maintainer sections (`Development & CI`, `Releasing`, the PyPI-OIDC one-time-setup table) were moved out

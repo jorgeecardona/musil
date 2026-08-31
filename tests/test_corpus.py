@@ -29,6 +29,7 @@ from musil import (
     Result,
     Until,
     action_taken,
+    always,
     assert_covers,
     assert_covers_table,
     assert_ok,
@@ -293,6 +294,9 @@ def test_ltl_always_is_pure_safety_and_ignores_deadlock():
     assert not check(m).ok and check(m).kind == "deadlock"  # plain check flags the deadlock
     assert check_ltl(m, Always(Atom[Dining]("true", lambda s: True))).ok  # G(true) ignores the deadlock
     assert not check_ltl(m, Always(Atom[Dining]("eating0", lambda s: s.pc[0] == "eating"))).ok  # invariant fails
+    # The `always` PATTERN is the safety-check surface (lowers to check), so it DOES report the deadlock --
+    # the deliberate distinction from the pure-LTL check_ltl(Always) above.
+    assert not always(m, lambda s: True).ok and always(m, lambda s: True).kind == "deadlock"
 
 
 @dataclass(frozen=True)
