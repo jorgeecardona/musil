@@ -9,6 +9,17 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   to PyPI with the OLD README long-description (the setup table still showed on the project page). This patch
   bump forces `:release` to republish with the user-facing README. No code change.
 
+### Hardening — metamorphic property tests for the liveness layer
+
+- New `tests/test_liveness_properties.py` completes the random-model differential sweep over the last
+  soundness-critical layer (the fair-cycle / Emerson-Lei sub-SCC search, where the #22 bug lived): RECURRENCE
+  (`everywhere=True`, GF p) implies the goal is reachable from every reachable state (`reaches` == all states)
+  — liveness by fair-cycle search cross-checked against reachability by backward BFS; fairness is MONOTONE
+  (assuming more fair actions never breaks a holding property); and recurrence (GF p) implies plain
+  reachability liveness (F p). Pure stdlib, fixed seed. (Writing it also confirmed the subtlety that plain
+  `<>P` is satisfied by the goal holding at the initial state alone — it does NOT imply reachability
+  everywhere; only recurrence does.)
+
 ### Hardening — metamorphic property tests for the core and LTL layers
 
 - New `tests/test_core_ltl_properties.py` extends the random-model differential approach to the
