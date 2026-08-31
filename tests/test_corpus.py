@@ -11,10 +11,12 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Sequence
 from dataclasses import dataclass, replace
 from fractions import Fraction
+from typing import Literal
 
 import pytest
 
 from musil import (
+    LTL,
     Action,
     Always,
     Atom,
@@ -746,11 +748,10 @@ def test_probability_ltl_reducible_fragment_known_verdicts():
         probability_ltl(m, Until(at_a, not_z))
 
 
-def test_probability_ltl_mdp_gf_max_via_end_components():
-    # MDP GF-max reduces to reaching a maximal end component that contains the target, then cycling forever.
-    # I -> A (win) or Z (dead); A<->B is the target cycle (target = A); Z absorbs. A scheduler that CHOOSES at
-    # I steers into the good end component (P_max=1); a single probabilistic move (a coin) cannot, so P_max is
-    # the reach probability 1/2. GF and F agree here because the only uncertainty is reaching the component.
+def test_probability_ltl_mdp_full_fragment_max_and_min():
+    # The whole F/G/GF/FG fragment for an MDP, max AND min. I -> A (win) or Z (dead); A<->B is a cycle;
+    # Z absorbs. A scheduler that CHOOSES at I can steer into the {A,B} cycle or into Z, so max/min differ;
+    # a single probabilistic move (a coin) cannot steer, so max == min == the 1/2 reach probability.
     m: Model[Chain] = Model(
         init=Chain("I"),
         actions=[
@@ -763,21 +764,31 @@ def test_probability_ltl_mdp_gf_max_via_end_components():
         terminal=lambda s: False,
     )
     at_a = Atom[Chain]("A", _is("A"))
+    in_cyc = Atom[Chain]("cyc", lambda s: s.tag in {"A", "B"})
+    not_z = Atom[Chain]("notZ", lambda s: s.tag != "Z")
 
     def choose(_s: Chain, en: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
-        return [[a] for a in en]  # scheduler picks each action -> can steer to the good component
+        return [[a] for a in en]  # scheduler picks each action -> can steer
 
     def coin(_s: Chain, en: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
-        return [list(en)]  # all enabled in one move -> a probabilistic coin the scheduler cannot steer
+        return [list(en)]  # all enabled in one move -> a probabilistic coin, no steering
 
-    assert probability_ltl(m, Always(Eventually(at_a)), moves=choose) == Fraction(1)  # steer in: GF A a.s.
-    assert probability_ltl(m, Eventually(at_a), moves=choose) == Fraction(1)
-    assert probability_ltl(m, Always(Eventually(at_a)), moves=coin) == Fraction(1, 2)  # coin reaches it 1/2
-    assert probability_ltl(m, Eventually(at_a), moves=coin) == Fraction(1, 2)
-    with pytest.raises(NotImplementedError):  # min direction is deferred
-        probability_ltl(m, Always(Eventually(at_a)), moves=choose, optimize="min")
-    with pytest.raises(NotImplementedError):  # FG on the MDP path is deferred
-        probability_ltl(m, Eventually(Always(at_a)), moves=choose)
+    def p(
+        formula: LTL[Chain],
+        mv: Callable[[Chain, tuple[Action[Chain], ...]], list[Sequence[Action[Chain]]]],
+        opt: Literal["max", "min"],
+    ) -> Fraction:
+        return probability_ltl(m, formula, moves=mv, optimize=opt)
+
+    half = Fraction(1, 2)
+    for formula in (Eventually(at_a), Always(Eventually(at_a)), Eventually(Always(in_cyc))):
+        assert p(formula, choose, "max") == Fraction(1)  # steer into the cycle: F/GF A, FG cyc all reachable
+        assert p(formula, choose, "min") == Fraction(0)  # steer into Z instead
+        assert p(formula, coin, "max") == half  # the coin reaches the cycle with probability 1/2
+        assert p(formula, coin, "min") == half
+    # G !Z: the scheduler can avoid Z forever (max 1) or dive into it (min 0)
+    assert p(Always(not_z), choose, "max") == Fraction(1)
+    assert p(Always(not_z), choose, "min") == Fraction(0)
 
 
 def test_profile_explores_the_same_reachable_set():

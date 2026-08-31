@@ -417,6 +417,29 @@ def _maximal_end_components[S: Hashable](
     return result
 
 
+def _stay_within[S: Hashable](
+    states: Sequence[S], all_moves: Mapping[S, list[_Dist[S]]], keep: Callable[[S], bool]
+) -> set[S]:
+    """The greatest set ``U`` of ``keep`` states in which the scheduler can stay FOREVER: every state in ``U``
+    has a move whose whole support lies in ``U`` (an absorbing/empty move stays trivially). Computed by
+    iterative removal. This is the target region for PERSISTENT reachability (``FG keep``): once in ``U`` the
+    scheduler can keep the run inside ``keep`` for good, so ``P_max(FG keep) = P_max(reach U))``."""
+    u = {s for s in states if keep(s)}
+    changed = True
+    while changed:
+        changed = False
+        for s in list(u):
+            if not any({t for _, t in move} <= u for move in all_moves[s]):
+                u.discard(s)
+                changed = True
+    return u
+
+
+def _negate[S: Hashable](pred: Callable[[S], bool]) -> Callable[[S], bool]:
+    """The pointwise negation of a state predicate (for the min-direction duals: ``¬GF p = FG ¬p``)."""
+    return lambda s: not pred(s)
+
+
 def probability_ltl[S: Hashable](
     model: Model[S],
     formula: LTL[S],
@@ -441,16 +464,21 @@ def probability_ltl[S: Hashable](
       ``p``.
 
     With ``moves`` (as in ``reach_probability_mdp``) the model is an MDP and the answer is the OPTIMAL
-    probability over all schedulers. ``optimize="max"`` supports ``F p`` (max reachability) and ``GF p`` — the
-    max probability of a repeated-reachability (Büchi) condition, which equals the max reachability to the
-    states lying in a MAXIMAL END COMPONENT that contains a ``p`` state (reach such a component and cycle
-    through ``p`` forever). ``optimize="min"`` and the other MDP shapes are not yet built (see
-    PROBABILISTIC_NOTES.md).
+    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / G / GF / FG fragment:
 
-    All exact, reusing the reachability solve, the BSCC / MEC decomposition and (for the MDP) policy iteration.
-    Any unsupported formula raises ``NotImplementedError`` — general probabilistic LTL needs a DETERMINISTIC
-    automaton for the formula (a Safra/Rabin construction), not yet built. Raises ``ValueError`` if the
-    exploration truncates."""
+    - ``F p`` → max / min reachability of ``p``;
+    - ``G p`` → ``1 - P_min(F ¬p)`` (max) / ``1 - P_max(F ¬p)`` (min);
+    - ``GF p`` (Büchi) → the max probability equals the max reachability to the states in a MAXIMAL END
+      COMPONENT that contains a ``p`` state (reach such a component and cycle through ``p`` forever); the min is
+      the dual ``1 - P_max(FG ¬p)``;
+    - ``FG p`` (co-Büchi) → the max probability equals the max reachability to the region the scheduler can
+      stay inside ``p`` forever (``_stay_within``); the min is the dual ``1 - P_max(GF ¬p)``.
+
+    All exact, reusing the reachability solve, the BSCC / MEC / stay-within decompositions and (for the MDP)
+    policy iteration; NO linear programming (that is only for the long-run AVERAGE reward, see
+    PROBABILISTIC_NOTES.md). Any formula outside this fragment raises ``NotImplementedError`` — general
+    probabilistic LTL needs a DETERMINISTIC automaton for the formula (a Safra/Rabin construction), not yet
+    built. Raises ``ValueError`` if the exploration truncates."""
     phi = _push_negations(formula)
     graph = explore(model, max_states=max_states)
     if graph.truncated:
@@ -459,26 +487,48 @@ def probability_ltl[S: Hashable](
     init = graph.initial[0]
 
     if moves is not None:  # MDP path: the optimal probability over schedulers
-        if optimize != "max":
-            raise NotImplementedError(
-                "probability_ltl over an MDP supports optimize='max' only; min is deferred (PROBABILISTIC_NOTES.md)"
-            )
         all_moves = _mdp_moves(model, graph, moves, w)
+        states = graph.states
+
+        def reach_max(pred: Callable[[S], bool]) -> Fraction:
+            return _reach_policy_iteration(states, all_moves, pred, minimize=False, absorbing=set[S]())[0][init]
+
+        def reach_min(pred: Callable[[S], bool]) -> Fraction:
+            absorbing = _s0_min(states, all_moves, pred)  # states that can avoid pred forever -> pinned to 0
+            return _reach_policy_iteration(states, all_moves, pred, minimize=True, absorbing=absorbing)[0][init]
+
+        def gf_max(pred: Callable[[S], bool]) -> Fraction:  # reach a MEC that contains a pred state, then cycle
+            good = {s for c in _maximal_end_components(states, all_moves) if any(pred(x) for x in c) for s in c}
+            return reach_max(good.__contains__)
+
+        def fg_max(pred: Callable[[S], bool]) -> Fraction:  # reach the region the scheduler can stay in forever
+            return reach_max(_stay_within(states, all_moves, pred).__contains__)
+
+        # The whole reducible fragment for MDPs, max and min. Min follows by duality (¬GF p = FG ¬p, etc.);
+        # G/F reachability duals reuse the min/max reachability directly.
+        mx = optimize == "max"
         match phi:
-            case Always(arg=Eventually(arg=inner)):  # GF p: reach a MEC that contains a p state, then cycle
+            case Always(arg=Eventually(arg=inner)):  # GF p
                 p = _state_predicate(inner)
                 if p is not None:
-                    good = {s for c in _maximal_end_components(graph.states, all_moves) if any(p(x) for x in c) for s in c}
-                    return _reach_policy_iteration(graph.states, all_moves, good.__contains__, minimize=False, absorbing=set[S]())[0][init]
-            case Eventually(arg=inner):  # F p: max reachability
+                    return gf_max(p) if mx else 1 - fg_max(_negate(p))
+            case Eventually(arg=Always(arg=inner)):  # FG p
                 p = _state_predicate(inner)
                 if p is not None:
-                    return _reach_policy_iteration(graph.states, all_moves, p, minimize=False, absorbing=set[S]())[0][init]
+                    return fg_max(p) if mx else 1 - gf_max(_negate(p))
+            case Eventually(arg=inner):  # F p
+                p = _state_predicate(inner)
+                if p is not None:
+                    return reach_max(p) if mx else reach_min(p)
+            case Always(arg=inner):  # G p = 1 - P(F ¬p)
+                p = _state_predicate(inner)
+                if p is not None:
+                    return (1 - reach_min(_negate(p))) if mx else (1 - reach_max(_negate(p)))
             case _:
                 pass
         raise NotImplementedError(
-            f"probability_ltl over an MDP supports F p and GF p with optimize='max'; {formula} is deferred "
-            "(min, FG, G and general PLTL need more machinery -- see PROBABILISTIC_NOTES.md)"
+            f"probability_ltl over an MDP supports F/G/GF/FG of a state predicate (max and min); {formula} "
+            "needs the general probabilistic LTL engine (a deterministic automaton), not yet built"
         )
 
     dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}

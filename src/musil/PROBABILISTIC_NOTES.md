@@ -105,15 +105,21 @@ accelerator for large linear solves, never required).
   reducible-fragment matcher from `check_ltl` (`_push_negations` / `_state_predicate`). Corpus separates GF
   from FG on a model with a `{A,B}` cycle where only `A` is the target: `P(GF A) = 1/2`, `P(FG A) = 0`.
 
-- **MDP repeated reachability (GF), max** — `probability_ltl(model, formula, moves=..., optimize="max")` with
-  `formula` an `F p` or `GF p`. `F p` is max reachability; `GF p` is the max probability of a Büchi condition,
-  which equals the max reachability to the states in a MAXIMAL END COMPONENT that contains a `p` state (reach
-  such a component, then cycle through `p` forever — de Alfaro / Baier & Katoen). MECs are computed by
-  `_maximal_end_components` (SCC-refinement: keep only moves staying inside a candidate, drop states with no
-  staying move, reprocess; an absorbing state is its own MEC, consistent with the DTMC deadlock treatment),
-  and the reach is the existing max policy iteration. NO linear programming — GF/reachability need only MEC +
-  reachability, unlike the long-run AVERAGE below. Corpus separates a scheduler that steers into the good
-  component (P_max = 1) from a probabilistic coin that cannot (P_max = 1/2).
+- **MDP probabilistic LTL, F / G / GF / FG, max AND min** — `probability_ltl(model, formula, moves=...,
+  optimize="max"|"min")`. The optimal probability over all schedulers that a run satisfies `formula`, for the
+  reducible fragment, all EXACT and with NO linear programming (that is only for the long-run AVERAGE below):
+  - `F p` — max / min reachability (the existing policy iteration; min uses the `_s0_min` precomputation).
+  - `G p` — `1 - P_min(F ¬p)` (max), `1 - P_max(F ¬p)` (min).
+  - `GF p` (Büchi) — max = max reachability to the states in a MAXIMAL END COMPONENT containing a `p` state
+    (reach it, then cycle through `p` forever; `_maximal_end_components` by SCC-refinement, an absorbing state
+    its own MEC — consistent with the DTMC deadlock treatment). min = the dual `1 - P_max(FG ¬p)`.
+  - `FG p` (co-Büchi) — max = max reachability to the region the scheduler can stay inside `p` forever
+    (`_stay_within`, a greatest fixpoint). min = the dual `1 - P_max(GF ¬p)`.
+
+  So the whole fragment rests on three primitives — max/min reachability, MEC (for GF-max), and the
+  stay-within set (for FG-max) — plus the standard temporal duals. Corpus pins the full matrix on one model:
+  a scheduler that can steer gives `max = 1`, `min = 0` for F/GF/FG (and G ¬Z); a probabilistic coin that
+  cannot gives `max = min = 1/2`.
 
 ## Deferred (future layers, not blocking)
 
@@ -125,9 +131,6 @@ accelerator for large linear solves, never required).
 - **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
   negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall). Its own
   increment; needs a corpus case that actually exercises the degenerate zero-cost cycle.
-- **MDP probabilistic-LTL, remaining directions.** `optimize="min"` for GF (and F), and `FG` / `G` on the MDP
-  path, are deferred (the min/co-Büchi directions and their MEC/attractor characterisations); `probability_ltl`
-  raises on them. MEC decomposition (`_maximal_end_components`) is now in place to build them on.
 - **MDP long-run AVERAGE reward.** The steady-state *average reward* over schedulers (not the GF probability
   above) needs, within each MEC, the max/min long-run average — a linear program over the rationals (an exact
   rational simplex), a much larger build than the MEC + reachability the GF probability uses.
