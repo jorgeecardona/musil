@@ -29,6 +29,7 @@ from dataclasses import dataclass, replace
 from itertools import count
 
 from musil.core import Graph, Model, Result, Step, check, explore
+from musil.history import LastAction, action_taken, with_last_action
 from musil.liveness import LivenessResult, check_liveness, has_internal_edge, tarjan
 
 
@@ -225,6 +226,108 @@ def _state_predicate[S: Hashable](formula: LTL[S]) -> Callable[[S], bool] | None
             return None
 
 
+def _lift_atom[S: Hashable](predicate: Callable[[S], bool]) -> Callable[[LastAction[S]], bool]:
+    """Lift a predicate over ``S`` to one over ``LastAction[S]`` by reading the underlying ``.state``."""
+    return lambda la: predicate(la.state)
+
+
+def _lift_formula[S: Hashable](phi: LTL[S]) -> LTL[LastAction[S]]:
+    """Rewrite a formula over ``S`` to the same formula over ``LastAction[S]``: every ``Atom`` reads the
+    underlying ``.state``, the temporal/boolean structure is unchanged. Lets a state property be checked on
+    the ``with_last_action``-augmented model."""
+    match phi:
+        case Atom(name=n, predicate=p):
+            return Atom(n, _lift_atom(p))
+        case Not(arg=a):
+            return Not(_lift_formula(a))
+        case And(left=lhs, right=rhs):
+            return And(_lift_formula(lhs), _lift_formula(rhs))
+        case Or(left=lhs, right=rhs):
+            return Or(_lift_formula(lhs), _lift_formula(rhs))
+        case Implies(left=lhs, right=rhs):
+            return Implies(_lift_formula(lhs), _lift_formula(rhs))
+        case Next(arg=a):
+            return Next(_lift_formula(a))
+        case Eventually(arg=a):
+            return Eventually(_lift_formula(a))
+        case Always(arg=a):
+            return Always(_lift_formula(a))
+        case Until(left=lhs, right=rhs):
+            return Until(_lift_formula(lhs), _lift_formula(rhs))
+        case Release(left=lhs, right=rhs):
+            return Release(_lift_formula(lhs), _lift_formula(rhs))
+        case WeakUntil(left=lhs, right=rhs):
+            return WeakUntil(_lift_formula(lhs), _lift_formula(rhs))
+        case _:  # pragma: no cover - the match is exhaustive over the AST
+            raise TypeError(f"cannot lift unknown LTL node {type(phi).__name__}")
+
+
+def _enabled_by_name[S: Hashable](model: Model[S], name: str) -> Callable[[S], bool]:
+    """The predicate "some action named ``name`` is enabled at this state" over the ORIGINAL state — the
+    ``enabled(a)`` side of a fairness premise. Honours ``actions_fn`` when set, else the static actions."""
+    afn = model.actions_fn
+    if afn is None:
+        acts = tuple(a for a in model.actions if a.name == name)
+        return lambda s: any(a.enabled(s) for a in acts)
+    return lambda s: any(a.name == name and a.enabled(s) for a in afn(s))
+
+
+def _fairness_premise[S: Hashable](
+    model: Model[S], weak: list[str], strong: list[str]
+) -> LTL[LastAction[S]]:
+    """The fairness assumption as an LTL formula over the augmented model: the conjunction, over each fair
+    action ``a``, of weak fairness ``FG enabled(a) -> GF taken(a)`` (i.e. ``GF !enabled(a) | GF taken(a)``)
+    and strong fairness ``GF enabled(a) -> GF taken(a)`` (i.e. ``FG !enabled(a) | GF taken(a)``). On the
+    ``with_last_action`` model ``taken(a)`` is the state atom ``action_taken(a)`` and ``enabled(a)`` reads the
+    underlying state, so the whole premise is plain LTL the general engine already checks."""
+    terms: list[LTL[LastAction[S]]] = []
+    for kind, names in (("weak", weak), ("strong", strong)):
+        for nm in names:
+            enabled_pred = _enabled_by_name(model, nm)
+            en: LTL[LastAction[S]] = Atom(f"enabled:{nm}", lambda la, _p=enabled_pred: _p(la.state))
+            took: LTL[LastAction[S]] = Atom(f"taken:{nm}", action_taken(nm))
+            gf_took = Always(Eventually(took))
+            if kind == "weak":  # GF !enabled | GF taken
+                terms.append(Or(Always(Eventually(Not(en))), gf_took))
+            else:  # strong: FG !enabled | GF taken
+                terms.append(Or(Eventually(Always(Not(en))), gf_took))
+    premise = terms[0]
+    for t in terms[1:]:
+        premise = And(premise, t)
+    return premise
+
+
+def _check_ltl_fair[S: Hashable](
+    model: Model[S], formula: LTL[S], weak: list[str], strong: list[str], *, max_states: int
+) -> Result[S]:
+    """Fair LTL by reduction: ``model |=_fair phi`` iff ``model |= (fairness -> phi)``. Encode the fairness
+    assumption as an LTL premise over the ``with_last_action`` model (where ``taken``/``enabled`` are state
+    atoms), lift ``phi`` onto that model, and run the general engine on ``premise -> phi``. A counterexample is
+    a FAIR run violating ``phi``; its ``LastAction`` states are mapped back to the original states."""
+    if model.actions_fn is None:  # validate names against the static action set (as check_liveness does)
+        known = {a.name for a in model.actions}
+        unknown = sorted({nm for nm in (*weak, *strong) if nm not in known})
+        if unknown:
+            raise ValueError(f"check_ltl: unknown fair action name(s) {unknown}; actions are {sorted(known)}")
+    augmented = with_last_action(model)
+    prop = Implies(_fairness_premise(model, weak, strong), _lift_formula(formula))
+    graph = _stutter(explore(augmented, max_states=max_states))
+    found = GeneralizedBuchi[LastAction[S]].from_ltl(Not(prop)).accepting_lasso(graph)
+    if found is None:
+        return Result(ok=True, states_explored=len(graph.states), truncated=graph.truncated)
+    steps, loop = found
+    trace = tuple(Step(action=s.action, state=s.state.state) for s in steps)
+    return Result(
+        ok=False,
+        states_explored=len(graph.states),
+        kind="ltl",
+        reason=str(formula),
+        trace=trace,
+        loop=loop,
+        truncated=graph.truncated,
+    )
+
+
 def check_ltl[S: Hashable](
     model: Model[S],
     formula: LTL[S],
@@ -237,11 +340,14 @@ def check_ltl[S: Hashable](
     """Check ``formula`` against ``model``, reducing the supported fragment onto ``check`` /
     ``check_liveness`` (see the module docstring). Returns a ``Result`` for the safety reductions and a
     ``LivenessResult`` for the liveness ones; both satisfy the ``Verdict`` protocol (``.ok`` + ``__str__``).
-    ``fair`` / ``fair_strong`` apply to the liveness reductions (F / GF / G(a -> F b)). Any formula outside
-    the reducible shapes is checked by the general Büchi engine over the stutter-extended reachable graph (a
-    ``Result`` with ``kind="ltl"`` on violation); that engine does not yet compose fairness, so passing a
-    non-empty ``fair`` / ``fair_strong`` with such a formula RAISES ``NotImplementedError`` rather than
-    silently dropping the assumption (which could report a counterexample a fair scheduler excludes). On violation the ``Result`` carries a counterexample trace: the accepting
+    ``fair`` / ``fair_strong`` (weak / strong fairness by action NAME) apply everywhere: the reducible forms
+    (F / GF / G(a -> F b)) route through ``check_liveness``, and any other formula is checked by the general
+    Büchi engine under fairness by reduction — ``model |=_fair phi`` iff ``model |= (fairness -> phi)``, with
+    the fairness assumption encoded as an LTL premise over the ``with_last_action`` model (where ``taken(a)``
+    and ``enabled(a)`` are state atoms). A counterexample is then a FAIR run violating ``phi``, its states
+    mapped back to the model's own. An unknown fair action name raises ``ValueError`` (validated against the
+    static action set). Any formula outside the reducible shapes is otherwise checked by the general engine
+    over the stutter-extended reachable graph (a ``Result`` with ``kind="ltl"`` on violation). On violation the ``Result`` carries a counterexample trace: the accepting
     lasso of the ``Not(formula)`` automaton mapped back to model states — ``<init> -> ...(stem)... ->
     ...(cycle)`` — a concrete run that refutes the formula. Requires hashable states (the engine explores
     the graph)."""
@@ -270,17 +376,13 @@ def check_ltl[S: Hashable](
             return check_ltl(model, b, name=name, fair=fair, fair_strong=fair_strong, max_states=max_states)
         case _:
             pass
-    # The general engine does not yet compose fairness (that needs action-labelled atoms in the product;
-    # see LTL_NOTES.md). Fairness is honoured only for the reducible forms above, which route through
-    # check_liveness. Rather than silently DROP a fair/fair_strong assumption here -- which would return a
-    # verdict, and possibly a counterexample lasso, that a fair scheduler excludes -- REFUSE explicitly.
-    if (fair is not None and list(fair)) or (fair_strong is not None and list(fair_strong)):
-        raise NotImplementedError(
-            f"check_ltl cannot yet apply fairness to {formula}: it needs the general Büchi engine, which "
-            "does not compose fairness. Fairness (fair/fair_strong) is supported only for the reducible "
-            "forms F / GF / G(a -> F b); express the property in one of those shapes, or drop the "
-            "fairness assumption here."
-        )
+    # Fairness on the general-engine path: reduce fair-LTL to plain LTL over the with_last_action model,
+    # where taken(a)/enabled(a) are state atoms and the fairness assumption is an LTL premise (see
+    # _check_ltl_fair and LTL_NOTES.md). Only the reducible forms above route through check_liveness.
+    weak = list(fair) if fair is not None else []
+    strong = list(fair_strong) if fair_strong is not None else []
+    if weak or strong:
+        return _check_ltl_fair(model, formula, weak, strong, max_states=max_states)
     # General engine: model |= phi iff the automaton for Not(phi) has no accepting run over the
     # (stutter-extended) reachable graph. Covers Until/Release/Next/arbitrary nesting.
     graph = _stutter(explore(model, max_states=max_states))

@@ -243,20 +243,43 @@ def test_traffic_light_ltl_via_check_ltl():
     assert check_ltl(m, Until(known, green)).ok
 
 
-def test_check_ltl_refuses_fairness_on_the_general_engine():
-    # Fairness is honoured only for the reducible forms (F / GF / G(a -> F b)) via check_liveness. A formula
-    # that needs the general Büchi engine (here an Until) cannot yet compose fairness, so check_ltl REFUSES
-    # rather than silently returning a verdict that ignores the fair/fair_strong assumption (which could
-    # report a counterexample a fair scheduler excludes). Without fairness the engine runs normally.
-    m = light_model()
-    known = Atom[Light]("known", lambda s: s.color in {"red", "green", "yellow"})
-    green = Atom[Light]("green", lambda s: s.color == "green")
-    assert isinstance(check_ltl(m, Until(known, green)), Result)  # no fairness -> engine returns a Result
-    assert check_ltl(m, Until(known, green), fair=()).ok  # empty fairness is no constraint, not a refusal
-    with pytest.raises(NotImplementedError, match="fairness"):
-        check_ltl(m, Until(known, green), fair=("go",))
-    with pytest.raises(NotImplementedError, match="fairness"):
-        check_ltl(m, Until(known, green), fair_strong=("go",))
+@dataclass(frozen=True)
+class AB:
+    tag: str  # "a" or "b"
+
+
+def _ab_model() -> Model[AB]:
+    # From "a" a scheduler may WORK (-> b) or IDLE (-> a, a fault); from "b", go back. The property A U B
+    # ("stay in a until reaching b") is violated by the idle-forever run, but every run that treats WORK
+    # fairly reaches b -- so fairness on WORK flips the verdict. WORK is the "ours" action, IDLE the fault.
+    return Model(
+        init=AB("a"),
+        actions=[
+            Action("work", enabled=lambda s: s.tag == "a", apply=lambda s: AB("b")),
+            Action("idle", enabled=lambda s: s.tag == "a", apply=lambda s: AB("a")),
+            Action("back", enabled=lambda s: s.tag == "b", apply=lambda s: AB("a")),
+        ],
+        terminal=lambda s: False,
+    )
+
+
+def test_check_ltl_fairness_on_the_general_engine_flips_an_until():
+    # Fair LTL by reduction (with_last_action + fairness premise): a general-engine formula (Until) now
+    # composes fairness instead of refusing. A U B FAILS unfair (idle forever), HOLDS under weak OR strong
+    # fairness on WORK. Empty fairness is no constraint; an unknown fair name is rejected.
+    m = _ab_model()
+    a = Atom[AB]("A", lambda s: s.tag == "a")
+    b = Atom[AB]("B", lambda s: s.tag == "b")
+    assert not check_ltl(m, Until(a, b)).ok  # idle-forever run violates A U B
+    assert not check_ltl(m, Until(a, b), fair=()).ok  # empty fairness is no constraint
+    assert check_ltl(m, Until(a, b), fair=("work",)).ok  # weak fairness on work forces reaching b
+    assert check_ltl(m, Until(a, b), fair_strong=("work",)).ok  # strong fairness likewise
+    # the unfair counterexample maps back to ORIGINAL states (not LastAction), with a loop marker.
+    cex = check_ltl(m, Until(a, b))
+    assert isinstance(cex, Result) and not cex.ok and cex.loop is not None
+    assert all(isinstance(step.state, AB) for step in cex.trace)
+    with pytest.raises(ValueError, match="unknown fair action name"):
+        check_ltl(m, Until(a, b), fair=("nope",))
 
 
 @dataclass(frozen=True)

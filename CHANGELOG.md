@@ -4,6 +4,19 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — fair LTL on the general engine: `check_ltl(..., fair=/fair_strong=)` composes fairness
+
+- `check_ltl` now honours `fair` / `fair_strong` (weak / strong fairness by action name) for ANY formula, not
+  only the reducible F / GF / G(a -> F b) forms — completing the LTL layer's last deferral (it previously
+  RAISED on the engine path). Done by reduction: `model |=_fair phi` iff `model |= (fairness -> phi)`, with the
+  fairness assumption encoded as an LTL premise over the `with_last_action` model (where `taken(a)` and
+  `enabled(a)` are state atoms), `phi` lifted onto the augmented state, checked by the existing Büchi engine,
+  and the counterexample mapped back to the model's own states. Weak fairness is `GF !enabled(a) | GF
+  taken(a)`, strong is `FG !enabled(a) | GF taken(a)`. An unknown fair action name raises `ValueError`.
+- Corpus pins an `Until` that FAILS unfair (an idle-forever run) and HOLDS under weak OR strong fairness on the
+  "ours" action, with the counterexample mapped back to the original states. `LTL_NOTES.md` moves fairness from
+  deferred to shipped and records the terminal-stutter soundness argument.
+
 ### Added — `musil.history.with_last_action`: temporal properties over the action sequence
 
 - `with_last_action(model)` augments each state to `LastAction(state, action)` — the original state plus the
