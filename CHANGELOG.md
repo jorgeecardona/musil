@@ -4,6 +4,17 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — constrained (until) reachability: `avoid=` on `reach_probability` / `reach_probability_mdp`
+
+- The exact probability of the until property `P(¬avoid U target)` — reaching the target WITHOUT first
+  entering an `avoid` state — on both the DTMC (`reach_probability`) and MDP (`reach_probability_mdp`, min/max)
+  functions, unbounded and `steps=k`. Reuses the existing 0-sink mechanism: an `avoid` state that is not
+  itself a target becomes an absorbing failure (value 0), which `_dtmc_values` / `_bounded_values` / `_s0_min`
+  already resolve correctly; `target` takes precedence. Corpus pins a DTMC where `avoid` drops reachability
+  from 1 to 1/2 (a state that reaches the target a.s. by bouncing, but only directly with probability 1/2
+  while avoiding a failure state) and an MDP where `avoid` separates the schedulers (min 1 -> 1/2, max stays
+  1). No dependency.
+
 ### Added — `long_run_probability`: exact DTMC long-run / steady-state fraction of time
 
 - The exact fraction of time a DTMC spends in a target set in the limit (PRISM's steady-state / S operator), a

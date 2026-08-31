@@ -135,6 +135,7 @@ def reach_probability[S: Hashable](
     target: Callable[[S], bool],
     *,
     weight: Callable[[str, S], Fraction | int] | None = None,
+    avoid: Callable[[S], bool] | None = None,
     steps: int | None = None,
     max_states: int = 1_000_000,
 ) -> Fraction:
@@ -146,6 +147,12 @@ def reach_probability[S: Hashable](
     ``1`` for every action, i.e. a uniform choice. States must be HASHABLE (the graph is explored). Returns
     a ``fractions.Fraction`` — exact, no floating point.
 
+    ``avoid`` gives the CONSTRAINED (until) probability ``P(¬avoid U target)``: the probability of reaching
+    ``target`` WITHOUT first entering an ``avoid`` state. An ``avoid`` state that is not itself a ``target``
+    becomes an absorbing failure (probability 0), so a run that touches it before the target does not count;
+    ``target`` takes precedence (a state in both counts as reached). With no ``avoid`` (the default) it is
+    plain reachability.
+
     With ``steps=k`` the answer is the probability of reaching ``target`` WITHIN ``k`` transitions (an exact
     finite unrolling; ``steps=0`` is the indicator of ``target``). With ``steps=None`` (the default) it is
     the unbounded probability, solved by the exact linear system. Raises ``ValueError`` if the exploration
@@ -155,6 +162,8 @@ def reach_probability[S: Hashable](
         raise ValueError("reach_probability: exploration truncated at max_states; the probability is inconclusive")
     w = weight if weight is not None else _uniform
     dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
+    if avoid is not None:  # ¬avoid U target: avoid (non-target) states are absorbing 0-sinks
+        dist = {s: ([] if (avoid(s) and not target(s)) else d) for s, d in dist.items()}
     if steps is None:
         return _dtmc_values(graph.states, dist, target)[graph.initial[0]]
     if steps < 0:
@@ -377,6 +386,7 @@ def reach_probability_mdp[S: Hashable](
     moves: Moves[S],
     weight: Callable[[str, S], Fraction | int] | None = None,
     optimize: Literal["max", "min"] = "max",
+    avoid: Callable[[S], bool] | None = None,
     steps: int | None = None,
     max_states: int = 1_000_000,
 ) -> Fraction:
@@ -393,6 +403,11 @@ def reach_probability_mdp[S: Hashable](
     ``fractions.Fraction``. For ``optimize="min"`` the states from which a scheduler can avoid the target
     forever are found first (``_s0_min``) and pinned to 0, which is what stops min policy iteration from
     stalling on a value-preserving self-loop (see PROBABILISTIC_NOTES.md).
+
+    ``avoid`` gives the CONSTRAINED (until) optimal probability ``P_opt(¬avoid U target)``: an ``avoid`` state
+    that is not a ``target`` becomes an absorbing failure (0), so a run that touches it before the target does
+    not count. The optimisation is still over all schedulers — e.g. ``optimize="max"`` is the best a scheduler
+    can do while steering clear of ``avoid`` until the target.
 
     With ``steps=k`` the answer is instead the optimal probability of reaching ``target`` WITHIN ``k``
     transitions — an exact finite backward induction, so ``_s0_min`` is not needed (a bounded horizon cannot
@@ -414,6 +429,8 @@ def reach_probability_mdp[S: Hashable](
             for group in moves(s, enabled)
         ]
         all_moves[s] = state_moves if state_moves else [[]]  # no move -> a single absorbing move
+    if avoid is not None:  # ¬avoid U target: avoid (non-target) states become absorbing 0-sinks
+        all_moves = {s: ([[]] if (avoid(s) and not target(s)) else m) for s, m in all_moves.items()}
     minimize = optimize == "min"
     if steps is not None:
         if steps < 0:

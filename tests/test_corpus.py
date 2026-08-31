@@ -572,6 +572,58 @@ def test_long_run_weights_absorption_across_two_bsccs():
     assert long_run_probability(m, lambda s: s.tag in {"X", "Y"}) == Fraction(1)  # absorbed a.s.
 
 
+# --------------------------------------------------------------------------------------------------
+# 9d. Constrained (until) reachability — P(¬avoid U target), DTMC and MDP (avoid changes the verdict)
+# --------------------------------------------------------------------------------------------------
+
+
+def _is(tag: str) -> Callable[[Chain], bool]:
+    return lambda s: s.tag == tag
+
+
+def test_constrained_reachability_dtmc_avoid_changes_the_answer():
+    # one -> up:win or down:zero (1/2 each); zero -> back:one (NOT absorbing); win absorbing target. Plain
+    # reach(win) from one is 1 (it bounces until it goes up). Reaching win WITHOUT visiting zero requires
+    # going up immediately: P(not zero U win) = 1/2.
+    m: Model[Chain] = Model(
+        init=Chain("one"),
+        actions=[
+            Action("up", enabled=_is("one"), apply=lambda s: Chain("win")),
+            Action("down", enabled=_is("one"), apply=lambda s: Chain("zero")),
+            Action("back", enabled=_is("zero"), apply=lambda s: Chain("one")),
+        ],
+        terminal=_is("win"),
+    )
+    assert reach_probability(m, _is("win")) == Fraction(1)
+    assert reach_probability(m, _is("win"), avoid=_is("zero")) == Fraction(1, 2)
+
+
+def test_constrained_reachability_mdp_min_max_with_avoid():
+    # one has two moves: SURE (-> win) and RISK (1/2 win, 1/2 zero); zero -> back:one; win absorbing.
+    m: Model[Chain] = Model(
+        init=Chain("one"),
+        actions=[
+            Action("sure", enabled=_is("one"), apply=lambda s: Chain("win")),
+            Action("risk_up", enabled=_is("one"), apply=lambda s: Chain("win")),
+            Action("risk_down", enabled=_is("one"), apply=lambda s: Chain("zero")),
+            Action("back", enabled=_is("zero"), apply=lambda s: Chain("one")),
+        ],
+        terminal=_is("win"),
+    )
+
+    def moves(_s: Chain, enabled: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
+        risk = [a for a in enabled if a.name.startswith("risk_")]
+        others: list[Sequence[Action[Chain]]] = [[a] for a in enabled if not a.name.startswith("risk_")]
+        return ([risk] if risk else []) + others
+
+    # both moves reach win a.s. (zero loops back), so unconstrained min reach is 1.
+    assert reach_probability_mdp(m, _is("win"), moves=moves, optimize="min") == Fraction(1)
+    # with avoid=zero: RISK yields 1/2 (half the time it hits zero and fails), SURE yields 1. Min picks RISK
+    # (= 1/2), max picks SURE (= 1) -- avoid discriminates the two schedulers.
+    assert reach_probability_mdp(m, _is("win"), moves=moves, optimize="min", avoid=_is("zero")) == Fraction(1, 2)
+    assert reach_probability_mdp(m, _is("win"), moves=moves, optimize="max", avoid=_is("zero")) == Fraction(1)
+
+
 def test_profile_explores_the_same_reachable_set():
     # profile keeps its own instrumented loop (it times enabled/apply/canonicalize separately, which the
     # shared _successors kernel bundles). This pins its full-sweep reachable count to the corpus so it can
