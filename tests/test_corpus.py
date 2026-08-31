@@ -28,6 +28,7 @@ from musil import (
     Release,
     Result,
     Until,
+    WeakUntil,
     action_taken,
     always,
     assert_covers,
@@ -1012,7 +1013,10 @@ def test_probability_ltl_reducible_fragment_known_verdicts():
     never = Atom[Chain]("false", lambda _s: False)
     assert probability_ltl(m, Release(never, not_z)) == probability_ltl(m, Always(not_z))  # G(¬Z) = false R ¬Z
     assert probability_ltl(m, Release(at_a, not_z)) == 1 - reach_probability(m, _is("Z"), avoid=_is("A"))
-    with pytest.raises(NotImplementedError):  # a temporal operand (in Until or Release) still needs the general engine
+    # a W b (WeakUntil) also reduces (b R (a∨b)): G p = p W false, and false W A = A-at-init = 0 (init is I)
+    assert probability_ltl(m, WeakUntil(not_z, never)) == probability_ltl(m, Always(not_z))
+    assert probability_ltl(m, WeakUntil(never, at_a)) == Fraction(0)
+    with pytest.raises(NotImplementedError):  # a temporal operand (in Until/Release/WeakUntil) needs the general engine
         probability_ltl(m, Until(Eventually(at_a), not_z))
 
 
@@ -1067,6 +1071,10 @@ def test_probability_ltl_mdp_full_fragment_max_and_min():
     assert p(Release(never, not_z), choose, "max") == p(Always(not_z), choose, "max") == Fraction(1)
     assert p(Release(never, not_z), choose, "min") == p(Always(not_z), choose, "min") == Fraction(0)
     assert p(Release(never, not_z), coin, "max") == half and p(Release(never, not_z), coin, "min") == half
+    # a W b (WeakUntil): G p = p W false, cross-checked against Always both max and min
+    assert p(WeakUntil(not_z, never), choose, "max") == p(Always(not_z), choose, "max") == Fraction(1)
+    assert p(WeakUntil(not_z, never), choose, "min") == p(Always(not_z), choose, "min") == Fraction(0)
+    assert p(WeakUntil(not_z, never), coin, "max") == half and p(WeakUntil(not_z, never), coin, "min") == half
 
 
 def test_bounded_expected_reward_dtmc_and_mdp():

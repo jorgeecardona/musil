@@ -45,6 +45,7 @@ from musil.ltl import (
     Eventually,
     Release,
     Until,
+    WeakUntil,
     _push_negations,  # pyright: ignore[reportPrivateUsage]
     _state_predicate,  # pyright: ignore[reportPrivateUsage]
 )
@@ -684,9 +685,11 @@ def probability_ltl[S: Hashable](
     - ``a R b`` (``Release``, both STATE predicates) → the until dual ``1 - P(¬a U ¬b)``: ``b`` holds until
       (and including) the step ``a`` first holds, or forever if ``a`` never does. ``G p`` is the special case
       ``false R p``.
+    - ``a W b`` (``WeakUntil``, both STATE predicates) → the WEAK until ``(a U b) ∨ G a`` = ``b R (a∨b)`` =
+      ``1 - P(reach ¬a∧¬b avoiding b)``. ``G p`` is also the special case ``p W false``.
 
     With ``moves`` (as in ``reach_probability_mdp``) the model is an MDP and the answer is the OPTIMAL
-    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / G / GF / FG / U / R
+    probability over all schedulers, ``optimize="max"`` or ``"min"``, for the same F / G / GF / FG / U / R / W
     fragment:
 
     - ``F p`` → max / min reachability of ``p``;
@@ -699,6 +702,7 @@ def probability_ltl[S: Hashable](
     - ``a U b`` → the max / min constrained reachability of ``b`` avoiding ``¬a`` (``reach_probability_mdp``
       with ``avoid=¬a``).
     - ``a R b`` → ``1 - P_min(¬a U ¬b)`` (max) / ``1 - P_max(¬a U ¬b)`` (min), the until dual.
+    - ``a W b`` → ``1 - P_min(¬b U (¬a∧¬b))`` (max) / ``1 - P_max(¬b U (¬a∧¬b))`` (min), via ``b R (a∨b)``.
 
     All exact, reusing the reachability solve, the BSCC / MEC / stay-within decompositions and (for the MDP)
     policy iteration; NO linear programming (that is only for the long-run AVERAGE reward, see
@@ -765,6 +769,17 @@ def probability_ltl[S: Hashable](
                     return 1 - reach_probability_mdp(
                         model, _negate(b), moves=moves, weight=weight, optimize=dual, avoid=a, max_states=max_states
                     )
+            case WeakUntil(left=left, right=right):  # a W b = b R (a∨b) = 1 - P(¬b U (¬a∧¬b)); max/min flips like R
+                a = _state_predicate(left)
+                b = _state_predicate(right)
+                if a is not None and b is not None:
+                    def _neither(s: S, _a: Callable[[S], bool] = a, _b: Callable[[S], bool] = b) -> bool:
+                        return not _a(s) and not _b(s)  # ¬(a∨b), the inner-until target
+
+                    dual = "min" if mx else "max"
+                    return 1 - reach_probability_mdp(
+                        model, _neither, moves=moves, weight=weight, optimize=dual, avoid=b, max_states=max_states
+                    )
             case _:
                 pass
         raise NotImplementedError(
@@ -802,6 +817,12 @@ def probability_ltl[S: Hashable](
             if a is not None and b is not None:  # ¬a U ¬b: target ¬b, absorbing when a ∧ b (avoid ∧ not-target)
                 rel_dist = {s: ([] if (a(s) and b(s)) else d) for s, d in dist.items()}
                 return 1 - _dtmc_values(graph.states, rel_dist, lambda s, _b=b: not _b(s))[init]
+        case WeakUntil(left=left, right=right):  # a W b = b R (a∨b) = 1 - P(reach ¬a∧¬b avoiding b)
+            a = _state_predicate(left)
+            b = _state_predicate(right)
+            if a is not None and b is not None:  # inner ¬b U (¬a∧¬b): target ¬a∧¬b, absorbing when b (avoid ∧ not-target)
+                ww_dist = {s: ([] if b(s) else d) for s, d in dist.items()}
+                return 1 - _dtmc_values(graph.states, ww_dist, lambda s, _a=a, _b=b: not _a(s) and not _b(s))[init]
         case _:
             pass
     raise NotImplementedError(

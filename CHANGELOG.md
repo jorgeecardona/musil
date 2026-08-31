@@ -2,6 +2,17 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `probability_ltl` now supports `a W b` (weak until), completing U / R / W
+
+- `probability_ltl(model, WeakUntil(a, b))` finishes the binary temporal operators for state predicates. Weak
+  until is `(a U b) ∨ G a = b R (a∨b)`, so `P(a W b) = 1 - reach_probability(¬a∧¬b, avoid=b)` (DTMC), and for an
+  MDP the max/min flips like release. Verified on every edge case: `a=true → 1`, `b=false → P(G a)`,
+  `b=true → 1`, `false W b → b-at-init`. `G p` is also `p W false`, and the corpus cross-checks
+  `probability_ltl(WeakUntil(p, false))` against `probability_ltl(Always(p))` for the DTMC and the MDP (max and
+  min). With U and R shipped in the previous entries, all three binary temporal operators of state predicates
+  now reduce to constrained reachability with no automaton; only operands that are themselves temporal need
+  the deferred deterministic-automaton engine.
+
 ### Added — `probability_ltl` now supports `a R b` (release of two state predicates)
 
 - `probability_ltl(model, Release(a, b))` completes the binary temporal operators for state predicates. Release

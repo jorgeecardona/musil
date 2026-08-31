@@ -135,7 +135,9 @@ accelerator for large linear solves, never required).
   ENTIRELY inside `p`; `a U b` (both STATE predicates) = the CONSTRAINED (until) reachability of `b` avoiding
   `¬a`, i.e. `reach_probability` with `avoid=¬a` — no automaton needed, since strong until on state predicates
   IS constrained reachability; `a R b` (both STATE predicates) = the until dual `1 - P(¬a U ¬b)` (`b` holds
-  until and including `a`, or forever — and `G p` is the special case `false R p`). Reuses the reachability
+  until and including `a`, or forever — and `G p` is the special case `false R p`); `a W b` (both STATE
+  predicates) = the WEAK until `(a U b) ∨ G a` = `b R (a∨b)` = `1 - P(reach ¬a∧¬b avoiding b)`. Reuses the
+  reachability
   solve and the BSCC decomposition (`_bscc_reach_sum`), and the reducible-fragment matcher from `check_ltl`
   (`_push_negations` / `_state_predicate`). Corpus separates GF from FG on a model with a `{A,B}` cycle where
   only `A` is the target: `P(GF A) = 1/2`, `P(FG A) = 0`; and pins `a U b` / `a R b` against the
@@ -154,6 +156,7 @@ accelerator for large linear solves, never required).
   - `a U b` — max / min constrained reachability of `b` avoiding `¬a` (`reach_probability_mdp` with
     `avoid=¬a`), the same reduction as the DTMC case.
   - `a R b` — `1 - P_min(¬a U ¬b)` (max), `1 - P_max(¬a U ¬b)` (min): the until dual, so the max/min flips.
+  - `a W b` — via `b R (a∨b)`: `1 - P_min(¬b U (¬a∧¬b))` (max), `1 - P_max(¬b U (¬a∧¬b))` (min).
 
   So the whole fragment rests on three primitives — max/min reachability, MEC (for GF-max), and the
   stay-within set (for FG-max) — plus the standard temporal duals. Corpus pins the full matrix on one model:
@@ -162,9 +165,10 @@ accelerator for large linear solves, never required).
 
 ## Deferred (future layers, not blocking)
 
-- **General probabilistic LTL** (`Next`, leads-to, NESTED / disjoined temporal operators, and `Until` / `Release`
-  whose operands are themselves temporal — e.g. `(F a) U b`). `Until` and `Release` of two STATE predicates are
-  shipped above (constrained reachability and its dual); the general case is different. Unlike the qualitative engine, the quantitative
+- **General probabilistic LTL** (`Next`, leads-to, NESTED / disjoined temporal operators, and `Until` /
+  `Release` / `WeakUntil` whose operands are themselves temporal — e.g. `(F a) U b`). `Until`, `Release`, and
+  `WeakUntil` of two STATE predicates are shipped above (constrained reachability and its duals); the general
+  case is different. Unlike the qualitative engine, the quantitative
   measure needs a DETERMINISTIC automaton for the formula — the nondeterministic Büchi automaton the GPVW
   engine builds gives the wrong probability on the DTMC product — so it needs a Rabin/Safra determinization
   (or a limit-deterministic construction), a larger build. `probability_ltl` raises `NotImplementedError`
