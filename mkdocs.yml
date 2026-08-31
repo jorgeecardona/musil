@@ -86,6 +86,8 @@ nav:
       - Byzantine service: examples/byzantine_service.md
       - Multi-environment composition: examples/open_system_composed.md
       - TCAS II: examples/tcas.md
+    - Temporal logic:
+      - Arbiter fairness: examples/arbiter_fairness.md
     - Probabilistic:
       - Availability + recovery cost: examples/availability.md
     - Scaling:

@@ -4,6 +4,16 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `examples/arbiter_fairness.py`: fair LTL + action-sequence liveness + `probability_ltl`, worked
+
+- A worked example for the three most recent temporal/probabilistic capabilities, which had no example: an
+  arbiter that must not starve a client. "Every `req_A` is eventually followed by a `serve_A`" is expressed
+  over ACTIONS via `with_last_action` + `action_taken`, then checked three ways — `check_ltl` (FAILS unfair:
+  the arbiter can stall or favour B), `check_ltl(..., fair=/fair_strong=)` (HOLDS under weak OR strong fairness
+  on `serve_A`), and `probability_ltl` on the uniform-random DTMC (`P(GF serve_A) = 1`). The example asserts
+  the exact verdicts and a subprocess test pins them; `docs/examples/arbiter_fairness.md` renders the scenario
+  under a new "Temporal logic" nav section. No new library code.
+
 ### Added — `fixed_points_of`: graph-first `fixed_points` over a pre-built graph (completes #31)
 
 - `fixed_points_of(graph)` computes the per-initial structural fixed points (the distinct no-outgoing-edge
