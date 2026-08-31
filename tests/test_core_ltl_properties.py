@@ -23,6 +23,7 @@ from musil import (
     Release,
     Until,
     check,
+    check_all,
     check_ltl,
     check_of,
     explore,
@@ -73,6 +74,20 @@ def test_check_of_agrees_with_check_over_random_models() -> None:
         r = check(m)
         r_of = check_of(explore(m), m)
         assert (r.ok, r.kind, r.invariant) == (r_of.ok, r_of.kind, r_of.invariant)
+
+
+def test_check_agrees_with_check_all_over_random_models() -> None:
+    # check early-exits at the first violation; check_all sweeps the whole space and BUCKETS the distinct
+    # violations (distinct code from check). They must agree: check.ok iff check_all found nothing, and
+    # check's reported (kind, invariant) is among check_all's results (check_all finds at least what check does).
+    rng = random.Random(22)
+    for _ in range(60):
+        m = _random_model(rng, rng.randint(2, 5))
+        r = check(m)
+        all_r = check_all(m)
+        assert r.ok == (all_r == [])
+        if not r.ok:
+            assert any((v.kind, v.invariant) == (r.kind, r.invariant) for v in all_r)
 
 
 def test_ltl_engine_agrees_with_reductions_over_random_models() -> None:
