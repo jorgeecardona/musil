@@ -124,7 +124,9 @@ accelerator for large linear solves, never required).
   number of choice states (product of move-counts), so for SMALL MDPs; `max_policies` caps it with a loud
   error. Corpus pins a scheduler that steers into a high-rate vs low-rate absorbing cycle (`max = 10`,
   `min = 2`) and a probabilistic coin that cannot (`max = min = 6`). The efficient accelerator is deferred (see
-  below), to be differential-tested against this oracle.
+  below), to be differential-tested against this oracle. `long_run_probability_mdp(model, target, ...)` is the
+  MDP analog of `long_run_probability` — the max/min long-run FRACTION OF TIME in a target set over schedulers,
+  the indicator special case, and delegates here.
 
 - **Probabilistic LTL, reducible fragment** — `probability_ltl(model, formula)`. The exact probability that a
   random DTMC run satisfies `formula`, for the shapes with a direct characterisation: `F p` = reachability of

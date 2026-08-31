@@ -528,6 +528,32 @@ def long_run_reward_mdp[S: Hashable](
     return best
 
 
+def long_run_probability_mdp[S: Hashable](
+    model: Model[S],
+    target: Callable[[S], bool],
+    *,
+    moves: Moves[S],
+    weight: Callable[[str, S], Fraction | int] | None = None,
+    optimize: Literal["max", "min"] = "max",
+    max_policies: int = 100_000,
+    max_states: int = 1_000_000,
+) -> Fraction:
+    """The exact MAXIMAL (or MINIMAL) long-run fraction of time the MDP spends in ``target`` over all
+    schedulers — the MDP analog of ``long_run_probability`` (as ``reach_probability_mdp`` is to
+    ``reach_probability``). It is ``long_run_reward_mdp`` with the target's indicator as the reward and
+    delegates to it, so it shares the reference-oracle enumeration of memoryless deterministic policies and the
+    ``max_policies`` cap (see ``long_run_reward_mdp`` for the method and its small-MDP scope)."""
+    return long_run_reward_mdp(
+        model,
+        lambda s: Fraction(target(s)),
+        moves=moves,
+        weight=weight,
+        optimize=optimize,
+        max_policies=max_policies,
+        max_states=max_states,
+    )
+
+
 def _bscc_reach_sum[S: Hashable](
     states: Sequence[S], dist: Mapping[S, _Dist[S]], init: S, keep: Callable[[frozenset[S]], bool]
 ) -> Fraction:

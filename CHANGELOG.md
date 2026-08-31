@@ -2,6 +2,15 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `long_run_probability_mdp`: MDP steady-state fraction of time (fills the DTMC/MDP symmetry)
+
+- `long_run_probability_mdp(model, target, moves=..., optimize="max"|"min")` returns the exact max/min long-run
+  fraction of time an MDP spends in a target set over all schedulers — the MDP analog of `long_run_probability`
+  (as `reach_probability_mdp` is to `reach_probability`), the one quantity that had a DTMC form but no MDP one.
+  It is the indicator special case of `long_run_reward_mdp` and delegates to it (same reference-oracle
+  enumeration and `max_policies` cap). Corpus pins a scheduler steering into an absorbing target (`max = 1`,
+  `min = 0`) and a probabilistic coin that reaches it half the time (`max = 1/2`).
+
 ### Added — `examples/server_utilization.py`: reward-rate answers (steady-state / transient / policy), worked
 
 - A worked example for the three newest reward-RATE capabilities, which had no example: a server that is BUSY

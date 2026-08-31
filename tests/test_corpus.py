@@ -47,6 +47,7 @@ from musil import (
     fixed_points,
     fixed_points_of,
     long_run_probability,
+    long_run_probability_mdp,
     long_run_reward,
     long_run_reward_mdp,
     never,
@@ -741,6 +742,12 @@ def test_long_run_reward_mdp_oracle_max_and_min():
     assert long_run_reward_mdp(m, rate, moves=coin, optimize="min") == Fraction(6)
     with pytest.raises(ValueError, match="max_policies"):  # the enumeration cap is a loud error
         long_run_reward_mdp(m, rate, moves=choose, optimize="max", max_policies=1)
+
+    # long_run_probability_mdp is the indicator special case: max/min long-run fraction of time in {A}.
+    in_a = _is("A")
+    assert long_run_probability_mdp(m, in_a, moves=choose, optimize="max") == Fraction(1)  # steer to A, stay
+    assert long_run_probability_mdp(m, in_a, moves=choose, optimize="min") == Fraction(0)  # steer to B instead
+    assert long_run_probability_mdp(m, in_a, moves=coin, optimize="max") == Fraction(1, 2)  # reached 1/2 the time
 
 
 def test_constrained_reachability_dtmc_avoid_changes_the_answer():
