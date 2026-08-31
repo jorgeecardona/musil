@@ -2,6 +2,19 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `long_run_reward_mdp`: exact MDP long-run average reward (reference oracle)
+
+- `long_run_reward_mdp(model, reward, moves=..., optimize="max"|"min")` returns the exact max/min steady-state
+  reward RATE over all schedulers of an MDP — the last DTMC capability without an MDP analog. A finite MDP has
+  an average-optimal MEMORYLESS DETERMINISTIC policy (Puterman), so the optimum equals the best/worst over the
+  finitely many such policies: it enumerates them, induces each one's DTMC, and takes the extreme of
+  `long_run_reward` (shared `_long_run_reward_of`). Exact and dependency-free — the pure-Python Tier-0 oracle.
+  Exponential in the number of choice states, so for SMALL MDPs; `max_policies` caps the enumeration with a
+  loud `ValueError`. An efficient average-reward policy iteration (LP-free, linear solves) is the documented
+  future accelerator, to be differential-tested against this oracle (PROBABILISTIC_NOTES.md). Corpus pins a
+  scheduler steering into a high-rate vs low-rate absorbing cycle (`max = 10`, `min = 2`) and a probabilistic
+  coin that cannot (`max = min = 6`).
+
 ### Added — `transient_distribution`: exact point-in-time state distribution after k steps
 
 - `transient_distribution(model, steps, weight=...)` returns the exact probability distribution over states

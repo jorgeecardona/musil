@@ -32,6 +32,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from fractions import Fraction
+from itertools import product
 from typing import Literal
 
 from musil.core import Action, Graph, Model, actions_source, explore
@@ -426,16 +427,25 @@ def long_run_reward[S: Hashable](
         raise ValueError("long_run_reward: exploration truncated at max_states; the long-run answer is inconclusive")
     w = weight if weight is not None else _uniform
     dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
-    support: dict[S, list[tuple[str, S]]] = {s: [("", t) for _, t in dist[s]] for s in graph.states}
+    return _long_run_reward_of(graph.states, dist, graph.initial[0], reward)
+
+
+def _long_run_reward_of[S: Hashable](
+    states: Sequence[S], dist: Mapping[S, _Dist[S]], init: S, reward: Callable[[S], Fraction | int]
+) -> Fraction:
+    """The long-run average reward of a DTMC given directly as its per-state distribution ``dist``:
+    ``sum_B reach(B) * sum_{s in B} pi_B(s) * reward(s)`` over the bottom SCCs. Shared by ``long_run_reward``
+    (the model builds ``dist``) and ``long_run_reward_mdp`` (each policy induces a ``dist``)."""
+    support: dict[S, list[tuple[str, S]]] = {s: [("", t) for _, t in dist[s]] for s in states}
     total = Fraction(0)
-    for scc in tarjan(set(graph.states), support):
+    for scc in tarjan(set(states), support):
         if any(t not in scc for s in scc for _, t in dist[s]):
             continue  # not a BOTTOM SCC: a distribution edge leaves it, so the run does not stay here
         pi = _stationary(list(scc), dist)
         avg = sum((pi[s] * Fraction(reward(s)) for s in scc), Fraction(0))  # stationary-weighted reward in B
         if avg == 0:
             continue  # this BSCC contributes no long-run reward
-        reach_b = _dtmc_values(graph.states, dist, scc.__contains__)[graph.initial[0]]
+        reach_b = _dtmc_values(states, dist, scc.__contains__)[init]
         total += reach_b * avg
     return total
 
@@ -464,6 +474,58 @@ def long_run_probability[S: Hashable](
     Requires hashable states (the graph is explored). Equals ``long_run_reward`` with the target's indicator
     as the reward (this delegates to it)."""
     return long_run_reward(model, lambda s: Fraction(target(s)), weight=weight, max_states=max_states)
+
+
+def long_run_reward_mdp[S: Hashable](
+    model: Model[S],
+    reward: Callable[[S], Fraction | int],
+    *,
+    moves: Moves[S],
+    weight: Callable[[str, S], Fraction | int] | None = None,
+    optimize: Literal["max", "min"] = "max",
+    max_policies: int = 100_000,
+    max_states: int = 1_000_000,
+) -> Fraction:
+    """The exact MAXIMAL (or MINIMAL) long-run average reward over all schedulers of the MDP — the steady-state
+    reward RATE a best/worst scheduler achieves. ``moves``/``weight`` describe the MDP as in
+    ``reach_probability_mdp``; ``reward(state)`` is the per-state rate (may be negative).
+
+    This is the pure-Python REFERENCE ORACLE: a finite MDP has an average-optimal MEMORYLESS DETERMINISTIC
+    policy (Puterman), so the optimum over ALL schedulers equals the best/worst over the finitely many
+    memoryless deterministic policies — enumerate them, induce each one's DTMC, and take the extreme of
+    ``long_run_reward``. Exact and dependency-free. It is EXPONENTIAL in the number of states with a genuine
+    choice (the product of their move-counts), so it is for SMALL MDPs; ``max_policies`` caps that product and
+    raises a loud ``ValueError`` past it rather than hanging. An efficient average-reward policy iteration is
+    the future accelerator (see PROBABILISTIC_NOTES.md), to be differential-tested against this oracle.
+
+    Raises ``ValueError`` if the exploration truncates, if the policy count exceeds ``max_policies``, or if
+    ``optimize`` is not ``"max"``/``"min"``. Requires hashable states."""
+    if optimize not in ("max", "min"):
+        raise ValueError(f"long_run_reward_mdp: optimize must be 'max' or 'min', got {optimize!r}")
+    graph = explore(model, max_states=max_states)
+    if graph.truncated:
+        raise ValueError("long_run_reward_mdp: exploration truncated at max_states; the answer is inconclusive")
+    w = weight if weight is not None else _uniform
+    all_moves = _mdp_moves(model, graph, moves, w)
+    state_list = list(graph.states)
+    count = 1
+    for s in state_list:
+        count *= len(all_moves[s])
+        if count > max_policies:
+            raise ValueError(
+                f"long_run_reward_mdp: more than max_policies={max_policies} memoryless deterministic policies "
+                "to enumerate (the product of the states' move-counts); this reference oracle is for small "
+                "MDPs. Raise max_policies deliberately, or wait for the policy-iteration accelerator."
+            )
+    init = graph.initial[0]
+    pick = max if optimize == "max" else min
+    best: Fraction | None = None
+    for combo in product(*(range(len(all_moves[s])) for s in state_list)):
+        induced = {s: all_moves[s][combo[i]] for i, s in enumerate(state_list)}  # this policy's DTMC
+        value = _long_run_reward_of(state_list, induced, init, reward)
+        best = value if best is None else pick(best, value)
+    assert best is not None  # at least one policy exists (each state has >= 1 move)
+    return best
 
 
 def _bscc_reach_sum[S: Hashable](

@@ -48,6 +48,7 @@ from musil import (
     fixed_points_of,
     long_run_probability,
     long_run_reward,
+    long_run_reward_mdp,
     never,
     partition_actions,
     path_to,
@@ -707,6 +708,39 @@ def test_transient_distribution_is_the_point_in_time_distribution():
     assert transient_distribution(cyc, 0)[Chain("A")] == Fraction(1)
     assert transient_distribution(cyc, 1)[Chain("B")] == Fraction(1)
     assert transient_distribution(cyc, 2)[Chain("A")] == Fraction(1)
+
+
+def test_long_run_reward_mdp_oracle_max_and_min():
+    # The exact max/min steady-state reward rate over schedulers, by the memoryless-deterministic-policy oracle.
+    # I -> A (up) or B (down); A, B are absorbing self-loops with rates 10 and 2. A scheduler that CHOOSES
+    # steers to the high-rate cycle (max 10) or the low (min 2); a probabilistic coin that cannot gives the
+    # 1/2 mixture 6, both directions.
+    m: Model[Chain] = Model(
+        init=Chain("I"),
+        actions=[
+            Action("up", enabled=_is("I"), apply=lambda s: Chain("A")),
+            Action("down", enabled=_is("I"), apply=lambda s: Chain("B")),
+            Action("loopA", enabled=_is("A"), apply=lambda s: Chain("A")),
+            Action("loopB", enabled=_is("B"), apply=lambda s: Chain("B")),
+        ],
+        terminal=lambda s: False,
+    )
+
+    def rate(s: Chain) -> int:
+        return {"A": 10, "B": 2}.get(s.tag, 0)
+
+    def choose(_s: Chain, en: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
+        return [[a] for a in en]
+
+    def coin(_s: Chain, en: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
+        return [list(en)]
+
+    assert long_run_reward_mdp(m, rate, moves=choose, optimize="max") == Fraction(10)
+    assert long_run_reward_mdp(m, rate, moves=choose, optimize="min") == Fraction(2)
+    assert long_run_reward_mdp(m, rate, moves=coin, optimize="max") == Fraction(6)  # 1/2*10 + 1/2*2
+    assert long_run_reward_mdp(m, rate, moves=coin, optimize="min") == Fraction(6)
+    with pytest.raises(ValueError, match="max_policies"):  # the enumeration cap is a loud error
+        long_run_reward_mdp(m, rate, moves=choose, optimize="max", max_policies=1)
 
 
 def test_constrained_reachability_dtmc_avoid_changes_the_answer():

@@ -115,8 +115,16 @@ accelerator for large linear solves, never required).
   reward in place of the indicator. `reward` MAY be negative (a net cost rate). `long_run_probability` is the
   special case `reward = 1_target` and now DELEGATES to `long_run_reward` (one BSCC loop, no drift). Corpus
   pins a periodic 2-cycle with rates 3/1 (`= 2`) and a transient split with rates 10/2 (`= 6`) and a negative
-  rate (`= -1/2`). This is the DTMC average-reward; the MDP long-run average (over schedulers) still needs the
-  rational LP noted below.
+  rate (`= -1/2`).
+- **MDP long-run AVERAGE reward (reference oracle)** — `long_run_reward_mdp(model, reward, moves=...,
+  optimize=...)`. The exact max/min steady-state reward RATE over all schedulers. A finite MDP has an
+  average-optimal MEMORYLESS DETERMINISTIC policy (Puterman), so the optimum equals the best/worst over the
+  finitely many such policies: enumerate them, induce each one's DTMC, and take the extreme of `long_run_reward`
+  (shared `_long_run_reward_of`). Exact and dependency-free — the pure-Python Tier-0 oracle. EXPONENTIAL in the
+  number of choice states (product of move-counts), so for SMALL MDPs; `max_policies` caps it with a loud
+  error. Corpus pins a scheduler that steers into a high-rate vs low-rate absorbing cycle (`max = 10`,
+  `min = 2`) and a probabilistic coin that cannot (`max = min = 6`). The efficient accelerator is deferred (see
+  below), to be differential-tested against this oracle.
 
 - **Probabilistic LTL, reducible fragment** — `probability_ltl(model, formula)`. The exact probability that a
   random DTMC run satisfies `formula`, for the shapes with a direct characterisation: `F p` = reachability of
@@ -152,9 +160,38 @@ accelerator for large linear solves, never required).
 - **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
   negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall). Its own
   increment; needs a corpus case that actually exercises the degenerate zero-cost cycle.
-- **MDP long-run AVERAGE reward.** The steady-state *average reward* over schedulers (not the GF probability
-  above) needs, within each MEC, the max/min long-run average — a linear program over the rationals (an exact
-  rational simplex), a much larger build than the MEC + reachability the GF probability uses.
+- **MDP long-run AVERAGE reward — efficient accelerator** (the oracle above is SHIPPED). The oracle enumerates
+  every memoryless deterministic policy, which is exponential; the accelerator computes the same value in
+  polynomial time. Two exact, dependency-free routes (neither needs z3); the layout below is the plan a future
+  tick can execute, differential-tested against `long_run_reward_mdp` on small MDPs.
+
+  **Structure (both routes share it).** Every run is absorbed a.s. into a maximal end component (already have
+  `_maximal_end_components`); the run's long-run average is the optimal average *gain* achievable inside that
+  MEC. So the value decomposes as: (A) per-MEC optimal gain `g*(M)`; then (B) reach the MECs so as to
+  optimise the expected `g*` of the MEC landed in.
+  - (B) is NOT plain reachability — landing in MEC `M` yields terminal value `g*(M)` (a rational, not 0/1), so
+    it is a max/min *expected-terminal-reward* to absorption: `V(s) = opt_move sum_s' P V(s')` on transient
+    states, `V = g*(M)` on MEC states. Solvable by policy iteration exactly (absorption is a.s., so the
+    induced systems are non-singular) — the same machinery as `reach_probability_mdp` but with per-MEC values
+    instead of the {0,1} indicator. Reuses what is shipped.
+  - (A) per-MEC gain is the hard half. A MEC is communicating, so the optimal gain is a single scalar.
+
+  **Route 1 — average-reward policy iteration (LP-free, linear solves only).** Within a MEC, Howard's
+  average-reward PI: evaluate a policy by solving the gain–bias system `g + h(s) = r(s,π(s)) + sum_s'
+  P_π(s,s') h(s')` with one `h` pinned (an `n+1` rational linear solve — reuses `_solve_linear`), then improve
+  each state to the action maximising `r(s,a) + sum P h(s')`. The subtlety that makes this a careful,
+  test-heavy increment rather than a quick one: the improvement is bias-based and needs the correct
+  gain-then-bias two-level comparison and an anti-cycling rule (Bland-style tie-breaking) to guarantee
+  termination; a naive version can cycle or stall. Correcting the earlier note here: this route needs NO
+  linear program — only the exact rational linear solve already in the module.
+  **Route 2 — linear programming.** The standard LP for max average reward (Puterman §9) over the rationals
+  needs an exact rational simplex with anti-cycling. That simplex would be a reusable Tier-0 primitive, but it
+  is a substantial, separately-tested build.
+
+  **Recommended:** Route 1 (no new primitive; reuses `_solve_linear` + policy iteration). **Soundness gate:**
+  differential against the shipped `long_run_reward_mdp` oracle on small MDPs (it already enumerates all
+  memoryless deterministic policies), plus known-verdict unichain cases. Ship the accelerator only when that
+  differential is green.
 
 ## References
 
