@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Hardening — metamorphic property tests for the probabilistic layer
+
+- New `tests/test_probabilistic_properties.py`: invariants that must hold on EVERY DTMC/MDP, checked over many
+  randomly generated small models (fixed seed, exact rational, pure stdlib). It pins RELATIONSHIPS the
+  known-verdict corpus does not — `reach_probability(steps=k)` is in `[0,1]`, non-decreasing in `k`, and never
+  exceeds the unbounded probability (a real cross-check: bounded uses `_bounded_values`, unbounded uses the
+  linear solve); `transient_distribution` always sums to 1; MDP `max >= min` with the uniform DTMC between
+  them; `long_run_probability` in `[0,1]`; and `probability_ltl(F target) == reach_probability(target)`. This
+  is the differential-oracle role (e.g. against a future native port), complementing the exact known verdicts.
+
 ### Fixed — `check_ltl(Always(p))` is now pure LTL safety (ignores deadlocks), resolving the `G` inconsistency
 
 - `G p` (`check_ltl` of `Always` of a state predicate) is a PURE safety property: it holds iff `p` holds in
