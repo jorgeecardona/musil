@@ -86,6 +86,8 @@ nav:
       - Byzantine service: examples/byzantine_service.md
       - Multi-environment composition: examples/open_system_composed.md
       - TCAS II: examples/tcas.md
+    - Scaling:
+      - Composed components + symmetry: examples/cosim_scaling.md
   - Open systems: open-systems.md
   - Pre-built environments: environments.md
   - Paper draft: paper.md

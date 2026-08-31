@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — the composed-components scaling benchmark + the symmetry recipe (#37)
+
+- `examples/cosim_master_scaling.py`: a generic co-simulation master over N interchangeable components (each
+  taking up to `k` independent micro-steps per macro step, with rollback) — the named partial-order-reduction
+  benchmark, run as a MEASUREMENT. The curve (`k=3`, n=2..5): full interleaving `(k+1)ⁿ` = 16, 64, 256, 1024;
+  under sorting symmetry `C(n+k, n)` = 10, 20, 35, 56 (up to 18.3× at n=5). The full search crosses the
+  default `max_states=1_000_000` around n=10; the symmetric search is still 286 states there. The measured
+  answer: for anonymous interchangeable components, `canonical_by_sorting` — not POR — makes the workload
+  scale, which is why POR stays deferred behind this curve (`REDUCTION_NOTES.md`). No new library code.
+- `docs/examples/cosim_scaling.md`: the "interchangeable components in a composed model" `canonicalize=`
+  recipe as a documented lever (build the slice accessor pair, hand it to `canonical_by_sorting`, and validate
+  with `symmetry_reduction_sound` first), with the curve and the soundness caveats. The example's own asserts
+  pin the closed-form counts and run `symmetry_reduction_sound` on each instance; `tests/test_example_cosim_scaling.py`
+  runs it as a subprocess and pins the published curve.
+
 ### Fixed — `check_ltl`: refuse fairness on the general engine instead of silently dropping it
 
 - `fair` / `fair_strong` are honoured only for the reducible LTL forms (F / GF / G(a -> F b)), which route
