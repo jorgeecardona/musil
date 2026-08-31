@@ -127,11 +127,20 @@ one-liners over the same engine. See `examples/ltl_properties.py`.
 
 **Exact quantitative checking (DTMC / MDP)** — `musil.probabilistic`. When actions carry a relative
 probability weight, the reachable graph is a Markov chain and you can ask exact questions, answered as
-`fractions.Fraction` with no floating-point error: `reach_probability` (probability of eventually — or, with
-`steps=k`, within `k` transitions — reaching a target) and `expected_reward` (expected steps or cost to
-reach it). When a scheduler also makes nondeterministic choices (an MDP), `reach_probability_mdp` /
-`expected_reward_mdp` give the minimum or maximum over all schedulers, by exact policy iteration. This is
-verification, not the sampling `sim` does. See `examples/lossy_retry.py`.
+`fractions.Fraction` with no floating-point error — verification, not the sampling `sim` does:
+
+- **Reachability** — `reach_probability` (eventually, within `steps=k`, or the until-property
+  `P(¬avoid U target)`) and `expected_reward` (expected steps/cost to reach a target, bounded or unbounded).
+- **Steady state and transient** — `long_run_probability` / `long_run_reward` (the long-run fraction of time
+  in a set, or the long-run average of a reward rate), and `transient_distribution` (the exact state
+  distribution after exactly `k` steps).
+- **Probabilistic LTL** — `probability_ltl` (the probability a random run satisfies `F` / `G` / `GF` / `FG` of
+  a state predicate).
+- **Nondeterminism (MDP)** — every one of the above has an `..._mdp` form (or a `moves=` argument) giving the
+  minimum or maximum over all schedulers.
+
+Everything is exact rational arithmetic. See `examples/lossy_retry.py`, `examples/availability.py`, and
+`examples/server_utilization.py`.
 
 **Where does it settle? — confluence** — `fixed_points(model)` reports, for each initial state
 *separately*, the distinct terminal states (no available step) its runs can end in. A single start
