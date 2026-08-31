@@ -2,6 +2,13 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Release — 0.34.46 republishes the corrected README (PyPI long-description)
+
+- The maintainer sections (`Development & CI`, `Releasing`, the PyPI-OIDC one-time-setup table) were moved out
+  of the README into `CONTRIBUTING.md` in a docs-only commit that did NOT bump the version, so 0.34.45 shipped
+  to PyPI with the OLD README long-description (the setup table still showed on the project page). This patch
+  bump forces `:release` to republish with the user-facing README. No code change.
+
 ### Hardening — metamorphic property tests for the core and LTL layers
 
 - New `tests/test_core_ltl_properties.py` extends the random-model differential approach to the
