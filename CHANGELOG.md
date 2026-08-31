@@ -2,7 +2,20 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
-### Hardening — LTL engine-vs-reduction differential, and a documented `G`-on-deadlock inconsistency
+### Fixed — `check_ltl(Always(p))` is now pure LTL safety (ignores deadlocks), resolving the `G` inconsistency
+
+- `G p` (`check_ltl` of `Always` of a state predicate) is a PURE safety property: it holds iff `p` holds in
+  every reachable state and IGNORES deadlocks (deadlock-freedom is a separate property — `check`, or a
+  `G(enabled)` claim). Previously the `Always(p)` reduction ran plain `check`, which reports an undeclared
+  deadlock as a violation, so `check_ltl(Always(p))` returned False on a deadlocking model even when `p` held
+  everywhere — disagreeing with the engine's stutter-extended `G p` (its equivalent `false R p`). The
+  reduction now sets every dead-end terminal before `check`, so it reports only invariant violations; the two
+  semantically-equal formulas now agree everywhere. This is a behaviour change ONLY for models with an
+  undeclared deadlock checked with `Always(p)`. `patterns.always` / `patterns.absent` stay direct `check`
+  calls and still report deadlocks (the "safety check" surface, distinct from pure-LTL `G`). The differential
+  now covers `G` on the deadlocking model; `test_ltl_always_is_pure_safety_and_ignores_deadlock` pins it.
+
+### Hardening — LTL engine-vs-reduction differential (from the prior version, now with `G` included)
 
 - New corpus differential `test_ltl_general_engine_agrees_with_the_reductions`: forces `F` / `G` / `GF`
   through the general Büchi engine (`true U p`, `false R p`, `G(true U p)`) and checks they match the proven

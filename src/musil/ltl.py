@@ -33,6 +33,12 @@ from musil.history import LastAction, action_taken, with_last_action
 from musil.liveness import LivenessResult, check_liveness, has_internal_edge, tarjan
 
 
+def _always_terminal(_s: object) -> bool:
+    """A ``terminal`` that accepts every dead-end as legitimate — used to make the ``G p`` reduction a pure
+    invariant sweep (``check`` then never reports a deadlock, only an invariant violation)."""
+    return True
+
+
 def _stutter[S: Hashable](graph: Graph[S]) -> Graph[S]:
     """Add a self-loop to every state with no successor, so a finite maximal run that would end there
     becomes an infinite stuttering run — LTL's semantics are over infinite runs, and the Büchi product
@@ -340,6 +346,10 @@ def check_ltl[S: Hashable](
     """Check ``formula`` against ``model``, reducing the supported fragment onto ``check`` /
     ``check_liveness`` (see the module docstring). Returns a ``Result`` for the safety reductions and a
     ``LivenessResult`` for the liveness ones; both satisfy the ``Verdict`` protocol (``.ok`` + ``__str__``).
+    ``G p`` (``Always`` of a state predicate) is PURE LTL safety: it holds iff ``p`` holds in every reachable
+    state and IGNORES deadlocks (an undeclared dead-end does not fail ``G p`` on its own; deadlock-freedom is a
+    separate property — use ``check`` or ``G(enabled)`` for that). So ``Always(p)`` agrees with its equivalent
+    ``false R p`` even on deadlocking models.
     ``fair`` / ``fair_strong`` (weak / strong fairness by action NAME) apply everywhere: the reducible forms
     (F / GF / G(a -> F b)) route through ``check_liveness``, and any other formula is checked by the general
     Büchi engine under fairness by reduction — ``model |=_fair phi`` iff ``model |= (fairness -> phi)``, with
@@ -361,10 +371,17 @@ def check_ltl[S: Hashable](
             pa, pb = _state_predicate(trigger), _state_predicate(response)
             if pa is not None and pb is not None:
                 return check_liveness(model, goal=pb, leadsto_from=pa, goal_name=name, fair=fair, fair_strong=fair_strong, max_states=max_states)
-        case Always(arg=inner):  # G state -> safety invariant
+        case Always(arg=inner):  # G state -> the invariant holds in every reachable state (pure LTL safety)
             p = _state_predicate(inner)
             if p is not None:
-                return check(replace(model, invariants={name: p}), max_states=max_states)
+                # G p is a PURE safety property: it must NOT couple in deadlock-freedom (that is a separate
+                # property -- `check`, or a G(enabled) liveness-of-progress claim). Set every dead-end
+                # terminal so `check` reports only an invariant violation, never a deadlock, matching the
+                # engine's stutter-extended G (so `Always(p)` and its equivalent `false R p` agree). See
+                # LTL_NOTES.md.
+                return check(
+                    replace(model, invariants={name: p}, terminal=_always_terminal), max_states=max_states
+                )
         case Eventually(arg=inner):  # F state -> <>P
             p = _state_predicate(inner)
             if p is not None:

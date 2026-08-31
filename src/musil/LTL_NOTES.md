@@ -87,27 +87,23 @@ The engine is soundness-critical: a bug means a wrong verdict on a temporal prop
   F / G / GF through the engine (`true U p`, `false R p`, `G(true U p)`) and compares to the reductions on
   classic models — F and GF agree everywhere; G is checked only on deadlock-free models (see below).
 
-## KNOWN INCONSISTENCY: `G` on a deadlocking model (needs a semantics decision)
+## `G` is pure LTL safety, decoupled from deadlock (fix A, RESOLVED)
 
-`check_ltl(model, Always(p))` reduces to `check(replace(model, invariants={..: p}))`, and `check` reports an
-undeclared DEADLOCK as a violation. So on a model with a deadlock, `check_ltl(Always(p))` returns False even
-when `p` holds in every reachable state — because of the deadlock, not `p`. The general engine's `G p` (its
-LTL-equivalent `Release(false, p)` routes there) stutter-extends the deadlock into a self-loop and reports
-True. So the two SEMANTICALLY-EQUAL formulas `Always(p)` and `false R p` give DIFFERENT verdicts on a
-deadlocking model — an internal inconsistency (`test_ltl_general_engine_agrees_with_the_reductions` documents
-it by excluding `G` on the deadlocking model). `F`/`GF` are unaffected: a trapped run reaches no new state, so
-the engine and `check_liveness` agree.
+Earlier, `check_ltl(model, Always(p))` reduced to `check(replace(model, invariants={..: p}))`, and `check`
+reports an undeclared DEADLOCK as a violation — so on a deadlocking model `check_ltl(Always(p))` returned
+False even when `p` held in every reachable state, while the engine's `G p` (its equivalent `false R p`)
+stutter-extends the deadlock and returned True. The two SEMANTICALLY-EQUAL formulas disagreed
+(`test_ltl_general_engine_agrees_with_the_reductions` caught it). `F`/`GF` were unaffected (a trapped run
+reaches no new state, so the engine and `check_liveness` agree).
 
-The fix is a semantics DECISION (left to the maintainer, hence a note not a change):
-- **(A) LTL-pure G** — `G p` is a safety property that ignores deadlocks (deadlock-freedom is a SEPARATE
-  property). Reduce `Always(p)` to a pure invariant sweep with NO deadlock detection, so it matches the
-  engine. This is the standard-LTL reading and makes the two paths agree.
-- **(B) musil-flavoured G** — `G p` means "`p` invariant AND the system never gets stuck", inheriting
-  `check`'s deadlock semantics. Then the ENGINE path must also flag deadlocks for `G`, which is non-standard.
-
-Recommend (A): decouple `Always(p)`'s reduction from deadlock detection so equal formulas get equal verdicts;
-if a caller wants deadlock-freedom too, that is `check` (or an explicit `G(enabled)` liveness-of-progress
-property), not a rider on `G p`.
+FIXED with option (A): `G p` is a PURE safety property that ignores deadlocks (deadlock-freedom is a SEPARATE
+property). The `Always(p)` reduction now sets every dead-end terminal (`terminal=lambda _s: True`) before
+`check`, so `check` reports only an invariant violation, never a deadlock — matching the engine. `Always(p)`
+and `false R p` now agree everywhere (the differential covers `G` on the deadlocking model too), and
+`test_ltl_always_is_pure_safety_and_ignores_deadlock` pins it. If a caller wants deadlock-freedom too, that is
+`check` (or an explicit `G(enabled)` liveness-of-progress property), not a rider on `G p`. NOTE: the
+`patterns.always` / `patterns.absent` safety helpers stay direct `check` calls and so DO still report
+deadlocks — they are the "safety check" surface, deliberately distinct from the pure-LTL `check_ltl(Always)`.
 - Fairness composes as a premise (`fair -> φ`), matching `check_liveness`'s `fair`/`fair_strong`.
 - Restrict to the finite reachable graph; the automaton is finite by construction. No infinite/unbounded
   reasoning here (that is the induction/`[smt]` frontier, separate).
