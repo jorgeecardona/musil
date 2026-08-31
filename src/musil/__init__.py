@@ -131,6 +131,7 @@ from musil.probabilistic import (
     reach_probability_mdp,
 )
 from musil.profiling import ActionCost, Phase, Profile, profile
+from musil.reconciler import reconciler
 from musil.refine import (
     RefinementMonitor,
     RefinementResult,
@@ -279,6 +280,7 @@ __all__ = [
     "reach_probability_mdp",
     "reachable_violations",
     "reaches",
+    "reconciler",
     "recurs",
     "replay",
     "replay_actions",

@@ -44,6 +44,18 @@ Model a message channel (reliable / lossy / duplicating; unordered, so reorderin
 
 ::: musil.channels
 
+## Reconciler — `reconciler`
+
+The controller / reconciler shape (a `desired` field the environment sets, an `actual` field the controller
+drives toward it, goal `[]<>converged`) as a builder — the most common shape in modern infrastructure
+(operators, sync engines, cache maintainers). `reconciler(get_desired=, get_actual=, set_actual=)` returns
+`(converged, reconcile)`: the `converged` predicate for `check_liveness(everywhere=True)` and a fair
+reconcile `Action` (tagged `fair="weak"` — the "ours" side of the fair-ours / unfair-faults discipline).
+Compose it with the fault factories (`crash_actions`, channel loss) as unfair actions or `check_open`
+environments.
+
+::: musil.reconciler
+
 ## Faults — `crash_actions`, `partition_actions`
 
 Fault-injection action factories for the explicit-state path (`check` / `explore` / `check_open`), so a

@@ -46,6 +46,7 @@ from musil import (
     profile,
     reach_probability,
     reach_probability_mdp,
+    reconciler,
     recurs,
     replicated_transition_actions,
     responds,
@@ -929,3 +930,46 @@ def test_assert_covers_table_catches_undeclared_transitions():
     bad: Model[Ledger] = replace(m, actions=[*m.actions, extra])
     with pytest.raises(AssertionError, match="draft -> closed"):
         assert_covers_table(bad, _LEDGER_TABLE, get=_entry0)
+
+
+# --------------------------------------------------------------------------------------------------
+# 20. reconciler — desired<->actual convergence; fair reconcile vs an unfair competitor (#23)
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Ctrl:
+    desired: str
+    actual: str
+
+
+def _ctrl_desired(s: Ctrl) -> str:
+    return s.desired
+
+
+def _ctrl_actual(s: Ctrl) -> str:
+    return s.actual
+
+
+def _ctrl_set_actual(s: Ctrl, v: str) -> Ctrl:
+    return replace(s, actual=v)
+
+
+def reconciler_model() -> tuple[Model[Ctrl], Callable[[Ctrl], bool]]:
+    converged, reconcile = reconciler(
+        get_desired=_ctrl_desired, get_actual=_ctrl_actual, set_actual=_ctrl_set_actual
+    )
+    # an UNFAIR idle self-loop competes with reconcile: without fairness the scheduler can idle forever and
+    # never converge; the reconcile action's own weak-fair tag is what rules that cycle out.
+    idle: Action[Ctrl] = Action("idle", enabled=lambda s: True, apply=lambda s: s)
+    m = Model(init=Ctrl("a", "b"), actions=[reconcile, idle], terminal=lambda s: False)
+    return m, converged
+
+
+def test_reconciler_converges_under_reconcile_fairness_only():
+    m, converged = reconciler_model()
+    assert len(explore(m).states) == 2  # (a,b) not converged, (a,a) converged
+    # []<>converged holds because reconcile is weak-fair by construction (the tag the builder attaches)...
+    assert check_liveness(m, goal=converged, everywhere=True).ok
+    # ...and fails without fairness: the idle self-loop can starve reconcile forever.
+    assert not check_liveness(m, goal=converged, everywhere=True, fair=()).ok

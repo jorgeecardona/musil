@@ -4,6 +4,21 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — `musil.reconciler`: the controller/reconciler shape as a builder (#23)
+
+- `reconciler(get_desired=, get_actual=, set_actual=)` returns `(converged, reconcile)` for the single most
+  common shape in modern infrastructure (operators, sync engines, cache maintainers): a `desired` field the
+  environment sets, an `actual` field the controller drives toward it, goal `[]<>converged`. `converged` is
+  `actual == desired` (feed to `check_liveness(everywhere=True)`); `reconcile` is a fair `Action` (tagged
+  `fair="weak"`) that sets `actual` to `desired` while they differ — the "ours" side of the fair-ours /
+  unfair-faults discipline, so a liveness proof may assume the controller keeps reconciling but not that a
+  fault heals itself. Composes with the fault factories (`crash_actions`, channel loss) as unfair actions or
+  `check_open` environments. Generic over both the state and the value type.
+- Corpus pins a reconciler with a competing UNFAIR `idle` self-loop: `[]<>converged` HOLDS because reconcile
+  is weak-fair by construction, and FAILS with `fair=()` (idle can starve reconcile forever) — showing the
+  fair tag is exactly what carries convergence. The chosen-design / negative-control TEST HARNESS the issue
+  also mentions is a larger, separate piece and is deferred.
+
 ### Added — richer transition builders: `effect` / `also`, and `replicated_transition_actions` (#26)
 
 - `transition_actions` gains two keyword arguments: `effect(state, src, dst)` runs after the status change
