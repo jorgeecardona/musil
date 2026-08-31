@@ -102,6 +102,14 @@ accelerator for large linear solves, never required).
   where `P^n` does not converge. Transient states carry zero long-run measure; a deadlock/absorbing state is
   its own BSCC with mass 1. Corpus pins the periodic 2-cycle (`1/2`), a biased chain (`pi(A) = 1/3`), and a
   transient split into two absorbing BSCCs (`1/2`, and `1` for the whole absorbing set).
+- **DTMC long-run AVERAGE reward** — `long_run_reward(model, reward, weight=...)`. The exact steady-state
+  reward rate (PRISM's `R=? [S]`): in the limit, the mean of `reward(state)` over the run,
+  `sum_B reach(B) * sum_{s in B} pi_B(s) * reward(s)` — the same BSCC + stationary machinery as above, with the
+  reward in place of the indicator. `reward` MAY be negative (a net cost rate). `long_run_probability` is the
+  special case `reward = 1_target` and now DELEGATES to `long_run_reward` (one BSCC loop, no drift). Corpus
+  pins a periodic 2-cycle with rates 3/1 (`= 2`) and a transient split with rates 10/2 (`= 6`) and a negative
+  rate (`= -1/2`). This is the DTMC average-reward; the MDP long-run average (over schedulers) still needs the
+  rational LP noted below.
 
 - **Probabilistic LTL, reducible fragment** — `probability_ltl(model, formula)`. The exact probability that a
   random DTMC run satisfies `formula`, for the shapes with a direct characterisation: `F p` = reachability of

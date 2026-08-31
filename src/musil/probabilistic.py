@@ -21,7 +21,9 @@ reaching the target WITHIN ``k`` transitions (a finite unrolling, no fixed point
 answers the dual quantitative question: the exact expected accumulated cost (default: number of steps) to
 reach the target in a DTMC, finite only when the target is reached almost surely. ``long_run_probability``
 answers the steady-state question: the exact fraction of time the DTMC spends in a target set in the limit,
-by decomposing into bottom SCCs and solving each one's stationary distribution exactly. ``probability_ltl``
+by decomposing into bottom SCCs and solving each one's stationary distribution exactly; ``long_run_reward``
+generalises it to the steady-state average of any per-state reward (a net rate, which may be negative).
+``probability_ltl``
 answers the exact probability that a random DTMC run satisfies an LTL formula, for the reducible F / G / GF /
 FG fragment. See PROBABILISTIC_NOTES.md.
 """
@@ -358,6 +360,45 @@ def _stationary[S: Hashable](bscc: Sequence[S], dist: Mapping[S, _Dist[S]]) -> d
     return {s: solution[idx[s]] for s in bscc}
 
 
+def long_run_reward[S: Hashable](
+    model: Model[S],
+    reward: Callable[[S], Fraction | int],
+    *,
+    weight: Callable[[str, S], Fraction | int] | None = None,
+    max_states: int = 1_000_000,
+) -> Fraction:
+    """The exact long-run AVERAGE reward per step of the DTMC (PRISM's steady-state reward ``R=? [S]``): in the
+    limit, the mean of ``reward(state)`` over the run, as a ``Fraction``.
+
+    The reachable graph is a DTMC (``weight`` normalises each state's enabled actions into a distribution, as
+    in ``reach_probability``). A finite DTMC is absorbed almost surely into a BOTTOM SCC; inside each BSCC the
+    long-run fraction of time in a state is its stationary probability ``pi_B(s)``, so the long-run average
+    reward is, over the BSCCs ``B``, ``sum_B reach(B) * sum_{s in B} pi_B(s) * reward(s)`` — the reach-weighted
+    then stationary-weighted mean of the reward. ``reward`` MAY be negative (a net cost rate); it is not a
+    probability. Reachability to each BSCC reuses the exact DTMC solve, ``pi_B`` the exact stationary solve.
+    ``long_run_probability(model, target)`` is the special case ``reward = 1_target`` (the target's indicator).
+
+    Raises ``ValueError`` if the exploration truncates at ``max_states`` (the answer would be inconclusive).
+    Requires hashable states (the graph is explored)."""
+    graph = explore(model, max_states=max_states)
+    if graph.truncated:
+        raise ValueError("long_run_reward: exploration truncated at max_states; the long-run answer is inconclusive")
+    w = weight if weight is not None else _uniform
+    dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
+    support: dict[S, list[tuple[str, S]]] = {s: [("", t) for _, t in dist[s]] for s in graph.states}
+    total = Fraction(0)
+    for scc in tarjan(set(graph.states), support):
+        if any(t not in scc for s in scc for _, t in dist[s]):
+            continue  # not a BOTTOM SCC: a distribution edge leaves it, so the run does not stay here
+        pi = _stationary(list(scc), dist)
+        avg = sum((pi[s] * Fraction(reward(s)) for s in scc), Fraction(0))  # stationary-weighted reward in B
+        if avg == 0:
+            continue  # this BSCC contributes no long-run reward
+        reach_b = _dtmc_values(graph.states, dist, scc.__contains__)[graph.initial[0]]
+        total += reach_b * avg
+    return total
+
+
 def long_run_probability[S: Hashable](
     model: Model[S],
     target: Callable[[S], bool],
@@ -379,25 +420,9 @@ def long_run_probability[S: Hashable](
     measure. An absorbing / deadlock state is treated as self-absorbing (it forms its own BSCC with mass 1).
 
     Raises ``ValueError`` if the exploration truncates at ``max_states`` (the answer would be inconclusive).
-    Requires hashable states (the graph is explored)."""
-    graph = explore(model, max_states=max_states)
-    if graph.truncated:
-        raise ValueError("long_run_probability: exploration truncated at max_states; the answer is inconclusive")
-    w = weight if weight is not None else _uniform
-    dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
-    # SCCs over the DTMC support graph (an edge wherever the distribution puts positive probability).
-    support: dict[S, list[tuple[str, S]]] = {s: [("", t) for _, t in dist[s]] for s in graph.states}
-    total = Fraction(0)
-    for scc in tarjan(set(graph.states), support):
-        if any(t not in scc for s in scc for _, t in dist[s]):
-            continue  # not a BOTTOM SCC: a distribution edge leaves it, so the run does not stay here
-        pi = _stationary(list(scc), dist)
-        pi_on_target = sum((pi[s] for s in scc if target(s)), Fraction(0))
-        if pi_on_target == 0:
-            continue  # this BSCC holds no target state -> contributes no long-run time
-        reach_b = _dtmc_values(graph.states, dist, scc.__contains__)[graph.initial[0]]
-        total += reach_b * pi_on_target
-    return total
+    Requires hashable states (the graph is explored). Equals ``long_run_reward`` with the target's indicator
+    as the reward (this delegates to it)."""
+    return long_run_reward(model, lambda s: Fraction(target(s)), weight=weight, max_states=max_states)
 
 
 def _bscc_reach_sum[S: Hashable](

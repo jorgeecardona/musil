@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `long_run_reward`: exact DTMC long-run average reward (steady-state reward rate)
+
+- `long_run_reward(model, reward, weight=...)` returns the exact steady-state reward rate of a DTMC (PRISM's
+  `R=? [S]`): in the limit, the mean of `reward(state)` over the run, `sum_B reach(B) * sum_{s in B} pi_B(s) *
+  reward(s)` — the same BSCC + stationary-distribution machinery as `long_run_probability`, with a per-state
+  `reward` in place of the target indicator. `reward` MAY be negative (a net cost rate). `long_run_probability`
+  is the special case `reward = 1_target` and now DELEGATES to `long_run_reward` (one BSCC loop, no drift).
+  Corpus pins a periodic 2-cycle with rates 3/1 (`= 2`), a transient split with rates 10/2 (`= 6`), and a
+  negative rate (`= -1/2`). No LP (this is the DTMC average-reward; the MDP long-run average still needs one).
+
 ### Added — step-bounded expected reward: `steps=k` on `expected_reward` / `expected_reward_mdp`
 
 - `expected_reward` and `expected_reward_mdp` gain `steps=k`: the expected cost accumulated until the target is

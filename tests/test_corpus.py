@@ -47,6 +47,7 @@ from musil import (
     fixed_points,
     fixed_points_of,
     long_run_probability,
+    long_run_reward,
     never,
     partition_actions,
     path_to,
@@ -647,6 +648,34 @@ def test_long_run_weights_absorption_across_two_bsccs():
 
 def _is(tag: str) -> Callable[[Chain], bool]:
     return lambda s: s.tag == tag
+
+
+def test_long_run_reward_average_rate():
+    # long_run_reward is the steady-state AVERAGE reward per step. A <-> B periodic 2-cycle, pi = 1/2 each:
+    # reward 3 on A, 1 on B -> long-run average = 3/2 + 1/2 = 2. The indicator reward recovers
+    # long_run_probability (which now delegates to long_run_reward).
+    cycle: Model[Chain] = Model(
+        init=Chain("A"),
+        actions=[
+            Action("toB", enabled=_is("A"), apply=lambda s: Chain("B")),
+            Action("toA", enabled=_is("B"), apply=lambda s: Chain("A")),
+        ],
+    )
+    assert long_run_reward(cycle, lambda s: 3 if s.tag == "A" else 1) == Fraction(2)
+    assert long_run_reward(cycle, lambda s: 1 if s.tag == "A" else 0) == Fraction(1, 2)  # = long_run_probability
+    # a transient start splitting 1/2 into two absorbing sinks with rates 10 and 2 -> 1/2*10 + 1/2*2 = 6;
+    # the reward may be NEGATIVE (a net cost rate): -1 on Y -> 1/2*0 + 1/2*(-1) = -1/2.
+    split: Model[Chain] = Model(
+        init=Chain("I"),
+        actions=[
+            Action("left", enabled=_is("I"), apply=lambda s: Chain("X")),
+            Action("right", enabled=_is("I"), apply=lambda s: Chain("Y")),
+            Action("loopX", enabled=_is("X"), apply=lambda s: Chain("X")),
+            Action("loopY", enabled=_is("Y"), apply=lambda s: Chain("Y")),
+        ],
+    )
+    assert long_run_reward(split, lambda s: {"X": 10, "Y": 2}.get(s.tag, 0)) == Fraction(6)
+    assert long_run_reward(split, lambda s: -1 if s.tag == "Y" else 0) == Fraction(-1, 2)
 
 
 def test_constrained_reachability_dtmc_avoid_changes_the_answer():
