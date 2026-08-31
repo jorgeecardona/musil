@@ -32,7 +32,7 @@ from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
 from fractions import Fraction
 from typing import Literal
 
-from musil.core import Action, Model, actions_source, explore
+from musil.core import Action, Graph, Model, actions_source, explore
 from musil.liveness import tarjan
 
 # intra-package reuse of the LTL normaliser + state-predicate compiler for the reducible PLTL fragment
@@ -149,6 +149,26 @@ def _normalize[S: Hashable](
     for wt, nxt in pairs:
         acc[nxt] = acc.get(nxt, Fraction(0)) + wt / total
     return [(p, t) for t, p in acc.items()]
+
+
+def _mdp_moves[S: Hashable](
+    model: Model[S], graph: Graph[S], moves: Moves[S], weight: Callable[[str, S], Fraction | int]
+) -> dict[S, list[_Dist[S]]]:
+    """Per state, the scheduler's moves as normalized distributions over successors, from the canonical edges
+    ``explore`` already computed (group each move's actions by name, so no canonicalization is redone). A state
+    with no move gets a single absorbing (empty) move. Shared by ``reach_probability_mdp`` and the MDP path of
+    ``probability_ltl`` so they cannot drift in how the MDP is built."""
+    source = actions_source(model)
+    all_moves: dict[S, list[_Dist[S]]] = {}
+    for s in graph.states:
+        by_name = {name: nxt for name, nxt in graph.edges.get(s, ())}
+        enabled = tuple(a for a in source(s) if a.enabled(s))
+        state_moves = [
+            _normalize([(a.name, by_name[a.name]) for a in group if a.name in by_name], s, weight)
+            for group in moves(s, enabled)
+        ]
+        all_moves[s] = state_moves if state_moves else [[]]  # no move -> a single absorbing move
+    return all_moves
 
 
 def reach_probability[S: Hashable](
@@ -366,39 +386,102 @@ def _bscc_reach_sum[S: Hashable](
     return total
 
 
+def _maximal_end_components[S: Hashable](
+    states: Sequence[S], all_moves: Mapping[S, list[_Dist[S]]]
+) -> list[frozenset[S]]:
+    """The maximal end components of the MDP: maximal sets ``C`` of states in which the scheduler can choose,
+    per state, a move whose whole probability mass stays inside ``C`` and makes the sub-MDP strongly connected
+    — the sets it can stay inside forever and cycle within. Computed by the standard refinement (Baier &
+    Katoen / de Alfaro): SCC-decompose using only moves that stay inside the current candidate, drop any state
+    with no staying move, and reprocess the remainder until stable. An absorbing state (empty move) stays
+    trivially, so it is its own singleton MEC — consistent with the DTMC treatment of a deadlock as absorbing.
+    Used for the MDP repeated-reachability (GF) probability."""
+    result: list[frozenset[S]] = []
+    stack: list[set[S]] = [set(states)]
+    while stack:
+        t = stack.pop()
+        # successor graph within t, via NON-EMPTY moves whose whole support stays in t
+        succ: dict[S, list[tuple[str, S]]] = {s: [] for s in t}
+        for s in t:
+            for move in all_moves[s]:
+                post = {nxt for _, nxt in move}
+                if post and post <= t:
+                    succ[s].extend(("", nxt) for nxt in post)
+        for scc in tarjan(set(t), succ):
+            # a state "stays" in scc if some move's support is inside scc (the empty/absorbing move stays)
+            remove = {s for s in scc if not any({nxt for _, nxt in move} <= scc for move in all_moves[s])}
+            if not remove:
+                result.append(frozenset(scc))
+            elif scc - remove:
+                stack.append(scc - remove)
+    return result
+
+
 def probability_ltl[S: Hashable](
     model: Model[S],
     formula: LTL[S],
     *,
     weight: Callable[[str, S], Fraction | int] | None = None,
+    moves: Moves[S] | None = None,
+    optimize: Literal["max", "min"] = "max",
     max_states: int = 1_000_000,
 ) -> Fraction:
-    """The exact probability that a random run of the DTMC satisfies the LTL ``formula`` (PRISM's P operator),
-    a ``Fraction``. The reachable graph is a DTMC exactly as in ``reach_probability`` (``weight`` normalises
-    each state's enabled actions into a distribution; a negative weight raises).
+    """The exact probability that a run satisfies the LTL ``formula`` (PRISM's P operator), a ``Fraction``.
 
-    Supports the fragment with a direct DTMC characterisation — ``formula`` a temporal operator applied to a
-    STATE predicate ``p`` (a boolean combination of atoms), namely:
+    With no ``moves`` (the default) the reachable graph is a DTMC (``weight`` normalises each state's enabled
+    actions into a distribution; a negative weight raises), and the answer is the probability a RANDOM run
+    satisfies ``formula``, for the fragment with a direct characterisation — a temporal operator on a STATE
+    predicate ``p``:
 
     - ``F p`` → the reachability probability of ``p``;
     - ``G p`` → ``1 - P(F ¬p)``;
-    - ``GF p`` (``Always(Eventually p)``) → the probability of being absorbed into a bottom SCC that CONTAINS a
+    - ``GF p`` (``Always(Eventually p)``) → the probability of absorption into a bottom SCC that CONTAINS a
       ``p`` state (a run visits every state of its absorbing BSCC infinitely often);
-    - ``FG p`` (``Eventually(Always p)``) → the probability of being absorbed into a bottom SCC ENTIRELY inside
+    - ``FG p`` (``Eventually(Always p)``) → the probability of absorption into a bottom SCC ENTIRELY inside
       ``p``.
 
-    All exact, reusing the reachability solve and the BSCC decomposition. Any other formula (``Until``,
-    ``Next``, a leads-to, nested temporal operators, disjunctions of temporal formulas) raises
-    ``NotImplementedError``: general probabilistic LTL needs a DETERMINISTIC automaton for the formula (the
-    nondeterministic Büchi automaton the qualitative engine builds gives the wrong measure on a DTMC product),
-    which is a larger construction (Safra/Rabin) not yet built. Raises ``ValueError`` if exploration truncates."""
+    With ``moves`` (as in ``reach_probability_mdp``) the model is an MDP and the answer is the OPTIMAL
+    probability over all schedulers. ``optimize="max"`` supports ``F p`` (max reachability) and ``GF p`` — the
+    max probability of a repeated-reachability (Büchi) condition, which equals the max reachability to the
+    states lying in a MAXIMAL END COMPONENT that contains a ``p`` state (reach such a component and cycle
+    through ``p`` forever). ``optimize="min"`` and the other MDP shapes are not yet built (see
+    PROBABILISTIC_NOTES.md).
+
+    All exact, reusing the reachability solve, the BSCC / MEC decomposition and (for the MDP) policy iteration.
+    Any unsupported formula raises ``NotImplementedError`` — general probabilistic LTL needs a DETERMINISTIC
+    automaton for the formula (a Safra/Rabin construction), not yet built. Raises ``ValueError`` if the
+    exploration truncates."""
     phi = _push_negations(formula)
     graph = explore(model, max_states=max_states)
     if graph.truncated:
         raise ValueError("probability_ltl: exploration truncated at max_states; the probability is inconclusive")
     w = weight if weight is not None else _uniform
-    dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
     init = graph.initial[0]
+
+    if moves is not None:  # MDP path: the optimal probability over schedulers
+        if optimize != "max":
+            raise NotImplementedError(
+                "probability_ltl over an MDP supports optimize='max' only; min is deferred (PROBABILISTIC_NOTES.md)"
+            )
+        all_moves = _mdp_moves(model, graph, moves, w)
+        match phi:
+            case Always(arg=Eventually(arg=inner)):  # GF p: reach a MEC that contains a p state, then cycle
+                p = _state_predicate(inner)
+                if p is not None:
+                    good = {s for c in _maximal_end_components(graph.states, all_moves) if any(p(x) for x in c) for s in c}
+                    return _reach_policy_iteration(graph.states, all_moves, good.__contains__, minimize=False, absorbing=set[S]())[0][init]
+            case Eventually(arg=inner):  # F p: max reachability
+                p = _state_predicate(inner)
+                if p is not None:
+                    return _reach_policy_iteration(graph.states, all_moves, p, minimize=False, absorbing=set[S]())[0][init]
+            case _:
+                pass
+        raise NotImplementedError(
+            f"probability_ltl over an MDP supports F p and GF p with optimize='max'; {formula} is deferred "
+            "(min, FG, G and general PLTL need more machinery -- see PROBABILISTIC_NOTES.md)"
+        )
+
+    dist = {s: _normalize(graph.edges.get(s, ()), s, w) for s in graph.states}
     match phi:
         case Always(arg=Eventually(arg=inner)):  # GF p
             p = _state_predicate(inner)
@@ -514,21 +597,11 @@ def reach_probability_mdp[S: Hashable](
     graph = explore(model, max_states=max_states)
     if graph.truncated:
         raise ValueError("reach_probability_mdp: exploration truncated at max_states; the probability is inconclusive")
-    source = actions_source(model)
     w = weight if weight is not None else _uniform
-    # Per state, the moves as normalized distributions, using the canonical successors explore already
-    # computed (group the state's edges by action name, so no canonicalization is redone here).
-    all_moves: dict[S, list[_Dist[S]]] = {}
-    for s in graph.states:
-        by_name = {name: nxt for name, nxt in graph.edges.get(s, ())}
-        enabled = tuple(a for a in source(s) if a.enabled(s))
-        state_moves = [
-            _normalize([(a.name, by_name[a.name]) for a in group if a.name in by_name], s, w)
-            for group in moves(s, enabled)
-        ]
-        all_moves[s] = state_moves if state_moves else [[]]  # no move -> a single absorbing move
+    all_moves = _mdp_moves(model, graph, moves, w)
     if avoid is not None:  # ¬avoid U target: avoid (non-target) states become absorbing 0-sinks
-        all_moves = {s: ([[]] if (avoid(s) and not target(s)) else m) for s, m in all_moves.items()}
+        absorbing_move: list[_Dist[S]] = [[]]
+        all_moves = {s: (absorbing_move if (avoid(s) and not target(s)) else m) for s, m in all_moves.items()}
     minimize = optimize == "min"
     if steps is not None:
         if steps < 0:

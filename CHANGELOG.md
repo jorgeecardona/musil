@@ -4,6 +4,20 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+### Added — MDP repeated-reachability probability: `probability_ltl(..., moves=..., optimize="max")` for GF/F
+
+- `probability_ltl` gains an MDP path (pass `moves=` as in `reach_probability_mdp`): the OPTIMAL probability
+  over all schedulers that a run satisfies the formula. `optimize="max"` supports `F p` (max reachability) and
+  `GF p` — the max probability of a repeated-reachability (Büchi) condition, which equals the max reachability
+  to the states in a MAXIMAL END COMPONENT that contains a `p` state (reach such a component, then cycle
+  through `p` forever). New `_maximal_end_components` computes MECs by the standard SCC-refinement; an
+  absorbing state is its own MEC, consistent with the DTMC deadlock treatment. No linear programming — GF and
+  reachability need only MEC + the existing max policy iteration. `optimize="min"`, and `FG` / `G` on the MDP
+  path, raise `NotImplementedError` (deferred). Corpus separates a scheduler that steers into the good
+  component (`P_max = 1`) from a probabilistic coin that cannot (`P_max = 1/2`).
+- Refactored `reach_probability_mdp`'s move-building into a shared `_mdp_moves` so the DTMC-as-MDP construction
+  cannot drift between it and `probability_ltl`.
+
 ### Added — `examples/arbiter_fairness.py`: fair LTL + action-sequence liveness + `probability_ltl`, worked
 
 - A worked example for the three most recent temporal/probabilistic capabilities, which had no example: an

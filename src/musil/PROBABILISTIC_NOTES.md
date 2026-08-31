@@ -105,6 +105,16 @@ accelerator for large linear solves, never required).
   reducible-fragment matcher from `check_ltl` (`_push_negations` / `_state_predicate`). Corpus separates GF
   from FG on a model with a `{A,B}` cycle where only `A` is the target: `P(GF A) = 1/2`, `P(FG A) = 0`.
 
+- **MDP repeated reachability (GF), max** — `probability_ltl(model, formula, moves=..., optimize="max")` with
+  `formula` an `F p` or `GF p`. `F p` is max reachability; `GF p` is the max probability of a Büchi condition,
+  which equals the max reachability to the states in a MAXIMAL END COMPONENT that contains a `p` state (reach
+  such a component, then cycle through `p` forever — de Alfaro / Baier & Katoen). MECs are computed by
+  `_maximal_end_components` (SCC-refinement: keep only moves staying inside a candidate, drop states with no
+  staying move, reprocess; an absorbing state is its own MEC, consistent with the DTMC deadlock treatment),
+  and the reach is the existing max policy iteration. NO linear programming — GF/reachability need only MEC +
+  reachability, unlike the long-run AVERAGE below. Corpus separates a scheduler that steers into the good
+  component (P_max = 1) from a probabilistic coin that cannot (P_max = 1/2).
+
 ## Deferred (future layers, not blocking)
 
 - **General probabilistic LTL** (`Until`, `Next`, leads-to, nested/ disjoined temporal operators). Unlike the
@@ -115,9 +125,12 @@ accelerator for large linear solves, never required).
 - **Zero/negative-cost SSP.** The positive-cost SSP assumption both directions rest on breaks with zero- or
   negative-cost cycles (an improper policy no longer has infinite cost, so policy iteration can stall). Its own
   increment; needs a corpus case that actually exercises the degenerate zero-cost cycle.
-- **MDP steady-state.** The DTMC long-run above does NOT cover the MDP case (min/max long-run over
-  schedulers, which needs MAXIMAL END COMPONENTS — a scheduler can keep the run inside a sub-MDP forever —
-  not just BSCCs); its own increment.
+- **MDP probabilistic-LTL, remaining directions.** `optimize="min"` for GF (and F), and `FG` / `G` on the MDP
+  path, are deferred (the min/co-Büchi directions and their MEC/attractor characterisations); `probability_ltl`
+  raises on them. MEC decomposition (`_maximal_end_components`) is now in place to build them on.
+- **MDP long-run AVERAGE reward.** The steady-state *average reward* over schedulers (not the GF probability
+  above) needs, within each MEC, the max/min long-run average — a linear program over the rationals (an exact
+  rational simplex), a much larger build than the MEC + reachability the GF probability uses.
 
 ## References
 

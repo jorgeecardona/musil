@@ -746,6 +746,40 @@ def test_probability_ltl_reducible_fragment_known_verdicts():
         probability_ltl(m, Until(at_a, not_z))
 
 
+def test_probability_ltl_mdp_gf_max_via_end_components():
+    # MDP GF-max reduces to reaching a maximal end component that contains the target, then cycling forever.
+    # I -> A (win) or Z (dead); A<->B is the target cycle (target = A); Z absorbs. A scheduler that CHOOSES at
+    # I steers into the good end component (P_max=1); a single probabilistic move (a coin) cannot, so P_max is
+    # the reach probability 1/2. GF and F agree here because the only uncertainty is reaching the component.
+    m: Model[Chain] = Model(
+        init=Chain("I"),
+        actions=[
+            Action("win", enabled=_is("I"), apply=lambda s: Chain("A")),
+            Action("dead", enabled=_is("I"), apply=lambda s: Chain("Z")),
+            Action("AtoB", enabled=_is("A"), apply=lambda s: Chain("B")),
+            Action("BtoA", enabled=_is("B"), apply=lambda s: Chain("A")),
+            Action("loopZ", enabled=_is("Z"), apply=lambda s: Chain("Z")),
+        ],
+        terminal=lambda s: False,
+    )
+    at_a = Atom[Chain]("A", _is("A"))
+
+    def choose(_s: Chain, en: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
+        return [[a] for a in en]  # scheduler picks each action -> can steer to the good component
+
+    def coin(_s: Chain, en: tuple[Action[Chain], ...]) -> list[Sequence[Action[Chain]]]:
+        return [list(en)]  # all enabled in one move -> a probabilistic coin the scheduler cannot steer
+
+    assert probability_ltl(m, Always(Eventually(at_a)), moves=choose) == Fraction(1)  # steer in: GF A a.s.
+    assert probability_ltl(m, Eventually(at_a), moves=choose) == Fraction(1)
+    assert probability_ltl(m, Always(Eventually(at_a)), moves=coin) == Fraction(1, 2)  # coin reaches it 1/2
+    assert probability_ltl(m, Eventually(at_a), moves=coin) == Fraction(1, 2)
+    with pytest.raises(NotImplementedError):  # min direction is deferred
+        probability_ltl(m, Always(Eventually(at_a)), moves=choose, optimize="min")
+    with pytest.raises(NotImplementedError):  # FG on the MDP path is deferred
+        probability_ltl(m, Eventually(Always(at_a)), moves=choose)
+
+
 def test_profile_explores_the_same_reachable_set():
     # profile keeps its own instrumented loop (it times enabled/apply/canonicalize separately, which the
     # shared _successors kernel bundles). This pins its full-sweep reachable count to the corpus so it can
