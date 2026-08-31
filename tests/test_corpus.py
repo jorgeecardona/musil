@@ -1184,6 +1184,77 @@ def test_witness_and_path_to_return_shortest_paths():
 
 
 # --------------------------------------------------------------------------------------------------
+# 11b. River crossing (wolf/goat/cabbage) — planning by reachability: goal is exactly 7 crossings away
+# --------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Bank:
+    farmer: str = "L"
+    wolf: str = "L"
+    goat: str = "L"
+    cabbage: str = "L"
+
+
+def river_model(*, refute_goal: bool = False) -> Model[Bank]:
+    goal = Bank("R", "R", "R", "R")
+
+    def other(x: str) -> str:
+        return "R" if x == "L" else "L"
+
+    def safe(s: Bank) -> bool:
+        unwatched = s.farmer != s.goat
+        return not (unwatched and (s.wolf == s.goat or s.goat == s.cabbage))
+
+    def move(s: Bank, carry: str | None) -> Bank:
+        f = other(s.farmer)
+        if carry == "wolf":
+            return replace(s, farmer=f, wolf=other(s.wolf))
+        if carry == "goat":
+            return replace(s, farmer=f, goat=other(s.goat))
+        if carry == "cabbage":
+            return replace(s, farmer=f, cabbage=other(s.cabbage))
+        return replace(s, farmer=f)
+
+    def present(s: Bank, carry: str | None) -> bool:
+        if carry == "wolf":
+            return s.wolf == s.farmer
+        if carry == "goat":
+            return s.goat == s.farmer
+        if carry == "cabbage":
+            return s.cabbage == s.farmer
+        return True
+
+    def act(name: str, carry: str | None) -> Action[Bank]:
+        return Action(name, enabled=lambda s: present(s, carry) and safe(move(s, carry)), apply=lambda s: move(s, carry))
+
+    invariants: dict[str, Callable[[Bank], bool]] = (
+        {"not-yet-across": lambda s: s != goal} if refute_goal else {}
+    )
+    return Model(
+        init=Bank(),
+        actions=[act("alone", None), act("wolf", "wolf"), act("goat", "goat"), act("cabbage", "cabbage")],
+        invariants=invariants,
+        terminal=lambda s: s == goal,
+    )
+
+
+def test_river_crossing_goal_is_reachable_in_seven_crossings():
+    # A famous fully-finite planning puzzle. Guarding every move by safety makes illegal positions
+    # non-existent, so the 10 reachable states are exactly the legal ones, and the shortest plan to get
+    # everyone across is 7 crossings. Known independent of musil; guards reachability-as-planning.
+    goal = Bank("R", "R", "R", "R")
+    g = explore(river_model())
+    assert len(g.states) == 10
+    assert all(s.farmer == s.goat or (s.wolf != s.goat and s.goat != s.cabbage) for s in g.states)
+    w = witness(g, lambda s: s == goal)
+    assert w is not None and len(w) - 1 == 7
+    # Refuting "the goal is never reached" returns the same plan as a counterexample: planning == refutation.
+    r = check(river_model(refute_goal=True))
+    assert not r.ok and r.trace[-1].state == goal and len(r.trace) - 1 == 7
+
+
+# --------------------------------------------------------------------------------------------------
 # 12. Negative-side assertion helpers — action_names / witness / assert_violates / truncated (#32)
 # --------------------------------------------------------------------------------------------------
 

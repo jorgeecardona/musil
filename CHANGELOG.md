@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Examples — River crossing (planning by reachability)
+
+- `examples/river_crossing.py`: the wolf/goat/cabbage puzzle, solved by using the checker as a PLANNER. Every
+  crossing is guarded so it may fire only if the resulting bank configuration is safe, so illegal positions are
+  never entered; then `witness(graph, everyone_across)` returns the shortest path to the goal — the
+  seven-crossing solution — and `format_trace` renders it. The docs page also shows the equivalent idiom:
+  giving the model the invariant "the goal is never reached" makes `check` return the same plan as a
+  counterexample (planning == refutation). Ten reachable states, one exact answer, no probabilities. Corpus
+  pins the 10-state space, the 7-crossing witness, and the refutation equivalence.
+
 ### Examples — Gambler's ruin (the canonical absorbing random walk)
 
 - `examples/gamblers_ruin.py`: the textbook 1-D random walk between two absorbing barriers, deriving three
