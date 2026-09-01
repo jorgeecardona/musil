@@ -2,6 +2,15 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — deprecation shim so the pre-0.35 flat imports keep working (with a warning)
+
+- A module-level `__getattr__` on the `musil` package softens the 0.35 API break into deprecate-then-remove.
+  `from musil import reach_probability` still resolves — to the genuine `musil.probabilistic.reach_probability`
+  — but raises a `DeprecationWarning` naming the new submodule path. Core (top-level) names are unaffected (the
+  shim is never consulted for them), and an unknown name still raises `AttributeError`. A test asserts every one
+  of the 124 moved names resolves in its named submodule, so the shim table cannot drift. The names will stop
+  being importable from the top level in a future release; see `docs/migrating.md`.
+
 ### Changed (BREAKING) — public API reorganised: a small core top level, everything else in submodules
 
 - The top-level `musil` package now exports only the **core checking API** (~34 names): modelling (`Model`,
