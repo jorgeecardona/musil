@@ -78,6 +78,7 @@ plugins:
           paths: [src]
           options:
             show_root_heading: true
+            heading_level: 3
             show_source: true
             members_order: source
             separate_signature: true
