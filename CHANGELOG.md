@@ -2,6 +2,14 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Docs — coverage & vacuity example gets a docs page
+
+- `examples/coverage_vacuity.py` (a green-check account with one dead action and one vacuously-true invariant,
+  found by `coverage` / `invariant_coverage`) now has a docs page under the "Analysis & proof" nav category,
+  beside induction. This completes the invariant that every README-listed verification mode has a discoverable
+  worked example: coverage/vacuity was surfaced in the README capability list two commits ago but its example
+  was not on the site.
+
 ### Examples — induction (the counterexample-to-induction workflow)
 
 - `examples/induction.py`: the worked example `check_inductive` was missing (every other major capability has
