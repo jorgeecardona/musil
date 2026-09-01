@@ -22,7 +22,8 @@ result rather than hiding in comments.
 ## The `EnvironmentSpec` contract
 
 ```python
-from musil import Assumption, EnvironmentSpec, Action
+from musil import Action
+from musil.env import Assumption, EnvironmentSpec
 
 k8s = EnvironmentSpec[ServiceState](
     name="k8s",
@@ -69,7 +70,8 @@ This follows seL4's two-layer assurance model (Klein et al., SOSP 2009): formal 
 ## Running `check_open`
 
 ```python
-from musil import check, check_open
+from musil import check
+from musil.env import check_open
 
 model = _service_model()
 

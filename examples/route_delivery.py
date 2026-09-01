@@ -24,17 +24,8 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 
-from musil import (
-    Action,
-    BaseNode,
-    Context,
-    Model,
-    NetworkModel,
-    Node,
-    check,
-    check_liveness,
-    simulate,
-)
+from musil import Action, Model, check, check_liveness
+from musil.sim import BaseNode, Context, NetworkModel, Node, simulate
 
 # ----------------------------------------------------------------------------------------------------
 # 1. The design, as a model. One route version is desired; the agent's applied version trails it.

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from musil import Action, Invariant, Model, check, explore, symmetry_reduction_sound
+from musil import Action, Invariant, Model, check, explore
+from musil.core import symmetry_reduction_sound
 
 
 @dataclass(frozen=True)

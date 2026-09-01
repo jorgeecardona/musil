@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace as dc_replace
 
-from musil import Action, Invariant, Model, ModelDiff, diff
+from musil import Action, Invariant, Model
+from musil.diffing import ModelDiff, diff
 
 
 @dataclass(frozen=True)

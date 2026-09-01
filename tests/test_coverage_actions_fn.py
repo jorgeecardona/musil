@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import Action, Model, coverage
+from musil import Action, Model
+from musil.metrics import coverage
 
 
 @dataclass(frozen=True)

@@ -37,7 +37,9 @@ The components are interchangeable and nothing outside a component's slice names
 instance** before trusting it on a large one:
 
 ```python
-from musil import canonical_by_sorting, check, symmetry_reduction_sound
+from musil import check
+from musil.core import symmetry_reduction_sound
+from musil.symmetry import canonical_by_sorting
 
 canon = canonical_by_sorting(
     get=lambda s: s.steps,                 # the per-component slices, in component order

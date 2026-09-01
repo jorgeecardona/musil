@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from musil import Action, Assumption, EnvironmentSpec, Model, check, check_open
+from musil import Action, Model, check
+from musil.env import Assumption, EnvironmentSpec, check_open
 
 
 @dataclass(frozen=True)

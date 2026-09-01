@@ -171,7 +171,7 @@ def as_regression_test[S: Hashable](
     lines = [
         f"def test_{test_name}():",
         f"    {model_import}",
-        "    from musil import replay_actions",
+        "    from musil.counterexample import replay_actions",
         "",
         f"    result = replay_actions(model, {names!r})",
         "    assert not result.ok",

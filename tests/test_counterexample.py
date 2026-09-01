@@ -7,16 +7,8 @@ from dataclasses import replace as dc_replace
 
 import pytest
 
-from musil import (
-    Action,
-    Model,
-    Result,
-    Step,
-    as_regression_test,
-    check,
-    minimize,
-    replay_actions,
-)
+from musil import Action, Model, Result, Step, check
+from musil.counterexample import as_regression_test, minimize, replay_actions
 
 
 @dataclass(frozen=True)

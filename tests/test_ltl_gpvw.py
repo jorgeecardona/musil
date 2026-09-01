@@ -12,7 +12,6 @@ from musil import (
     And,
     Atom,
     Eventually,
-    GeneralizedBuchi,
     Implies,
     Model,
     Next,
@@ -21,6 +20,7 @@ from musil import (
     check_ltl,
     explore,
 )
+from musil.ltl import GeneralizedBuchi
 
 
 @dataclass(frozen=True)

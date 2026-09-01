@@ -156,7 +156,7 @@ and the shortest trace to the violation.
 ### 3.2  Open-System API
 
 ```python
-from musil import check_open
+from musil.env import check_open
 from musil.env import Assumption, EnvironmentSpec
 
 crash_env = EnvironmentSpec[State](
@@ -196,7 +196,7 @@ they bound the trust boundary and must be communicated to the user.
 The same `EnvironmentSpec` concepts are implemented in simulation via `AdversarialNode`:
 
 ```python
-from musil import simulate
+from musil.sim import simulate
 from musil.environments.k8s import eviction_notifier
 
 report = simulate(

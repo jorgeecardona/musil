@@ -13,9 +13,8 @@ from fractions import Fraction
 
 import pytest
 
-from musil import (
-    Action,
-    Model,
+from musil import Action, Model
+from musil.probabilistic import (
     expected_reward,
     expected_reward_mdp,
     reach_probability,

@@ -24,7 +24,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from fractions import Fraction
 
-from musil import Action, Model, assert_probability, reach_probability
+from musil import Action, Model
+from musil.probabilistic import assert_probability, reach_probability
 
 PICK = 1  # your initial choice, fixed by symmetry: doors are interchangeable
 

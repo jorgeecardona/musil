@@ -2,6 +2,26 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Changed (BREAKING) — public API reorganised: a small core top level, everything else in submodules
+
+- The top-level `musil` package now exports only the **core checking API** (~34 names): modelling (`Model`,
+  `Action`, `Invariant`, `EdgeInvariant`), the checks (`check`, `check_all`, `check_of`, `explore`,
+  `check_liveness`, `check_ltl`), results and traces (`Result`, `Step`, `Verdict`, `Graph`, `LivenessResult`,
+  `format_trace`, `witness`, `path_to`, `reaches`, `states_where`), the test assertions (`assert_ok`,
+  `assert_violates`), and the LTL formula AST. The previous flat namespace re-exported all **158** names — too
+  many to discover or teach, and it hid the layering.
+- Every specialised layer now lives in its own **submodule**, imported directly:
+  `musil.probabilistic`, `musil.sim`, `musil.env`, `musil.metrics`, `musil.fsm`, `musil.refine`,
+  `musil.conformance`, `musil.induction`, `musil.symmetry`, `musil.por`, `musil.faults`, `musil.channels`,
+  `musil.compose`, `musil.clock`, `musil.reconciler`, `musil.patterns`, `musil.counterexample`,
+  `musil.diffing`, `musil.cache`, `musil.profiling`, `musil.doctor`, `musil.citations`, `musil.graph`,
+  `musil.history`, `musil.tracing` (plus a few names demoted within `musil.core` / `musil.ltl`). **Nothing was
+  renamed or removed** — only the import path changed, e.g. `from musil import reach_probability` becomes
+  `from musil.probabilistic import reach_probability`.
+- Full old→new table and the quick fix: **`docs/migrating.md`**. All 30 examples, the whole test suite, and the
+  docs were updated to the new paths; `pip install musil` still pulls zero third-party packages, and the gate
+  (ruff, pyright, 435 tests, `mkdocs --strict`) stays green.
+
 ### Tests — random-model property test for partial-order reduction's soundness gate
 
 - Added `tests/test_por_properties.py`. POR is the most dangerous feature to get wrong — an unsound reduction

@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from dataclasses import replace as dc_replace
 from pathlib import Path
 
-from musil import Action, Model, check_cached, clear_verdict_cache
+from musil import Action, Model
+from musil.cache import check_cached, clear_verdict_cache
 
 
 @dataclass(frozen=True)

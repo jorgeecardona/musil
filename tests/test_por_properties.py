@@ -18,7 +18,8 @@ import random
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
-from musil import Action, Model, check, check_of, explore, explore_por, por_sound
+from musil import Action, Model, check, check_of, explore
+from musil.por import explore_por, por_sound
 
 
 @dataclass(frozen=True)

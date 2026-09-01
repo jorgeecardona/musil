@@ -5,7 +5,7 @@ from __future__ import annotations
 import sys
 from types import FrameType
 
-from musil import no_trace
+from musil.tracing import no_trace
 
 
 def _tracer(frame: FrameType, event: str, arg: object) -> None:

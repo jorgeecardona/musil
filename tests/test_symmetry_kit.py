@@ -9,15 +9,9 @@ from math import comb
 
 import pytest
 
-from musil import (
-    Action,
-    Model,
-    canonical_by_permutations,
-    canonical_by_sorting,
-    check,
-    explore,
-    symmetry_reduction_sound,
-)
+from musil import Action, Model, check, explore
+from musil.core import symmetry_reduction_sound
+from musil.symmetry import canonical_by_permutations, canonical_by_sorting
 
 VALUES = 3  # each worker counts 0, 1, 2
 

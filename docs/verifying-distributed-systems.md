@@ -55,7 +55,7 @@ convergence goal once each run settles.
 
 ```python
 from collections.abc import Mapping
-from musil import BaseNode, Context, NetworkModel, Node, simulate
+from musil.sim import BaseNode, Context, NetworkModel, Node, simulate
 
 class ControlPlane(BaseNode):
     def __init__(self, *, repush: bool) -> None:

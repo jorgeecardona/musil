@@ -6,18 +6,8 @@ from typing import ClassVar
 
 import pytest
 
-from musil import (
-    Action,
-    ActionSchema,
-    Invariant,
-    Model,
-    check,
-    check_all,
-    enumerate_actions,
-    explore,
-    format_trace,
-    format_trace_diff,
-)
+from musil import Action, Invariant, Model, check, check_all, explore, format_trace
+from musil.core import ActionSchema, enumerate_actions, format_trace_diff
 
 
 @dataclass(frozen=True)

@@ -5,11 +5,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import (
-    Action,
+from musil import Action, Model
+from musil.env import (
     Assumption,
     EnvironmentSpec,
-    Model,
     OpenLivenessResult,
     check_liveness_open,
     check_open,

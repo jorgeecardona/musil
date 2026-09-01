@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from musil import Action, Model, check, to_dot
+from musil import Action, Model, check
+from musil.graph import to_dot
 
 
 @dataclass(frozen=True)

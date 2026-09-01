@@ -5,11 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from musil import (
-    Model,
-    check,
+from musil import Model, check, explore
+from musil.fsm import (
     declared_states,
-    explore,
     multi_status_field_actions,
     protocol_actions,
     protocol_operations,

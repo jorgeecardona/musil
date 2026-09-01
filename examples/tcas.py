@@ -54,8 +54,8 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Literal
 
-from musil import Action, Model, check, check_open
-from musil.env import Assumption, EnvironmentSpec
+from musil import Action, Model, check
+from musil.env import Assumption, EnvironmentSpec, check_open
 
 # ---------------------------------------------------------------------------
 # State

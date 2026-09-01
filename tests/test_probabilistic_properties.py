@@ -11,11 +11,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
-from musil import (
-    Action,
-    Atom,
-    Eventually,
-    Model,
+from musil import Action, Atom, Eventually, Model
+from musil.probabilistic import (
     long_run_probability,
     probability_ltl,
     reach_probability,

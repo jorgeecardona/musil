@@ -14,7 +14,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from musil import Action, Model, RefinementMonitor, acheck_refinement, check_refinement
+from musil import Action, Model
+from musil.refine import RefinementMonitor, acheck_refinement, check_refinement
 
 
 @dataclass(frozen=True)

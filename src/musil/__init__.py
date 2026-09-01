@@ -23,30 +23,35 @@ concurrent actors) for the first invariant violation or deadlock, with the short
         invariants={"known-color": lambda s: s.color in {"red", "green", "yellow"}},
     )
     assert check(model).ok
+
+The top level exports the CORE checking API — modelling (``Model``, ``Action``), the checks
+(``check``, ``check_all``, ``explore``, ``check_liveness``, ``check_ltl``), results and traces
+(``Result``, ``Step``, ``format_trace``, ``witness`` …), the LTL formula AST, and the test
+assertions. Everything else lives in a submodule, imported directly:
+
+- ``musil.probabilistic`` — exact DTMC / MDP probabilities (reachability, reward, steady-state, PLTL)
+- ``musil.sim`` — sampling-based simulation of faulty distributed runs
+- ``musil.env`` — open-system checking against adversarial environments (``check_open``)
+- ``musil.metrics`` — coverage and vacuity (is a green check meaningful?)
+- ``musil.induction`` — ``check_inductive`` (proof by k-induction, unbounded depth)
+- ``musil.symmetry`` / ``musil.por`` — symmetry and partial-order reduction, with soundness gates
+- ``musil.refine`` / ``musil.conformance`` — refinement and code-conformance checking
+- ``musil.fsm`` / ``musil.faults`` / ``musil.channels`` / ``musil.compose`` / ``musil.clock`` /
+  ``musil.reconciler`` — model-building kits
+- ``musil.patterns`` — named liveness sugar (``always``, ``eventually``, ``recurs``, ``responds``)
+- ``musil.counterexample`` / ``musil.diffing`` / ``musil.cache`` / ``musil.profiling`` /
+  ``musil.doctor`` / ``musil.citations`` / ``musil.graph`` / ``musil.history`` / ``musil.tracing``
+
+See ``docs/migrating.md`` for the import-path changes from the pre-0.35 flat namespace.
 """
 
-from musil.cache import check_cached, clear_verdict_cache
-from musil.channels import channel_actions, fifo_channel_actions, fifo_send, send
-from musil.citations import Citation, dangling_citations, find_citations, known_models
-from musil.clock import BoundedClock, bounded_clock
-from musil.compose import Composite, compose
-from musil.conformance import (
-    ConformanceResult,
-    Divergence,
-    areplay,
-    generate_traces,
-    replay,
-)
 from musil.core import (
     Action,
-    ActionSchema,
     EdgeInvariant,
-    FixedPoints,
     Graph,
     Invariant,
     Model,
     Result,
-    StateViolation,
     Step,
     Verdict,
     assert_ok,
@@ -54,57 +59,20 @@ from musil.core import (
     check,
     check_all,
     check_of,
-    enumerate_actions,
     explore,
-    fixed_points,
-    fixed_points_of,
-    footprint_sound,
     format_trace,
-    format_trace_diff,
-    invariant_from_violations,
-    never,
     path_to,
-    reachable_violations,
     reaches,
     states_where,
-    symmetry_reduction_sound,
     witness,
 )
-from musil.counterexample import as_regression_test, minimize, replay_actions
-from musil.diffing import ModelDiff, diff
-from musil.doctor import Finding, scan
-from musil.env import (
-    Assumption,
-    EnvironmentSpec,
-    OpenLivenessResult,
-    OpenResult,
-    check_liveness_open,
-    check_open,
-)
-from musil.faults import crash_actions, partition_actions
-from musil.fsm import (
-    assert_covers_table,
-    declared_states,
-    multi_status_field_actions,
-    protocol_actions,
-    protocol_operations,
-    replicated_transition_actions,
-    status_field_actions,
-    terminal_states,
-    transition_actions,
-)
-from musil.graph import to_dot
-from musil.history import LastAction, action_taken, with_last_action
-from musil.induction import InductionResult, check_inductive
-from musil.liveness import LivenessResult, check_liveness, check_liveness_of
+from musil.liveness import LivenessResult, check_liveness
 from musil.ltl import (
     LTL,
     Always,
     And,
     Atom,
-    Buchi,
     Eventually,
-    GeneralizedBuchi,
     Implies,
     Next,
     Not,
@@ -114,221 +82,40 @@ from musil.ltl import (
     WeakUntil,
     check_ltl,
 )
-from musil.metrics import (
-    Coverage,
-    InvariantCoverage,
-    PortfolioCoverage,
-    StateSpaceMetrics,
-    assert_covers,
-    coverage,
-    coverage_of,
-    invariant_coverage,
-    invariant_coverage_of,
-    metrics_of,
-    portfolio_coverage,
-    solution_cardinality,
-    state_space_metrics,
-)
-from musil.patterns import absent, always, eventually, recurs, responds
-from musil.por import explore_por, independent, por_sound
-from musil.probabilistic import (
-    assert_probability,
-    expected_reward,
-    expected_reward_mdp,
-    long_run_probability,
-    long_run_probability_mdp,
-    long_run_reward,
-    long_run_reward_mdp,
-    probability_ltl,
-    reach_probability,
-    reach_probability_mdp,
-    transient_distribution,
-)
-from musil.profiling import ActionCost, Phase, Profile, profile
-from musil.reconciler import reconciler
-from musil.refine import (
-    RefinementMonitor,
-    RefinementResult,
-    RefinementViolation,
-    acheck_refinement,
-    check_refinement,
-)
-from musil.sim import (
-    AdversarialNode,
-    BaseNode,
-    Context,
-    Crash,
-    Envelope,
-    FaultSchedule,
-    NetworkModel,
-    Node,
-    Partition,
-    RunResult,
-    SimFailure,
-    SimReport,
-    Simulator,
-    simulate,
-)
-from musil.symmetry import canonical_by_fields, canonical_by_permutations, canonical_by_sorting
-from musil.tracing import no_trace
 
 __all__ = [
     "LTL",
     "Action",
-    "ActionCost",
-    "ActionSchema",
-    "AdversarialNode",
     "Always",
     "And",
-    "Assumption",
     "Atom",
-    "BaseNode",
-    "BoundedClock",
-    "Buchi",
-    "Citation",
-    "Composite",
-    "ConformanceResult",
-    "Context",
-    "Coverage",
-    "Crash",
-    "Divergence",
     "EdgeInvariant",
-    "Envelope",
-    "EnvironmentSpec",
     "Eventually",
-    "FaultSchedule",
-    "Finding",
-    "FixedPoints",
-    "GeneralizedBuchi",
     "Graph",
     "Implies",
-    "InductionResult",
     "Invariant",
-    "InvariantCoverage",
-    "LastAction",
     "LivenessResult",
     "Model",
-    "ModelDiff",
-    "NetworkModel",
     "Next",
-    "Node",
     "Not",
-    "OpenLivenessResult",
-    "OpenResult",
     "Or",
-    "Partition",
-    "Phase",
-    "PortfolioCoverage",
-    "Profile",
-    "RefinementMonitor",
-    "RefinementResult",
-    "RefinementViolation",
     "Release",
     "Result",
-    "RunResult",
-    "SimFailure",
-    "SimReport",
-    "Simulator",
-    "StateSpaceMetrics",
-    "StateViolation",
     "Step",
     "Until",
     "Verdict",
     "WeakUntil",
-    "absent",
-    "acheck_refinement",
-    "action_taken",
-    "always",
-    "areplay",
-    "as_regression_test",
-    "assert_covers",
-    "assert_covers_table",
     "assert_ok",
-    "assert_probability",
     "assert_violates",
-    "bounded_clock",
-    "canonical_by_fields",
-    "canonical_by_permutations",
-    "canonical_by_sorting",
-    "channel_actions",
     "check",
     "check_all",
-    "check_cached",
-    "check_inductive",
     "check_liveness",
-    "check_liveness_of",
-    "check_liveness_open",
     "check_ltl",
     "check_of",
-    "check_open",
-    "check_refinement",
-    "clear_verdict_cache",
-    "compose",
-    "coverage",
-    "coverage_of",
-    "crash_actions",
-    "dangling_citations",
-    "declared_states",
-    "diff",
-    "enumerate_actions",
-    "eventually",
-    "expected_reward",
-    "expected_reward_mdp",
     "explore",
-    "explore_por",
-    "fifo_channel_actions",
-    "fifo_send",
-    "find_citations",
-    "fixed_points",
-    "fixed_points_of",
-    "footprint_sound",
     "format_trace",
-    "format_trace_diff",
-    "generate_traces",
-    "independent",
-    "invariant_coverage",
-    "invariant_coverage_of",
-    "invariant_from_violations",
-    "known_models",
-    "long_run_probability",
-    "long_run_probability_mdp",
-    "long_run_reward",
-    "long_run_reward_mdp",
-    "metrics_of",
-    "minimize",
-    "multi_status_field_actions",
-    "never",
-    "no_trace",
-    "partition_actions",
     "path_to",
-    "por_sound",
-    "portfolio_coverage",
-    "probability_ltl",
-    "profile",
-    "protocol_actions",
-    "protocol_operations",
-    "reach_probability",
-    "reach_probability_mdp",
-    "reachable_violations",
     "reaches",
-    "reconciler",
-    "recurs",
-    "replay",
-    "replay_actions",
-    "replicated_transition_actions",
-    "responds",
-    "scan",
-    "send",
-    "simulate",
-    "solution_cardinality",
-    "state_space_metrics",
     "states_where",
-    "status_field_actions",
-    "symmetry_reduction_sound",
-    "terminal_states",
-    "to_dot",
-    "transient_distribution",
-    "transition_actions",
-    "with_last_action",
     "witness",
 ]

@@ -11,7 +11,8 @@ factory for simulation testing.
 
 ```python
 from dataclasses import dataclass, replace
-from musil import check_open, Model, Action
+from musil import Action, Model
+from musil.env import check_open
 from musil.environments.k8s import pod_eviction
 
 @dataclass(frozen=True)
@@ -202,7 +203,7 @@ Not shipped here on purpose: **message lost/reordered/duplicated** is already `m
 Pass multiple `EnvironmentSpec` objects to `check_open` — behaviors and assumptions are merged:
 
 ```python
-from musil import check_open
+from musil.env import check_open
 from musil.environments.k8s import pod_eviction
 from musil.environments.aws import aws_api_faults
 from musil.environments.etcd import cluster_faults
@@ -251,7 +252,7 @@ env = pod_eviction(
 For deterministic simulation testing, wire `AdversarialNode` factories into your node map:
 
 ```python
-from musil import simulate, NetworkModel
+from musil.sim import NetworkModel, simulate
 from musil.environments.k8s import eviction_notifier
 
 report = simulate(
@@ -271,7 +272,7 @@ For Byzantine payload corruption, use `NetworkModel(mutate=...)`:
 
 ```python
 import random
-from musil import simulate, NetworkModel
+from musil.sim import NetworkModel, simulate
 
 def flip_bits(src: str, dst: str, payload: object) -> object | None:
     if src == "service" and isinstance(payload, int):

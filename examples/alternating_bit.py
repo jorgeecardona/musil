@@ -35,7 +35,8 @@ from collections.abc import Callable, Hashable
 from dataclasses import dataclass, replace
 from typing import cast
 
-from musil import Action, Model, channel_actions, check, check_liveness, send
+from musil import Action, Model, check, check_liveness
+from musil.channels import channel_actions, send
 
 # Number of application messages to push end to end. 3 is enough to wrap the one-bit counter
 # (idx 0 and idx 2 both carry bit 0) -- which is precisely what breaks ABP on a reordering channel.

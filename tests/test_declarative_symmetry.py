@@ -5,14 +5,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import (
-    Action,
-    Model,
-    canonical_by_fields,
-    check,
-    explore,
-    symmetry_reduction_sound,
-)
+from musil import Action, Model, check, explore
+from musil.core import symmetry_reduction_sound
+from musil.symmetry import canonical_by_fields
 
 
 @dataclass(frozen=True)

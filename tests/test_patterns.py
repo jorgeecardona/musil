@@ -4,15 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import (
-    Action,
-    Model,
-    absent,
-    always,
-    eventually,
-    recurs,
-    responds,
-)
+from musil import Action, Model
+from musil.patterns import absent, always, eventually, recurs, responds
 
 
 @dataclass(frozen=True)

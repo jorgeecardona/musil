@@ -5,15 +5,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import (
-    Action,
-    InvariantCoverage,
-    Model,
-    check,
-    explore,
-    invariant_coverage,
-    invariant_coverage_of,
-)
+from musil import Action, Model, check, explore
+from musil.metrics import InvariantCoverage, invariant_coverage, invariant_coverage_of
 
 
 @dataclass(frozen=True)

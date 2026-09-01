@@ -3,7 +3,7 @@ the doctor's analog of the model corpus. Pure ast, so these are exact and stable
 
 from __future__ import annotations
 
-from musil import scan
+from musil.doctor import scan
 
 
 def test_scan_flags_the_three_hand_rolled_patterns() -> None:

@@ -1,6 +1,12 @@
 # API reference
 
-Everything below is re-exported from the top-level `musil` package, e.g. `from musil import Model, check`.
+The **core checking API** is exported from the top-level `musil` package — modelling (`Model`, `Action`),
+the checks (`check`, `check_all`, `explore`, `check_liveness`, `check_ltl`), results and traces (`Result`,
+`Step`, `format_trace`, `witness`, …), the LTL formula AST, and the test assertions (`assert_ok`,
+`assert_violates`). Everything else lives in a **submodule**, imported directly — e.g.
+`from musil.probabilistic import reach_probability`, `from musil.env import check_open`,
+`from musil.metrics import coverage`. Each section below names its module; see
+[migrating](migrating.md) for the import-path changes from the pre-0.35 flat namespace.
 
 ## Core — `check`, `Model`, `Action`
 

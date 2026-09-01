@@ -19,7 +19,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from musil import Action, Model, check, coverage, invariant_coverage
+from musil import Action, Model, check
+from musil.metrics import coverage, invariant_coverage
 
 
 @dataclass(frozen=True)

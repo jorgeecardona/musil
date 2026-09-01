@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace as dc_replace
 
-from musil import Action, Model, Profile, check, profile
+from musil import Action, Model, check
+from musil.profiling import Profile, profile
 
 
 @dataclass(frozen=True)

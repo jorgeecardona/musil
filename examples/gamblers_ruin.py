@@ -23,7 +23,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 
-from musil import Action, Model, assert_probability, expected_reward, reach_probability
+from musil import Action, Model
+from musil.probabilistic import assert_probability, expected_reward, reach_probability
 
 
 @dataclass(frozen=True)

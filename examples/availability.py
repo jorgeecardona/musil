@@ -24,7 +24,8 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
-from musil import Action, Model, expected_reward_mdp, long_run_probability, reach_probability
+from musil import Action, Model
+from musil.probabilistic import expected_reward_mdp, long_run_probability, reach_probability
 
 HEALTHY, DEGRADED, FAILED, RECOVERING = "healthy", "degraded", "failed", "recovering"
 

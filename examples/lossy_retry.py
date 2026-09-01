@@ -20,7 +20,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
-from musil import Action, Model, expected_reward, expected_reward_mdp, reach_probability
+from musil import Action, Model
+from musil.probabilistic import expected_reward, expected_reward_mdp, reach_probability
 
 
 @dataclass(frozen=True)

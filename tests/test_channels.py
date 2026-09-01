@@ -5,7 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable
 from dataclasses import dataclass, replace
 
-from musil import Action, Model, channel_actions, explore, send
+from musil import Action, Model, explore
+from musil.channels import channel_actions, send
 
 MSGS = ("a", "b")
 
@@ -76,7 +77,7 @@ class FifoWire:
 
 
 def test_fifo_channel_preserves_order() -> None:
-    from musil import fifo_channel_actions, fifo_send
+    from musil.channels import fifo_channel_actions, fifo_send
 
     get: Callable[[FifoWire], tuple[Hashable, ...]] = lambda s: s.inflight  # noqa: E731
     put: Callable[[FifoWire, tuple[Hashable, ...]], FifoWire] = lambda s, q: replace(s, inflight=q)  # noqa: E731
@@ -95,7 +96,7 @@ def test_fifo_channel_preserves_order() -> None:
 
 
 def test_fifo_channel_lossy_can_drop_head() -> None:
-    from musil import fifo_channel_actions, fifo_send
+    from musil.channels import fifo_channel_actions, fifo_send
 
     get: Callable[[FifoWire], tuple[Hashable, ...]] = lambda s: s.inflight  # noqa: E731
     put: Callable[[FifoWire, tuple[Hashable, ...]], FifoWire] = lambda s, q: replace(s, inflight=q)  # noqa: E731

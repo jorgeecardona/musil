@@ -7,7 +7,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from dataclasses import replace as dc_replace
 
-from musil import Action, Model, check, explore, footprint_sound
+from musil import Action, Model, check, explore
+from musil.core import footprint_sound
 
 
 @dataclass(frozen=True)

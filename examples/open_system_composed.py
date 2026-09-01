@@ -20,7 +20,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from musil import Action, Model, check_open
+from musil import Action, Model
+from musil.env import check_open
 from musil.environments.aws import aws_api_faults
 from musil.environments.etcd import cluster_faults
 from musil.environments.k8s import pod_eviction

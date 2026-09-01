@@ -27,13 +27,9 @@ from dataclasses import dataclass, replace
 from math import comb
 from time import perf_counter
 
-from musil import (
-    Action,
-    Model,
-    canonical_by_sorting,
-    check,
-    symmetry_reduction_sound,
-)
+from musil import Action, Model, check
+from musil.core import symmetry_reduction_sound
+from musil.symmetry import canonical_by_sorting
 
 
 @dataclass(frozen=True)

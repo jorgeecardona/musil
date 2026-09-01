@@ -213,7 +213,7 @@ generate them from the same allowed-transitions table your code already enforces
 can't silently disagree with the code, because it is the code's table:
 
 ```python
-from musil import status_field_actions, terminal_states
+from musil.fsm import status_field_actions, terminal_states
 model = Model(
     init=Service("pending"),
     actions=status_field_actions(ALLOWED["service"]),     # generated from YOUR table
@@ -237,7 +237,8 @@ on. musil tries every environment action from every reachable state, covering th
 than a sample:
 
 ```python
-from musil import Assumption, EnvironmentSpec, Action, check_open
+from musil import Action
+from musil.env import Assumption, EnvironmentSpec, check_open
 
 k8s = EnvironmentSpec[ServiceState](
     name="k8s",
@@ -267,7 +268,7 @@ simulation testing" technique as a pure-Python library — it *finds* bugs (with
 rather than proving their absence:
 
 ```python
-from musil import simulate, NetworkModel
+from musil.sim import NetworkModel, simulate
 report = simulate(node_factory, seeds=range(1000), snapshot=snapshot,
                   network=NetworkModel(loss=0.3, max_latency=3),
                   model=spec, abstraction=lift, goal=lambda w: w.applied == w.desired)

@@ -5,15 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass, replace
 
-from musil import (
-    Action,
-    Model,
-    canonical_by_sorting,
-    check,
-    coverage,
-    coverage_of,
-    explore,
-)
+from musil import Action, Model, check, explore
+from musil.metrics import coverage, coverage_of
+from musil.symmetry import canonical_by_sorting
 
 
 @dataclass(frozen=True)

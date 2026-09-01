@@ -2,7 +2,8 @@
 (how many reachable states satisfy a goal) — the design-level analog of 'expression cardinality',
 measured exactly instead of guessed."""
 
-from musil import Action, Model, solution_cardinality, state_space_metrics
+from musil import Action, Model
+from musil.metrics import solution_cardinality, state_space_metrics
 
 
 def _counter(max_n: int) -> Model[int]:

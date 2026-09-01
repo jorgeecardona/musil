@@ -12,7 +12,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import Model, check, declared_states, status_field_actions, terminal_states, to_dot
+from musil import Model, check
+from musil.fsm import declared_states, status_field_actions, terminal_states
+from musil.graph import to_dot
 
 # a service lifecycle state machine, expressed as an allowed-transitions table
 ALLOWED: dict[str, set[str]] = {

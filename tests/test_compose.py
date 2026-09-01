@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import cast
 
-from musil import Action, Model, check, compose
+from musil import Action, Model, check
+from musil.compose import compose
 
 
 @dataclass(frozen=True)

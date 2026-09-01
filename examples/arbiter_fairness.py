@@ -24,19 +24,9 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from fractions import Fraction
 
-from musil import (
-    Action,
-    Always,
-    Atom,
-    Eventually,
-    Implies,
-    LastAction,
-    Model,
-    action_taken,
-    check_ltl,
-    probability_ltl,
-    with_last_action,
-)
+from musil import Action, Always, Atom, Eventually, Implies, Model, check_ltl
+from musil.history import LastAction, action_taken, with_last_action
+from musil.probabilistic import probability_ltl
 
 
 @dataclass(frozen=True)

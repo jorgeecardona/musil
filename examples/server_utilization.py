@@ -19,7 +19,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 
-from musil import Action, Model, long_run_reward, long_run_reward_mdp, transient_distribution
+from musil import Action, Model
+from musil.probabilistic import long_run_reward, long_run_reward_mdp, transient_distribution
 
 
 @dataclass(frozen=True)

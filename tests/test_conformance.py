@@ -7,7 +7,8 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from musil import Action, ConformanceResult, Model, areplay, generate_traces, replay
+from musil import Action, Model
+from musil.conformance import ConformanceResult, areplay, generate_traces, replay
 
 
 @dataclass(frozen=True)

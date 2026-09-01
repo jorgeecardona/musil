@@ -4,9 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from musil import check_open
 from musil.core import Action, Model
-from musil.env import Assumption, EnvironmentSpec
+from musil.env import Assumption, EnvironmentSpec, check_open
 from musil.environments.aws import (
     IAM_CORRECTNESS,
     S3_EVENTUAL_DELIVERY,

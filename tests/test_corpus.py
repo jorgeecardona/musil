@@ -22,9 +22,7 @@ from musil import (
     And,
     Atom,
     Eventually,
-    GeneralizedBuchi,
     Implies,
-    LastAction,
     Model,
     Next,
     Not,
@@ -32,49 +30,42 @@ from musil import (
     Result,
     Until,
     WeakUntil,
-    action_taken,
-    always,
-    assert_covers,
-    assert_covers_table,
     assert_ok,
-    assert_probability,
     assert_violates,
     check,
     check_all,
     check_liveness,
-    check_liveness_of,
     check_ltl,
     check_of,
-    crash_actions,
-    eventually,
+    explore,
+    path_to,
+    states_where,
+    witness,
+)
+from musil.core import fixed_points, fixed_points_of, never
+from musil.faults import crash_actions, partition_actions
+from musil.fsm import assert_covers_table, replicated_transition_actions
+from musil.history import LastAction, action_taken, with_last_action
+from musil.liveness import check_liveness_of
+from musil.ltl import GeneralizedBuchi
+from musil.metrics import assert_covers, portfolio_coverage
+from musil.patterns import always, eventually, recurs, responds
+from musil.por import explore_por, por_sound
+from musil.probabilistic import (
+    assert_probability,
     expected_reward,
     expected_reward_mdp,
-    explore,
-    explore_por,
-    fixed_points,
-    fixed_points_of,
     long_run_probability,
     long_run_probability_mdp,
     long_run_reward,
     long_run_reward_mdp,
-    never,
-    partition_actions,
-    path_to,
-    por_sound,
-    portfolio_coverage,
     probability_ltl,
-    profile,
     reach_probability,
     reach_probability_mdp,
-    reconciler,
-    recurs,
-    replicated_transition_actions,
-    responds,
-    states_where,
     transient_distribution,
-    with_last_action,
-    witness,
 )
+from musil.profiling import profile
+from musil.reconciler import reconciler
 
 # --------------------------------------------------------------------------------------------------
 # 1. Bounded counter — a derivable-count sanity anchor

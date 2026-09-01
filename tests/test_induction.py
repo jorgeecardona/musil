@@ -7,7 +7,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from musil import Action, InductionResult, Model, check_inductive
+from musil import Action, Model
+from musil.induction import InductionResult, check_inductive
 
 
 @dataclass(frozen=True)

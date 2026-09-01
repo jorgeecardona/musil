@@ -23,7 +23,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from musil import Action, Model, check, check_inductive
+from musil import Action, Model, check
+from musil.induction import check_inductive
 
 
 @dataclass(frozen=True)

@@ -6,7 +6,8 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from musil import Action, BoundedClock, Model, bounded_clock, check, explore
+from musil import Action, Model, check, explore
+from musil.clock import BoundedClock, bounded_clock
 
 
 @dataclass(frozen=True)

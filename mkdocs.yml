@@ -129,4 +129,5 @@ nav:
   - Pre-built environments: environments.md
   - Paper draft: paper.md
   - API reference: api.md
+  - Migrating (0.35 API): migrating.md
   - Changelog: changelog.md

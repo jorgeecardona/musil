@@ -6,7 +6,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from dataclasses import replace as dc_replace
 
-from musil import Action, Invariant, Model, explore, explore_por, independent, por_sound
+from musil import Action, Invariant, Model, explore
+from musil.por import explore_por, independent, por_sound
 
 
 @dataclass(frozen=True)

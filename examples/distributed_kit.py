@@ -20,7 +20,9 @@ from __future__ import annotations
 from collections.abc import Hashable
 from dataclasses import dataclass, replace
 
-from musil import Action, Model, check, check_liveness, crash_actions, reconciler
+from musil import Action, Model, check, check_liveness
+from musil.faults import crash_actions
+from musil.reconciler import reconciler
 
 # --- 1. a controller converging under faults --------------------------------------------------------
 

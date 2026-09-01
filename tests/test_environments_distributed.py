@@ -6,7 +6,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import replace as dc_replace
 
-from musil import Action, EnvironmentSpec, Model, check_open
+from musil import Action, Model
+from musil.env import EnvironmentSpec, check_open
 from musil.environments.distributed import credential_rotation, record_reality_divergence
 
 

@@ -196,7 +196,7 @@ def test_empty_string_invariant_is_a_violation_without_reason() -> None:
 
 def test_reachable_violations_enumerates_all_bad_states() -> None:
     # a 3-state cycle red->green->yellow->red; two invariants, one with a reason string.
-    from musil import reachable_violations
+    from musil.core import reachable_violations
 
     model = Model(
         init=Light("red"),
@@ -219,7 +219,7 @@ def test_reachable_violations_enumerates_all_bad_states() -> None:
 
 
 def test_invariant_from_violations_adapts_a_checker() -> None:
-    from musil import invariant_from_violations, reachable_violations
+    from musil.core import invariant_from_violations, reachable_violations
 
     # a checker that returns "violations" (here just strings) — empty means OK
     def checker(s: Light) -> list[str]:
@@ -280,7 +280,7 @@ def test_reaches_available_from_everywhere_idiom() -> None:
 
 
 def test_fixed_points_different_starts_may_settle_differently() -> None:
-    from musil import fixed_points
+    from musil.core import fixed_points
 
     # a latch: two starts settle in different places, but each start deterministically.
     model = Model(
@@ -299,7 +299,7 @@ def test_fixed_points_different_starts_may_settle_differently() -> None:
 
 
 def test_fixed_points_detects_order_dependent_settlement() -> None:
-    from musil import fixed_points
+    from musil.core import fixed_points
 
     # two racing steps from one start, each disabling the other: where it settles depends on
     # which fired first — the confluence bug.
@@ -317,7 +317,7 @@ def test_fixed_points_detects_order_dependent_settlement() -> None:
 
 
 def test_fixed_points_never_settling_start_is_liveness_not_confluence() -> None:
-    from musil import fixed_points
+    from musil.core import fixed_points
 
     # a pure cycle has no terminal state: empty set, still confluent — never settling is a
     # liveness question, not a confluence one.
@@ -334,7 +334,7 @@ def test_fixed_points_never_settling_start_is_liveness_not_confluence() -> None:
 
 
 def test_fixed_points_truncated_is_inconclusive() -> None:
-    from musil import fixed_points
+    from musil.core import fixed_points
 
     # an unbounded counter: truncation makes the terminal sets unreliable, so confluent is False.
     model = Model(init=0, actions=[Action("inc", lambda _s: True, lambda s: s + 1)])
