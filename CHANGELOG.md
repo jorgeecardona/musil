@@ -2,6 +2,18 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Tests — random-model property test for partial-order reduction's soundness gate
+
+- Added `tests/test_por_properties.py`. POR is the most dangerous feature to get wrong — an unsound reduction
+  silently drops the path to a violation and turns a real bug into a green check. Over 80 random concurrent
+  models x a family of ample functions (some sound, some deliberately unsound), the test pins that `explore_por`
+  never invents a state and — the critical guarantee — `por_sound` has **no false positive**: whenever a
+  reduction flips the safety verdict (`check` on the reduced graph disagrees with the full model), `por_sound`
+  returns False. This gives partial-order reduction the same broad metamorphic guard the probabilistic,
+  core/LTL, and liveness layers already have; the fixed-seed sweep exercised 156 gate-approved
+  (verdict-preserving) and 84 verdict-flipping (gate-rejected) reductions, complementing the fixed cases in
+  `test_por.py`.
+
 ### Docs — coverage & vacuity example gets a docs page
 
 - `examples/coverage_vacuity.py` (a green-check account with one dead action and one vacuously-true invariant,
