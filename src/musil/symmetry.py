@@ -32,6 +32,12 @@ from itertools import permutations
 from math import factorial
 from typing import Any, cast
 
+__all__ = [
+    "canonical_by_fields",
+    "canonical_by_permutations",
+    "canonical_by_sorting",
+]
+
 # A stable total order for picking an orbit's representative. Any fixed one is canonical; repr is
 # used because model states are arbitrary hashable values and need not be comparable with <.
 type Order[S] = Callable[[S], Any]

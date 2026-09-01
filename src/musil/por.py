@@ -27,6 +27,12 @@ from musil.core import (
     reachable_violations,
 )
 
+__all__ = [
+    "explore_por",
+    "independent",
+    "por_sound",
+]
+
 # An ample function: given a state and its enabled actions, return the subset to fire. MUST return a
 # subset of the enabled actions; SOUNDNESS (that firing only these preserves the properties of interest)
 # is the caller's obligation, validated by por_sound.

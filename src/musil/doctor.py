@@ -13,6 +13,11 @@ from __future__ import annotations
 import ast
 from dataclasses import dataclass
 
+__all__ = [
+    "Finding",
+    "scan",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class Finding:

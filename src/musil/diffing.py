@@ -17,6 +17,11 @@ from dataclasses import dataclass
 
 from musil.core import Invariant, Model, explore
 
+__all__ = [
+    "ModelDiff",
+    "diff",
+]
+
 
 def _holds[S: Hashable](inv: Invariant[S], state: S) -> bool:
     """Whether ``inv`` holds at ``state`` (``check``'s semantics: a string return or falsy is a violation)."""

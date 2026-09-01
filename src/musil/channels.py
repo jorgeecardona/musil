@@ -18,6 +18,13 @@ from collections.abc import Callable, Hashable, Iterable
 
 from musil.core import Action
 
+__all__ = [
+    "channel_actions",
+    "fifo_channel_actions",
+    "fifo_send",
+    "send",
+]
+
 type Message = Hashable
 
 

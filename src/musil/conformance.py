@@ -23,6 +23,14 @@ from typing import cast
 
 from musil.core import Graph, Model, Step, explore
 
+__all__ = [
+    "ConformanceResult",
+    "Divergence",
+    "areplay",
+    "generate_traces",
+    "replay",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class Divergence[S: Hashable]:

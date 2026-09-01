@@ -17,6 +17,11 @@ from collections.abc import Callable, Hashable, Iterable
 
 from musil.core import Action
 
+__all__ = [
+    "crash_actions",
+    "partition_actions",
+]
+
 
 def crash_actions[S: Hashable](
     nodes: Iterable[Hashable],

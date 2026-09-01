@@ -20,6 +20,12 @@ from dataclasses import replace
 
 from musil.core import Invariant, Model, Result, Step, actions_source
 
+__all__ = [
+    "as_regression_test",
+    "minimize",
+    "replay_actions",
+]
+
 
 def _violates[S: Hashable](inv: Invariant[S], state: S) -> bool:
     """``check``'s violation semantics: a string return is a violation (a reason), else falsy is one."""

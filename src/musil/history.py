@@ -21,6 +21,12 @@ from typing import Any
 
 from musil.core import Action, EdgeInvariant, Invariant, Model
 
+__all__ = [
+    "LastAction",
+    "action_taken",
+    "with_last_action",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class LastAction[S: Hashable]:

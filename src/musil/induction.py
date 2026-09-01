@@ -31,6 +31,11 @@ from dataclasses import dataclass
 
 from musil.core import Action, Invariant, Model, actions_source
 
+__all__ = [
+    "InductionResult",
+    "check_inductive",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class InductionResult[S: Hashable]:

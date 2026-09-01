@@ -19,6 +19,11 @@ from typing import Any
 
 from musil.core import Action, Invariant, Model
 
+__all__ = [
+    "Composite",
+    "compose",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class Composite:

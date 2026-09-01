@@ -23,6 +23,14 @@ from typing import cast
 
 from musil.core import Model, explore
 
+__all__ = [
+    "RefinementMonitor",
+    "RefinementResult",
+    "RefinementViolation",
+    "acheck_refinement",
+    "check_refinement",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class RefinementViolation[C, S: Hashable]:

@@ -2,6 +2,13 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Changed — every submodule now declares `__all__`
+
+- With the 0.35 reorg the submodules became the public entry points, so each of the 28 now declares an explicit
+  `__all__` of its public names (they already carried module docstrings). This curates
+  `from musil.<module> import *`, gives `help(musil.<module>)` and the mkdocstrings API reference a precise
+  public surface, and makes each submodule a first-class namespace. No behaviour change for explicit imports.
+
 ### Added — deprecation shim so the pre-0.35 flat imports keep working (with a warning)
 
 - A module-level `__getattr__` on the `musil` package softens the 0.35 API break into deprecate-then-remove.

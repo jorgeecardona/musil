@@ -31,6 +31,10 @@ import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 
+__all__ = [
+    "no_trace",
+]
+
 
 @contextmanager
 def no_trace() -> Generator[None]:

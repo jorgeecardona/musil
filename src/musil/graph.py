@@ -9,6 +9,10 @@ from collections.abc import Hashable, Iterable
 
 from musil.core import Graph, Model, explore
 
+__all__ = [
+    "to_dot",
+]
+
 
 def _label(state: object) -> str:
     """A compact one-line label: ``field=value, ...`` for a dataclass state, else ``str(state)``."""

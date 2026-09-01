@@ -15,6 +15,18 @@ from typing import Any
 
 from musil.core import Action, Model, explore
 
+__all__ = [
+    "assert_covers_table",
+    "declared_states",
+    "multi_status_field_actions",
+    "protocol_actions",
+    "protocol_operations",
+    "replicated_transition_actions",
+    "status_field_actions",
+    "terminal_states",
+    "transition_actions",
+]
+
 # A transition table: from_state -> the set of states it may move to. Matches the shape of a typical
 # `ALLOWED[entity]` map. Values may be any set/frozenset/collection of strings.
 type Table = Mapping[str, Set[str]]

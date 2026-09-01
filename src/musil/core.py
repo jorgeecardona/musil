@@ -19,6 +19,40 @@ from dataclasses import dataclass, field, is_dataclass, replace
 from dataclasses import fields as _dc_fields
 from typing import Any, Literal, NoReturn, Protocol, cast
 
+__all__ = [
+    "Action",
+    "ActionSchema",
+    "EdgeInvariant",
+    "FixedPoints",
+    "Graph",
+    "Invariant",
+    "Model",
+    "Result",
+    "StateViolation",
+    "Step",
+    "Verdict",
+    "assert_ok",
+    "assert_violates",
+    "check",
+    "check_all",
+    "check_of",
+    "enumerate_actions",
+    "explore",
+    "fixed_points",
+    "fixed_points_of",
+    "footprint_sound",
+    "format_trace",
+    "format_trace_diff",
+    "invariant_from_violations",
+    "never",
+    "path_to",
+    "reachable_violations",
+    "reaches",
+    "states_where",
+    "symmetry_reduction_sound",
+    "witness",
+]
+
 # A predicate that must hold in EVERY reachable state. Returns True when satisfied; False/None when
 # violated. May instead return a string, which signals a violation AND carries a human-readable
 # reason surfaced in the Result (e.g. when wrapping a richer checker that reports which sub-rule and

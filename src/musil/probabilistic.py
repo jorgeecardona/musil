@@ -51,6 +51,20 @@ from musil.ltl import (
     _state_predicate,  # pyright: ignore[reportPrivateUsage]
 )
 
+__all__ = [
+    "assert_probability",
+    "expected_reward",
+    "expected_reward_mdp",
+    "long_run_probability",
+    "long_run_probability_mdp",
+    "long_run_reward",
+    "long_run_reward_mdp",
+    "probability_ltl",
+    "reach_probability",
+    "reach_probability_mdp",
+    "transient_distribution",
+]
+
 # A distribution over successors: (probability, successor) pairs summing to 1 (empty = absorbing / no move).
 type _Dist[S] = list[tuple[Fraction, S]]
 

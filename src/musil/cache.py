@@ -33,6 +33,11 @@ from typing import cast
 
 from musil.core import Model, Result, check
 
+__all__ = [
+    "check_cached",
+    "clear_verdict_cache",
+]
+
 DEFAULT_CACHE_DIR = ".musil-cache"
 
 

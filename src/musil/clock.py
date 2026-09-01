@@ -39,6 +39,11 @@ from dataclasses import dataclass
 
 from musil.core import Action, Graph
 
+__all__ = [
+    "BoundedClock",
+    "bounded_clock",
+]
+
 
 @dataclass(frozen=True, slots=True)
 class BoundedClock[S: Hashable]:

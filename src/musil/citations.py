@@ -16,6 +16,13 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 
+__all__ = [
+    "Citation",
+    "dangling_citations",
+    "find_citations",
+    "known_models",
+]
+
 # The default reference shape: a ``test_<something>_musil`` model name, as a whole word.
 DEFAULT_PATTERN = r"\btest_\w+_musil\b"
 
