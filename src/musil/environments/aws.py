@@ -7,6 +7,7 @@ Model checking::
 
     from dataclasses import replace
     from musil.environments.aws import aws_api_faults
+    from musil.env import check_open
     env = aws_api_faults(
         can_throttle=lambda s: s.in_flight > 0,
         on_throttle=lambda s: replace(s, last_error="ThrottlingException"),

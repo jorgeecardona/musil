@@ -6,6 +6,7 @@ Model checking::
 
     from dataclasses import replace
     from musil.environments.k8s import pod_eviction
+    from musil.env import check_open
     env = pod_eviction(
         can_evict=lambda s: s.status == "running",
         on_evict=lambda s: replace(s, status="evicted"),

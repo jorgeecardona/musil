@@ -10,6 +10,7 @@ Model checking::
 
     from dataclasses import replace
     from musil.environments.sel4 import capability_revocation, HARDWARE_MEMORY_SAFETY
+    from musil.env import check_open
     env = capability_revocation(
         can_revoke=lambda s: s.cap_valid,
         on_revoke=lambda s: replace(s, cap_valid=False),

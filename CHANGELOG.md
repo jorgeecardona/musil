@@ -2,6 +2,16 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Fixed — expose `__version__` (#39), and env docstrings show the non-deprecated `check_open` import (#38)
+
+- **`musil.__version__`** (#39) — the package now exposes `__version__`, read from the installed distribution
+  via `importlib.metadata` (falling back to `0.0.0+unknown` in a bare source checkout). Previously
+  `import musil; musil.__version__` raised `AttributeError` through the deprecation `__getattr__`; consumers can
+  now read the runtime version without `importlib.metadata.version("musil")`.
+- **Environment docstrings** (#38) — every `musil.environments.*` factory's usage example now imports
+  `from musil.env import check_open`, so copy-pasting it no longer triggers the 0.35 deprecation warning that
+  the bare `check_open(model, env)` would (which resolves via the old top-level shim).
+
 ### Changed — every submodule now declares `__all__`
 
 - With the 0.35 reorg the submodules became the public entry points, so each of the 28 now declares an explicit

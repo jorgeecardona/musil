@@ -31,6 +31,13 @@ def test_unknown_name_raises_attributeerror() -> None:
         _ = musil.definitely_not_a_real_name
 
 
+def test_package_exposes_version_matching_the_distribution() -> None:
+    from importlib.metadata import version
+
+    assert musil.__version__ == version("musil")  # issue #39: musil.__version__ must exist and match the dist
+    assert musil.__version__ and musil.__version__[0].isdigit()
+
+
 def test_every_moved_name_resolves_in_its_submodule() -> None:
     moved: dict[str, str] = musil._MOVED  # pyright: ignore[reportPrivateUsage]
     with warnings.catch_warnings():

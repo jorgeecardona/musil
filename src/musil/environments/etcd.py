@@ -7,6 +7,7 @@ Model checking::
 
     from dataclasses import replace
     from musil.environments.etcd import cluster_faults
+    from musil.env import check_open
     env = cluster_faults(
         can_leader_change=lambda s: s.etcd_connected,
         on_leader_change=lambda s: replace(s, etcd_leader_known=False),

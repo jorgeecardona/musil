@@ -16,6 +16,7 @@ Model checking::
 
     from dataclasses import replace
     from musil.environments.distributed import record_reality_divergence
+    from musil.env import check_open
     env = record_reality_divergence(
         can_diverge=lambda s: s.record == s.reality,
         on_diverge=lambda s: replace(s, reality=s.reality + 1),  # reality drifts; the record goes stale

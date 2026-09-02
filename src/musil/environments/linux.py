@@ -7,6 +7,7 @@ Model checking::
 
     from dataclasses import replace
     from musil.environments.linux import process_faults
+    from musil.env import check_open
     env = process_faults(
         can_oom_kill=lambda s: s.status == "running",
         on_oom_kill=lambda s: replace(s, status="killed", exit_code=137),
