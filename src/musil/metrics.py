@@ -20,7 +20,13 @@ from __future__ import annotations
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass
 from fractions import Fraction
+from pathlib import Path
 
+from musil.cache import (
+    DEFAULT_CACHE_DIR,
+    _digest,  # pyright: ignore[reportPrivateUsage]
+    _load_or_store,  # pyright: ignore[reportPrivateUsage]
+)
 from musil.core import Graph, Invariant, Model, actions_source, explore
 
 __all__ = [
@@ -30,6 +36,7 @@ __all__ = [
     "StateSpaceMetrics",
     "assert_covers",
     "coverage",
+    "coverage_cached",
     "coverage_of",
     "invariant_coverage",
     "invariant_coverage_of",
@@ -204,6 +211,31 @@ def coverage[S: Hashable](
     be wrong in the direction that matters — actions look dead because the sweep stopped, not because
     they cannot fire. Run this on the whole space, next to ``check``, not inside it."""
     return coverage_of(explore(model, max_states=max_states), model, key=key)
+
+
+def coverage_cached[S: Hashable](
+    model: Model[S],
+    *,
+    version: str,
+    cache_dir: str | Path = DEFAULT_CACHE_DIR,
+    max_states: int = 1_000_000,
+    key: Callable[[str], str] | None = None,
+) -> Coverage:
+    """Like ``coverage``, but return a cached :class:`Coverage` when the model (identified by ``version`` plus
+    its readable structure) and options are unchanged; otherwise run ``coverage``, store it, and return it —
+    the content-addressed parallel of ``check_cached`` (issue #41). A coverage regression test
+    (``assert not coverage_cached(model, version="1").dead_actions``) then skips the whole re-exploration on
+    every CI run and pre-push hook once the model is unchanged.
+
+    ``version`` is REQUIRED and carries the same obligation as in ``check_cached``: bump it whenever an
+    action/invariant/guard BODY changes, since those callables are opaque to the structural digest (a
+    structural edit — a renamed/added action, changed options — invalidates the cache on its own). Unlike
+    ``check``, ``coverage`` needs the whole reachable space, so the cached artifact is the final ``Coverage``
+    computed once. Writing is best-effort. The entry is stored under a name distinct from ``check_cached``'s,
+    so a verdict cache and a coverage cache for the same model never collide."""
+    digest = _digest(model, version=version, max_states=max_states, canonicalize=None, key=key)
+    path = Path(cache_dir) / f"{digest}.coverage.pkl"
+    return _load_or_store(path, lambda: coverage(model, key=key, max_states=max_states))
 
 
 def solution_cardinality[S: Hashable](

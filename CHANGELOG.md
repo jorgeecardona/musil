@@ -2,6 +2,17 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `coverage_cached` (#41): content-addressed caching for `coverage()`
+
+- `coverage_cached(model, *, version, cache_dir, max_states, key)` in `musil.metrics` is the parallel of
+  `check_cached`: it returns a cached `Coverage` when the model (by readable structure + `version`) and options
+  are unchanged, otherwise runs `coverage`, stores it, and returns it — so a coverage regression test
+  (`assert not coverage_cached(model, version="1").dead_actions`) skips the whole re-exploration on every CI
+  run and pre-push hook once the model is unchanged. Same `version`-bump discipline as `check_cached` (bump when
+  an opaque action/invariant/guard body changes). The two now share one internal `_load_or_store` helper and
+  store under distinct filenames (`{digest}.pkl` vs `{digest}.coverage.pkl`), so a verdict cache and a coverage
+  cache for the same model never collide.
+
 ### Fixed — expose `__version__` (#39), and env docstrings show the non-deprecated `check_open` import (#38)
 
 - **`musil.__version__`** (#39) — the package now exposes `__version__`, read from the installed distribution

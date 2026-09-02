@@ -68,6 +68,26 @@ def _digest[S: Hashable](
     return hashlib.sha256(blob.encode()).hexdigest()
 
 
+def _load_or_store[R](path: Path, compute: Callable[[], R]) -> R:
+    """Return the pickled value at ``path`` if present and loadable, else ``compute()`` it, best-effort store
+    it there, and return it. Shared by ``check_cached`` and ``coverage_cached`` so their content-addressed
+    caching cannot drift. Load only a cache you produced (pickle); a read-only dir degrades to recompute."""
+    if path.is_file():
+        try:
+            with path.open("rb") as f:
+                return cast("R", pickle.load(f))
+        except (OSError, pickle.UnpicklingError, AttributeError, EOFError):
+            pass  # a corrupt / stale-format entry: fall through and recompute
+    result = compute()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("wb") as f:
+            pickle.dump(result, f)
+    except OSError:
+        pass  # best-effort: a read-only cache dir must not fail the computation
+    return result
+
+
 def check_cached[S: Hashable](
     model: Model[S],
     *,
@@ -87,21 +107,7 @@ def check_cached[S: Hashable](
     runs (and returns) normally, never an error."""
     digest = _digest(model, version=version, max_states=max_states, canonicalize=canonicalize, key=key)
     path = Path(cache_dir) / f"{digest}.pkl"
-    if path.is_file():
-        try:
-            # pickle.load: a local cache the caller produced (see the module docstring's trust note).
-            with path.open("rb") as f:
-                return cast("Result[S]", pickle.load(f))
-        except (OSError, pickle.UnpicklingError, AttributeError, EOFError):
-            pass  # a corrupt/stale-format entry: fall through and recompute
-    result = check(model, max_states=max_states, canonicalize=canonicalize, key=key)
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("wb") as f:
-            pickle.dump(result, f)
-    except OSError:
-        pass  # best-effort: a read-only cache dir must not fail the check
-    return result
+    return _load_or_store(path, lambda: check(model, max_states=max_states, canonicalize=canonicalize, key=key))
 
 
 def clear_verdict_cache(cache_dir: str | Path = DEFAULT_CACHE_DIR) -> int:
