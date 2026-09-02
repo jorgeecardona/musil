@@ -190,11 +190,35 @@ model-supplied accessors (no assumed state shape).
 - `credential_rotation(*, can_rotate, on_rotate, extra_assumptions=None)` — `EnvironmentSpec` for a
   credential invalidated mid-flight.
 - `record_reality_divergence(*, can_diverge, on_diverge, extra_assumptions=None)` — `EnvironmentSpec` for a
-  cached RECORD ceasing to match REALITY (a restart, a cutover, a re-attached/empty volume). Both "stale
-  view after restart" and "wrong/empty volume attached" are usages of this one factory.
+  cached RECORD ceasing to match REALITY (a restart, a cutover). "Stale view after restart" is a usage of this
+  one factory; for BLOCK-VOLUME faults specifically, prefer the dedicated `storage` contract below.
 
 Not shipped here on purpose: **message lost/reordered/duplicated** is already `musil.channels` +
 `sim.NetworkModel` (reuse those); **grace-window races** couple to `bounded_clock` and are left downstream.
+
+---
+
+### `musil.environments.storage` — block volumes
+
+The fault class behind most stateful-node data-loss incidents, as a dedicated contract (rather than the
+generic `record_reality_divergence` above), parameterized over model-supplied accessors.
+
+**Assumptions:**
+
+| Name | Status | Source |
+|------|--------|--------|
+| `storage:attach-exclusive` | unverified | AWS EBS single-instance attachment (except Multi-Attach); general block-storage contract |
+| `storage:data-presence-sensed` | unverified | Operational: the node senses whether the volume holds its own data and the sense eventually resolves |
+
+**Factory:**
+
+- `block_volume_faults(*, can_detach/on_detach, can_wrong_attach/on_wrong_attach, can_empty_attach/on_empty_attach, can_detach_during_write/on_detach_during_write, extra_assumptions=None)` —
+  `EnvironmentSpec` for block-volume faults. Each fault is opt-in via a `can_/on_` pair (both or neither; at
+  least one required): `storage:volume-detached`, `storage:wrong-volume-attached` (a different volume's data —
+  a silent tenant wipe), `storage:empty-volume-attached`, `storage:detach-during-write`. The
+  `storage:data-presence-sensed` assumption is what makes recovery (`[]<>recovered`) provable: a node that
+  senses a wrong/empty volume refuses to serve it and re-attaches. Compose it with `check_open` instead of
+  hand-rolling these faults as bespoke `Action`s.
 
 ---
 

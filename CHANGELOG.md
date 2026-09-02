@@ -2,6 +2,20 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `block_volume_faults` (#40): the block-volume fault contract for stateful nodes
+
+- `musil.environments.storage.block_volume_faults(...)` is an `EnvironmentSpec` factory for the fault class
+  behind most stateful-node data-loss incidents: `storage:volume-detached`, `storage:wrong-volume-attached`
+  (a different volume's data — a silent tenant wipe), `storage:empty-volume-attached`, and
+  `storage:detach-during-write`. Each fault is opt-in via a `can_/on_` callable pair (both or neither — a
+  half-pair raises; at least one required). Two assumptions are pre-wired and surfaced in
+  `OpenResult.unverified_assumptions`: `VOLUME_ATTACH_EXCLUSIVE` (single-writer attach) and
+  `DATA_PRESENCE_SENSED` (a data-presence sense eventually resolves — the basis for provable recovery).
+  Stateful-recovery models compose the shared contract via `check_open` instead of hand-rolling these faults.
+  Tests pin that `check_open` finds the wrong-volume data-loss (the fault named in the counterexample), a
+  sensing node is safe against the same fault, and a sensing-recovering node reaches the recovered state on
+  every run under strong fairness on serve.
+
 ### Added — `coverage_cached` (#41): content-addressed caching for `coverage()`
 
 - `coverage_cached(model, *, version, cache_dir, max_states, key)` in `musil.metrics` is the parallel of
