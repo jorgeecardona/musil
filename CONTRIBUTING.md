@@ -21,7 +21,8 @@ still work locally; they call `uv run` directly and don't need moon.)
 
 ## Releasing
 
-The version in `pyproject.toml` is the single source of truth, and releases are automated:
+`__version__` in `src/musil/__init__.py` is the single source of truth (pyproject's version is
+dynamic, derived from it via `[tool.hatch.version]`), and releases are automated:
 
 1. **`pre-commit` auto-bumps** the patch version whenever a commit touches `src/` (run
    `make install-hooks` once after cloning). Doc/test/example/config-only commits don't bump.
@@ -30,7 +31,7 @@ The version in `pyproject.toml` is the single source of truth, and releases are 
    non-bypassably in CI: a push or MR that changes `src/` without a version bump fails the pipeline,
    catching `--no-verify` and unhooked clones.
 3. **`:release`** runs on a green `main` pipeline (after the full `:ci` graph as deps): if
-   `pyproject`'s version isn't on PyPI yet, it publishes via OIDC Trusted Publishing. So merging a
+   the package version isn't on PyPI yet, it publishes via OIDC Trusted Publishing. So merging a
    version bump to `main` releases itself — no second pipeline, no tag required.
 
 ### One-time setup
@@ -47,7 +48,7 @@ The version in `pyproject.toml` is the single source of truth, and releases are 
 | Environment name | `pypi` |
 
 Publishing uses OIDC Trusted Publishing, so no token is stored anywhere. On a green `main`
-pipeline, `:release` ships to PyPI whenever `pyproject`'s version isn't published yet — there is no
+pipeline, `:release` ships to PyPI whenever the package version isn't published yet — there is no
 git tag step.
 
 Releases are automatic on `main` — there is no manual tag or publish step. Pushes and MRs run

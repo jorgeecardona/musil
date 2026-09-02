@@ -27,7 +27,7 @@ test: ## run the test suite
 
 check: lint typecheck test ## the full CI test stage: lint + typecheck + test
 
-bump: ## bump version in pyproject.toml -- TYPE=patch|minor|major (default patch)
+bump: ## bump __version__ in src/musil/__init__.py -- TYPE=patch|minor|major (default patch)
 	./scripts/bump-version $(or $(TYPE),patch)
 
 docs: ## build docs strictly (as CI / Read the Docs do)
