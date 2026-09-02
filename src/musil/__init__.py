@@ -47,7 +47,6 @@ See ``docs/migrating.md`` for the import-path changes from the pre-0.35 flat nam
 
 import importlib
 import warnings
-from importlib import metadata as _metadata
 
 from musil.core import (
     Action,
@@ -87,10 +86,7 @@ from musil.ltl import (
     check_ltl,
 )
 
-try:
-    __version__ = _metadata.version("musil")
-except _metadata.PackageNotFoundError:  # a source checkout with no installed distribution
-    __version__ = "0.0.0+unknown"
+__version__ = "0.35.6"  # the single source of truth; pyproject reads it via [tool.hatch.version]
 
 __all__ = [
     "LTL",

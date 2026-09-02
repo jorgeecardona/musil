@@ -2,8 +2,8 @@
 # musil — named for Robert Musil (engineer-mathematician turned novelist, "The Man Without
 # Qualities"). A standalone, dependency-free explicit-state model checker.
 name = "musil"
-version = "0.35.5"
-description = "A tiny, dependency-free explicit-state model checker for Python: safety, deadlock, liveness, full LTL, and exact DTMC/MDP probabilities — concurrency by interleaving."
+dynamic = ["version"]  # the single source of truth is __version__ in src/musil/__init__.py (see [tool.hatch.version])
+description ="A tiny, dependency-free explicit-state model checker for Python: safety, deadlock, liveness, full LTL, and exact DTMC/MDP probabilities — concurrency by interleaving."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -54,6 +54,11 @@ Changelog = "https://gitlab.com/jorgeecardona/musil/-/blob/main/CHANGELOG.md"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+# The version lives as __version__ in the package itself; hatchling reads it (by regex, no import) so
+# pyproject and the runtime never disagree. scripts/bump-version rewrites that literal.
+path = "src/musil/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/musil"]

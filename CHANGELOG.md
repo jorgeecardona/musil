@@ -29,10 +29,12 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ### Fixed — expose `__version__` (#39), and env docstrings show the non-deprecated `check_open` import (#38)
 
-- **`musil.__version__`** (#39) — the package now exposes `__version__`, read from the installed distribution
-  via `importlib.metadata` (falling back to `0.0.0+unknown` in a bare source checkout). Previously
-  `import musil; musil.__version__` raised `AttributeError` through the deprecation `__getattr__`; consumers can
-  now read the runtime version without `importlib.metadata.version("musil")`.
+- **`musil.__version__`** (#39) — the package exposes `__version__` as the **single source of truth**: a
+  literal in `src/musil/__init__.py` that `pyproject.toml` derives from dynamically (`dynamic = ["version"]` +
+  `[tool.hatch.version]`, read by regex without importing), so the runtime version and the distribution
+  metadata never disagree and the number lives in exactly one place (it was previously a static duplicate in
+  `pyproject.toml`). Previously `import musil; musil.__version__` raised `AttributeError` through the
+  deprecation `__getattr__`. `scripts/bump-version` and the pre-commit hook rewrite this literal.
 - **Environment docstrings** (#38) — every `musil.environments.*` factory's usage example now imports
   `from musil.env import check_open`, so copy-pasting it no longer triggers the 0.35 deprecation warning that
   the bare `check_open(model, env)` would (which resolves via the old top-level shim).
