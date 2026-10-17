@@ -39,7 +39,7 @@ module:
 | `musil.fsm` | `transition_actions`, `status_field_actions`, `multi_status_field_actions`, `protocol_actions`, `protocol_operations`, `replicated_transition_actions`, `movement_actions`, `declared_states`, `declared_accounts`, `endpoints_of`, `terminal_states`, `assert_covers_table` |
 | `musil.petri` | `petri_actions`, `petri_enabled`, `petri_terminal`, `place_invariants`, `assert_place_invariant`, `PetriNet` |
 | `musil.refine` | `check_refinement`, `acheck_refinement`, `RefinementMonitor`, `RefinementResult`, `RefinementViolation` |
-| `musil.conformance` | `replay`, `areplay`, `generate_traces`, `ConformanceResult`, `Divergence` |
+| `musil.conformance` | `replay`, `areplay`, `generate_traces`, `ConformanceResult`, `Divergence`, `ConvergenceMonitor`, `Convergence`, `assert_converged` |
 | `musil.induction` | `check_inductive`, `InductionResult` |
 | `musil.symmetry` | `canonical_by_sorting`, `canonical_by_fields`, `canonical_by_permutations` |
 | `musil.por` | `explore_por`, `por_sound`, `independent` |

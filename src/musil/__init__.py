@@ -86,7 +86,7 @@ from musil.ltl import (
     check_ltl,
 )
 
-__version__ = "0.36.2"  # the single source of truth; pyproject reads it via [tool.hatch.version]
+__version__ = "0.36.3"  # the single source of truth; pyproject reads it via [tool.hatch.version]
 
 __all__ = [
     "LTL",
@@ -140,6 +140,8 @@ _MOVED = {
     "Composite": "compose",
     "ConformanceResult": "conformance",
     "Context": "sim",
+    "Convergence": "conformance",
+    "ConvergenceMonitor": "conformance",
     "Coverage": "metrics",
     "Crash": "sim",
     "Divergence": "conformance",
@@ -177,6 +179,7 @@ _MOVED = {
     "always": "patterns",
     "areplay": "conformance",
     "as_regression_test": "counterexample",
+    "assert_converged": "conformance",
     "assert_covers": "metrics",
     "assert_covers_table": "fsm",
     "assert_place_invariant": "petri",

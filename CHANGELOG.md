@@ -2,6 +2,21 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `ConvergenceMonitor` for eventually-consistent systems (#33, needs 1 + 3)
+
+- `musil.conformance.ConvergenceMonitor(nodes, *, observe, merge)` watches an eventually-consistent real
+  system SETTLE toward a goal, allowing churn before it does — the question `replay` cannot ask, because
+  `replay` compares the implementation to the model in lock-step while a gossip/SWIM system only converges
+  after rounds of suspicion and retry. `observe(node)` reads one node's local view; `merge(views)` assembles
+  the per-node views into one global abstract state (the multi-node observation `project` cannot express);
+  `wait(goal, *, within, poll=, clock=, sleep=)` polls until the goal holds (converged) or the deadline
+  passes, returning a `Convergence` with the elapsed time, poll count, and last observed global state (the
+  evidence on a timeout). `clock`/`sleep` are injected so the poll loop runs on a virtual or simulation
+  clock. `assert_converged(result)` turns a non-convergence into a clean pytest failure, like `assert_ok`.
+- This generalizes paas's hand-rolled `meshlab.py` (`wait_for` + `views`) over a real SWIM mesh. The
+  FaultSchedule-driven fault injection and the `generate_traces`-driven scenario harness (#33 needs 2 + 4)
+  are separate, not in this change.
+
 ### Measured — SSP-master POR benchmark (#37)
 
 - Ran the deferred partial-order-reduction benchmark against the named workload (pymodelica's SSP

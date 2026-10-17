@@ -16,7 +16,8 @@ Two pieces:
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Generator, Hashable, Iterable, Sequence
+import time
+from collections.abc import Awaitable, Callable, Generator, Hashable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from inspect import isawaitable
 from typing import cast
@@ -25,8 +26,11 @@ from musil.core import Graph, Model, Step, explore
 
 __all__ = [
     "ConformanceResult",
+    "Convergence",
+    "ConvergenceMonitor",
     "Divergence",
     "areplay",
+    "assert_converged",
     "generate_traces",
     "replay",
 ]
@@ -65,6 +69,105 @@ class ConformanceResult[S: Hashable]:
             f"  implementation: {d.actual}\n"
             f"({self.traces_run} traces, {self.steps_run} steps run)"
         )
+
+
+# --- Convergence: watching an eventually-consistent real system settle --------------------------
+#
+# `replay` checks a system that moves in LOCK-STEP with the model: apply one action, project, compare
+# NOW. An eventually-consistent system does not oblige — after a fault it churns (gossip rounds,
+# retries, suspicion timeouts) and only SETTLES on the goal after a while, through intermediate states
+# that are not wrong, just not-yet-converged. The question there is "within T, does the observed system
+# reach a state satisfying P, allowing stutter in between", which is what paas's hand-rolled meshlab.py
+# (`wait_for` + `views`) asks of a real SWIM mesh. `ConvergenceMonitor` is that question, generalized:
+# observe each node, MERGE the per-node observations into one global state, poll until a goal holds or a
+# deadline passes. (#33 needs 1 + 3; the FaultSchedule-driven and generate_traces-driven harness are
+# separate.)
+
+
+@dataclass(frozen=True, slots=True)
+class Convergence[G]:
+    """The outcome of watching a system settle toward a goal. ``observed`` is the last merged global
+    state seen — the evidence, and on a timeout the thing to print to see how far it got."""
+
+    converged: bool
+    goal: str
+    elapsed: float
+    polls: int
+    observed: G | None
+
+    def __bool__(self) -> bool:
+        return self.converged
+
+    def __str__(self) -> str:
+        if self.converged:
+            return f"CONVERGED on {self.goal!r} after {self.elapsed:.3f}s ({self.polls} polls)"
+        return (
+            f"DID NOT CONVERGE on {self.goal!r} within {self.elapsed:.3f}s ({self.polls} polls)\n"
+            f"  last observed: {self.observed}"
+        )
+
+
+class ConvergenceMonitor[N: Hashable, O, G]:
+    """Watch an eventually-consistent system reach a goal, allowing churn before it does.
+
+    ``observe(node)`` reads one node's local view (returning whatever that node reports — an empty view
+    for a node that is down is normal, as in meshlab's per-node JSON dump). ``merge(views)`` assembles
+    the per-node views, keyed by node, into one global abstract state — the ``views()`` step that single
+    ``project`` in :func:`replay` cannot express. ``wait`` then polls that global state until a goal
+    predicate holds or a deadline passes.
+
+    ``clock``/``sleep`` are injected so the poll loop is testable on a virtual clock (no real waiting)
+    and so a caller can drive it off a simulation clock; they default to wall time."""
+
+    def __init__(
+        self,
+        nodes: Sequence[N],
+        *,
+        observe: Callable[[N], O],
+        merge: Callable[[Mapping[N, O]], G],
+    ) -> None:
+        self._nodes = tuple(nodes)
+        self._observe = observe
+        self._merge = merge
+
+    def snapshot(self) -> G:
+        """Observe every node once and merge into the current global state."""
+        return self._merge({node: self._observe(node) for node in self._nodes})
+
+    def wait(
+        self,
+        goal: Callable[[G], bool],
+        *,
+        within: float,
+        goal_name: str = "goal",
+        poll: float = 0.5,
+        clock: Callable[[], float] = time.monotonic,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> Convergence[G]:
+        """Poll ``snapshot()`` until ``goal`` holds (converged) or ``within`` seconds pass (did not).
+        Observes at least once; returns as soon as the goal holds, so a system already at the goal
+        converges in one poll with no sleeping."""
+        start = clock()
+        deadline = start + within
+        polls = 0
+        observed: G | None = None
+        while True:
+            observed = self.snapshot()
+            polls += 1
+            if goal(observed):
+                return Convergence(True, goal_name, clock() - start, polls, observed)
+            if clock() >= deadline:
+                return Convergence(False, goal_name, clock() - start, polls, observed)
+            sleep(poll)
+
+
+def assert_converged[G](result: Convergence[G], *, message: str | None = None) -> None:
+    """Assert a :class:`Convergence` converged — a clean pytest failure (with the last observed global
+    state) when the system did not settle in time, the way ``assert_ok`` reports a model counterexample.
+    Pass the result of :meth:`ConvergenceMonitor.wait`."""
+    __tracebackhide__ = True
+    if not result.converged:
+        raise AssertionError(f"{message}\n{result}" if message else str(result))
 
 
 def _paths[S: Hashable](g: Graph[S]) -> tuple[dict[S, tuple[S, str] | None], list[S]]:
@@ -142,7 +245,9 @@ def _drive[S: Hashable](
         actual = yield (True, "<init>", trace[0].state)
         if actual != trace[0].state:
             return ConformanceResult(
-                ok=False, traces_run=traces_run, steps_run=steps_run,
+                ok=False,
+                traces_run=traces_run,
+                steps_run=steps_run,
                 divergence=Divergence(ti, 0, "<init>", trace[0].state, actual),
             )
         for si in range(1, len(trace)):
@@ -151,7 +256,9 @@ def _drive[S: Hashable](
             steps_run += 1
             if actual != step.state:
                 return ConformanceResult(
-                    ok=False, traces_run=traces_run, steps_run=steps_run,
+                    ok=False,
+                    traces_run=traces_run,
+                    steps_run=steps_run,
                     divergence=Divergence(ti, si, step.action, step.state, actual),
                 )
     return ConformanceResult(ok=True, traces_run=traces_run, steps_run=steps_run)
