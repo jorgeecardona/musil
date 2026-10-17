@@ -86,7 +86,7 @@ from musil.ltl import (
     check_ltl,
 )
 
-__version__ = "0.36.0"  # the single source of truth; pyproject reads it via [tool.hatch.version]
+__version__ = "0.36.1"  # the single source of truth; pyproject reads it via [tool.hatch.version]
 
 __all__ = [
     "LTL",
@@ -196,8 +196,10 @@ _MOVED = {
     "coverage_of": "metrics",
     "crash_actions": "faults",
     "dangling_citations": "citations",
+    "declared_accounts": "fsm",
     "declared_states": "fsm",
     "diff": "diffing",
+    "endpoints_of": "fsm",
     "enumerate_actions": "core",
     "eventually": "patterns",
     "expected_reward": "probabilistic",

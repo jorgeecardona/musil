@@ -2,6 +2,24 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `movement_actions` (#24, part 1): the edge-labelled ledger table shape
+
+- `musil.fsm.movement_actions(table, *, move, enabled=None)` builds one `Action` per `(label, src, dst)`
+  from a movement table `Mapping[str, Set[tuple[str, str]]]` — an event kind mapped to the `(source,
+  destination)` account pairs it may move quantity between (a roast moves green to roasted OR to loss). This
+  is a third table shape beside `Table` (`from -> {to}`) and `Protocol` (`state -> op -> next`): `Table`
+  cannot name a source and a destination per labelled event, which is the shape a ledger's allowed-endpoints
+  map (`ALLOWED_ENDPOINTS[label] = {(src, dst), ...}`) actually has. Pointing the checker at that same map is
+  the zero-drift bridge — the generated actions cannot move between an undeclared endpoint pair.
+- The builder owns the STRUCTURE; the caller owns the ARITHMETIC. `move(state, label, src, dst)` returns the
+  new state with the quantity relocated (how much, and out of which field, is the caller's — so part 1 is not
+  tied to any balance representation), and `enabled(state, label, src, dst)` is an extra guard ANDed in,
+  typically "`src` has a positive balance" so a movement cannot overdraw.
+- `declared_accounts(table)` (every source and destination, the ledger analogue of `declared_states`) and
+  `endpoints_of(table, label)` (the `(src, dst)` pairs a guard checks against, the analogue of
+  `protocol_operations`). Quantity-splitting across destinations in one event, capacity guards, and derived
+  place invariants are `petri_actions` (#24, part 2), not shipped here.
+
 ### Added — `once` / `budget` (#28): declarative one-shot and bounded-budget fault combinators
 
 - `musil.faults.once(action, *, fired, mark)` wraps an action so it fires AT MOST ONCE per run, and

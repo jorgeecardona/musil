@@ -17,7 +17,10 @@ from musil.core import Action, Model, explore
 
 __all__ = [
     "assert_covers_table",
+    "declared_accounts",
     "declared_states",
+    "endpoints_of",
+    "movement_actions",
     "multi_status_field_actions",
     "protocol_actions",
     "protocol_operations",
@@ -180,6 +183,67 @@ def protocol_actions[S: Hashable, T](
 def protocol_operations[T](table: Protocol[T], state: T) -> frozenset[str]:
     """Every operation legal in ``state``, moving or not — what a guard checks against."""
     return frozenset(table.get(state, {}))
+
+
+# A movement table: an event kind (the label) -> the set of (source, destination) account pairs that
+# kind may move quantity between. This is a third table shape, distinct from both `Table` and
+# `Protocol`: the edge is labelled by the EVENT, and it names a *source* and a *destination* rather
+# than a single next-state — and the SAME label may touch several endpoint pairs, because one event
+# can split a quantity across more than one destination (a roast charges green and produces roasted
+# AND loss). It is the shape a ledger's allowed-endpoints map has
+# (`ALLOWED_ENDPOINTS[label] = {(src, dst), ...}`). `Table` maps a state to its successor states,
+# with no label and no source/destination, so it cannot express this; the three live side by side.
+type MovementTable = Mapping[str, Set[tuple[str, str]]]
+
+
+def movement_actions[S: Hashable](
+    table: MovementTable,
+    *,
+    move: Callable[[S, str, str, str], S],
+    enabled: Callable[[S, str, str, str], bool] | None = None,
+    name: Callable[[str, str, str], str] = lambda label, src, dst: f"{label}:{src}->{dst}",
+) -> list[Action[S]]:
+    """One Action per declared ``(label, src, dst)`` movement, from an edge-labelled ledger table.
+
+    The zero-drift argument, same as :func:`transition_actions` one shape over: an allowed-endpoints
+    map is what a ledger guard needs anyway — "may this event kind move between these two accounts" —
+    so pointing the checker at the SAME map means the movements being verified are the movements being
+    enforced, not a second description of them. Because the actions are generated from the table, they
+    cannot move between an undeclared ``(src, dst)`` pair; that is the zero-drift guarantee.
+
+    The builder supplies the STRUCTURE (which endpoints each label may touch); you supply the
+    ARITHMETIC. ``move(state, label, src, dst)`` returns a new state with the quantity moved from
+    ``src`` to ``dst`` (states are immutable) — how much moves, and out of which field, is yours to
+    decide, so part-1 movements are not tied to any balance representation. ``enabled(state, label,
+    src, dst)`` is an extra guard ANDed in, typically "``src`` has a positive balance" so a movement
+    cannot overdraw an account; omit it and every declared movement is always enabled.
+    """
+    actions: list[Action[S]] = []
+    for label, endpoints in table.items():
+        for src, dst in endpoints:
+            # default-arg capture pins label/src/dst per loop iteration (avoid late-binding);
+            # move/enabled are loop-invariant.
+            def _apply(s: S, label: str = label, src: str = src, dst: str = dst) -> S:
+                return move(s, label, src, dst)
+
+            def _enabled(s: S, label: str = label, src: str = src, dst: str = dst) -> bool:
+                return enabled is None or enabled(s, label, src, dst)
+
+            actions.append(Action(name=name(label, src, dst), enabled=_enabled, apply=_apply))
+    return actions
+
+
+def declared_accounts(table: MovementTable) -> set[str]:
+    """Every account named in a movement table — every source and every destination, over all labels.
+    The ledger analogue of :func:`declared_states`; use it to enumerate the accounts an invariant
+    ranges over (e.g. "these balances sum to a constant")."""
+    return {acct for endpoints in table.values() for pair in endpoints for acct in pair}
+
+
+def endpoints_of(table: MovementTable, label: str) -> frozenset[tuple[str, str]]:
+    """Every ``(src, dst)`` pair ``label`` may move between — what an endpoint guard checks against,
+    the movement analogue of :func:`protocol_operations`."""
+    return frozenset(table.get(label, ()))
 
 
 def declared_states(table: Table) -> set[str]:
