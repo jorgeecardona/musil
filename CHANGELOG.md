@@ -2,6 +2,17 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Measured — SSP-master POR benchmark (#37)
+
+- Ran the deferred partial-order-reduction benchmark against the named workload (pymodelica's SSP
+  co-simulation master), n = 2..5 rollback components, with and without `canonicalize=`. Plain is
+  `2^(n+3) − 1` states (exponential); with `canonical_by_sorting` over the interchangeable per-component
+  slots it is `8n + 7` (linear), and `symmetry_reduction_sound` passes at every n. Conclusion: symmetry
+  carries this workload, so POR is not needed for it — the deferral is now measured, not argued from
+  arithmetic. Curve, method, and the "at which n it stops being usable" answer recorded in
+  `src/musil/REDUCTION_NOTES.md`; the composed-component `canonicalize=` recipe is
+  `examples/cosim_master_scaling.py`. No library or package code changed (docs/notes only).
+
 ### Added — `musil.petri` (#24, part 2): Petri-net builder + derived place invariants
 
 - New module `musil.petri`. `petri_actions(net, *, tokens, deposit, capacity=None, also=None)` builds one

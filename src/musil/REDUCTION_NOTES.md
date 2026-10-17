@@ -124,6 +124,35 @@ safety runs only**; keep the differential test; keep liveness on the fairness en
   soundness over cyclic state spaces needs the full-cycle proviso. Until one is built and gated, POR is
   "supply an ample, validate with `por_sound`". `independent` gives the concrete relation to build on.
 
+## Measured: the SSP-master workload (#37)
+
+The one non-synthetic POR benchmark (IDEAS.md #5) is a co-simulation master over N FMUs — pymodelica's
+`src/modelica/ssp/master.py`, driven by `verify.master()` as a `Model[Progress]`. #37 asked for the
+scaling curve *before* any POR work: n = 2..5 rollback-capable components, state count and `check` wall
+time, with and without `canonicalize=`, and — because many SSP components are interchangeable — to try
+symmetry **first**. Measured 2026-10-17 (musil 0.36.2, against the real pymodelica master):
+
+| n | states | `check` | states + sym | `check` + sym | reduction | sound? |
+|---|--------|---------|--------------|---------------|-----------|--------|
+| 2 |     31 | 0.003s  |           23 | 0.002s        | 1.3×      | yes    |
+| 3 |     63 | 0.009s  |           31 | 0.005s        | 2.0×      | yes    |
+| 4 |    127 | 0.028s  |           39 | 0.010s        | 3.3×      | yes    |
+| 5 |    255 | 0.078s  |           47 | 0.017s        | 5.4×      | yes    |
+
+Plain is exactly `2^(n+3) − 1` (exponential — the independent per-component interleavings); with
+symmetry it is `8n + 7` (**linear**). The reduction is `canonical_by_sorting` over the interchangeable
+per-component `(time, saved)` slots, and it passes `symmetry_reduction_sound` at every n (it visits
+exactly the canonical quotient, with the same invariants violable — not a lossy merge).
+
+**Conclusion: symmetry carries this workload, so POR is not needed for it — and that deferral is now
+measured, not argued from arithmetic.** An exponential space becomes linear with a sound,
+already-shipped lever, extending the usable range far past where the full interleaving would stop (plain
+reaches musil's 1M-state ceiling near n ≈ 17; the reduced search does not). The worked recipe —
+`canonical_by_sorting` for interchangeable components in a composed model, gated by
+`symmetry_reduction_sound` — ships as `examples/cosim_master_scaling.py` (the lever the pymodelica POR
+issue noted was undocumented). POR stays deferred per the status above; if a workload ever appears whose
+symmetry does *not* collapse it, this is the measured starting point for building it.
+
 ## References
 
 - Flanagan & Godefroid, "Dynamic Partial-Order Reduction for Model Checking Software" (POPL 2005) —
