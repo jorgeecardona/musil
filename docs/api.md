@@ -48,6 +48,8 @@ Open-system checking against adversarial environments, composition, and the mode
 
 ::: musil.fsm
 
+::: musil.petri
+
 ::: musil.clock
 
 ::: musil.reconciler

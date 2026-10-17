@@ -2,6 +2,27 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `musil.petri` (#24, part 2): Petri-net builder + derived place invariants
+
+- New module `musil.petri`. `petri_actions(net, *, tokens, deposit, capacity=None, also=None)` builds one
+  `Action` per transition from a net `{name: (inputs, outputs)}` — a multiset of input places consumed and
+  output places produced, the shape a ledger event has when a quantity SPLITS (a roast consumes green and
+  produces roasted AND loss in one firing), which `fsm`'s single-token `Table`/`Protocol` cannot express.
+  Accessor-threading like `fsm`: you keep the marking in your own frozen state and pass `tokens(s, place)`
+  and `deposit(s, place, delta)`; the builder owns the enabledness guard (enough input tokens; `capacity`
+  headroom on outputs for a bounded place/pool) and the atomic consume-and-produce firing.
+- `petri_enabled(net, s, ...)` lists the fireable transitions (the guard-facing view), and
+  `petri_terminal(net, ...)` is a ready `terminal` predicate — true exactly when nothing can fire, so a
+  drained or stuck net is a legitimate rest state instead of a reported deadlock. Both were hand-written
+  with defensive comments in the ledger models this generates.
+- `place_invariants(net)` discovers a basis of the net's P-invariants (the left null space of its incidence
+  matrix, over the rationals) — the weightings whose weighted token total is conserved by every transition;
+  `assert_place_invariant(net, weights)` checks a named conservation law against the net STRUCTURE, with no
+  state-space search. This de-vacuifies "mass is conserved": instead of a runtime invariant the same hand
+  writes next to the actions, conservation becomes a theorem about the net that holds in every reachable
+  marking by construction — and a typo in an output count is caught at the net, naming the offending
+  transition. (Quantity-splitting, capacity, and conservation were #24's two deferred pieces; this ships them.)
+
 ### Added — `movement_actions` (#24, part 1): the edge-labelled ledger table shape
 
 - `musil.fsm.movement_actions(table, *, move, enabled=None)` builds one `Action` per `(label, src, dst)`

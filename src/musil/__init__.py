@@ -36,8 +36,8 @@ assertions. Everything else lives in a submodule, imported directly:
 - ``musil.induction`` — ``check_inductive`` (proof by k-induction, unbounded depth)
 - ``musil.symmetry`` / ``musil.por`` — symmetry and partial-order reduction, with soundness gates
 - ``musil.refine`` / ``musil.conformance`` — refinement and code-conformance checking
-- ``musil.fsm`` / ``musil.faults`` / ``musil.channels`` / ``musil.compose`` / ``musil.clock`` /
-  ``musil.reconciler`` — model-building kits
+- ``musil.fsm`` / ``musil.petri`` / ``musil.faults`` / ``musil.channels`` / ``musil.compose`` /
+  ``musil.clock`` / ``musil.reconciler`` — model-building kits
 - ``musil.patterns`` — named liveness sugar (``always``, ``eventually``, ``recurs``, ``responds``)
 - ``musil.counterexample`` / ``musil.diffing`` / ``musil.cache`` / ``musil.profiling`` /
   ``musil.doctor`` / ``musil.citations`` / ``musil.graph`` / ``musil.history`` / ``musil.tracing``
@@ -86,7 +86,7 @@ from musil.ltl import (
     check_ltl,
 )
 
-__version__ = "0.36.1"  # the single source of truth; pyproject reads it via [tool.hatch.version]
+__version__ = "0.36.2"  # the single source of truth; pyproject reads it via [tool.hatch.version]
 
 __all__ = [
     "LTL",
@@ -158,6 +158,7 @@ _MOVED = {
     "OpenLivenessResult": "env",
     "OpenResult": "env",
     "Partition": "sim",
+    "PetriNet": "petri",
     "Phase": "profiling",
     "PortfolioCoverage": "metrics",
     "Profile": "profiling",
@@ -178,6 +179,7 @@ _MOVED = {
     "as_regression_test": "counterexample",
     "assert_covers": "metrics",
     "assert_covers_table": "fsm",
+    "assert_place_invariant": "petri",
     "assert_probability": "probabilistic",
     "bounded_clock": "clock",
     "canonical_by_fields": "symmetry",
@@ -228,6 +230,10 @@ _MOVED = {
     "never": "core",
     "no_trace": "tracing",
     "partition_actions": "faults",
+    "petri_actions": "petri",
+    "petri_enabled": "petri",
+    "petri_terminal": "petri",
+    "place_invariants": "petri",
     "por_sound": "por",
     "portfolio_coverage": "metrics",
     "probability_ltl": "probabilistic",
