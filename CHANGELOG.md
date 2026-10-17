@@ -2,6 +2,20 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `FaultSchedule.drive` for driving faults into a real fleet (#33, need 2)
+
+- `musil.sim.FaultSchedule.drive(apply_fault, heal_fault, *, seconds_per_tick=, sleep=)` walks the
+  schedule's fault windows in virtual-time order and fires a caller callback at each boundary —
+  `apply_fault(fault)` when a window opens, `heal_fault(fault)` when it closes — passing the `Partition`
+  or `Crash` itself so the caller dispatches on type (a `Crash` → `proc.kill()` then restart, a
+  `Partition` → `ip link down` then up). The SAME `FaultSchedule` that injects faults into a model run in
+  the simulator now injects them into the running fleet, so "does the implementation refine the spec under
+  the same faults?" is one schedule asked twice. Returns a `FaultDrive` (windows opened/closed + heal
+  time); pair it with `ConvergenceMonitor` to assert the fleet reconverges after the last fault heals.
+  Ticks are paced to wall time by `seconds_per_tick` via `sleep` (inject it for a virtual clock). At a
+  shared instant, heals fire before applies. This is #33 need 2; the `generate_traces`-driven scenario
+  harness (need 4) is still separate.
+
 ### Added — `ConvergenceMonitor` for eventually-consistent systems (#33, needs 1 + 3)
 
 - `musil.conformance.ConvergenceMonitor(nodes, *, observe, merge)` watches an eventually-consistent real

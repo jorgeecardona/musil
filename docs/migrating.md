@@ -33,7 +33,7 @@ module:
 | Import from | Names |
 |---|---|
 | `musil.probabilistic` | `reach_probability`, `reach_probability_mdp`, `expected_reward`, `expected_reward_mdp`, `long_run_probability`, `long_run_probability_mdp`, `long_run_reward`, `long_run_reward_mdp`, `probability_ltl`, `transient_distribution`, `assert_probability` |
-| `musil.sim` | `simulate`, `Simulator`, `NetworkModel`, `Node`, `BaseNode`, `AdversarialNode`, `Context`, `Envelope`, `Crash`, `Partition`, `FaultSchedule`, `RunResult`, `SimReport`, `SimFailure` |
+| `musil.sim` | `simulate`, `Simulator`, `NetworkModel`, `Node`, `BaseNode`, `AdversarialNode`, `Context`, `Envelope`, `Crash`, `Partition`, `FaultSchedule`, `FaultDrive`, `RunResult`, `SimReport`, `SimFailure` |
 | `musil.env` | `check_open`, `check_liveness_open`, `EnvironmentSpec`, `Assumption`, `OpenResult`, `OpenLivenessResult` |
 | `musil.metrics` | `coverage`, `coverage_of`, `invariant_coverage`, `invariant_coverage_of`, `portfolio_coverage`, `assert_covers`, `metrics_of`, `state_space_metrics`, `solution_cardinality`, `Coverage`, `InvariantCoverage`, `PortfolioCoverage`, `StateSpaceMetrics` |
 | `musil.fsm` | `transition_actions`, `status_field_actions`, `multi_status_field_actions`, `protocol_actions`, `protocol_operations`, `replicated_transition_actions`, `movement_actions`, `declared_states`, `declared_accounts`, `endpoints_of`, `terminal_states`, `assert_covers_table` |

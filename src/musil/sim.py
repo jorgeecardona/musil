@@ -18,6 +18,7 @@ All randomness comes from one seeded RNG. ``musil.refine`` + invariants are the 
 from __future__ import annotations
 
 import heapq
+import time
 from collections.abc import Callable, Hashable, Iterable, Mapping
 from dataclasses import dataclass
 from random import Random
@@ -32,6 +33,7 @@ __all__ = [
     "Context",
     "Crash",
     "Envelope",
+    "FaultDrive",
     "FaultSchedule",
     "NetworkModel",
     "Node",
@@ -106,6 +108,16 @@ class Crash:
 
 
 @dataclass(frozen=True, slots=True)
+class FaultDrive:
+    """What :meth:`FaultSchedule.drive` did: how many fault windows it opened and closed, and the
+    virtual time the last one healed (after which a live system must converge)."""
+
+    applied: int
+    healed: int
+    heal_time: int
+
+
+@dataclass(frozen=True, slots=True)
 class FaultSchedule:
     """A fixed set of sustained faults for one run. ``heal_time()`` is when the last fault lifts (the
     world is clean again) -- the point after which a live system must converge to its goal. Build one
@@ -117,6 +129,49 @@ class FaultSchedule:
 
     def heal_time(self) -> int:
         return max([p.end for p in self.partitions] + [c.end for c in self.crashes], default=0)
+
+    def drive(
+        self,
+        apply_fault: Callable[[Partition | Crash], object],
+        heal_fault: Callable[[Partition | Crash], object],
+        *,
+        seconds_per_tick: float = 1.0,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> FaultDrive:
+        """Drive a REAL system through this schedule, firing a callback at each fault boundary in
+        virtual-time order: ``apply_fault(fault)`` when a fault's window opens, ``heal_fault(fault)``
+        when it closes. The fault is the ``Partition`` or ``Crash`` itself, so the caller dispatches on
+        type -- a ``Crash`` to ``proc.kill()`` then a restart, a ``Partition`` to ``ip link down`` then
+        up.
+
+        This is the bridge the conformance story was missing: the SAME ``FaultSchedule`` that injects
+        faults into a model run in the simulator now injects them into the running fleet, so "does the
+        implementation refine the spec under the same faults?" is one schedule, asked twice. Pair it
+        with :class:`musil.conformance.ConvergenceMonitor` to assert the fleet reconverges after
+        ``heal_time``.
+
+        Virtual ticks are paced to wall time by ``seconds_per_tick`` through ``sleep``; inject ``sleep``
+        (e.g. a virtual clock's advance) to drive a simulated fleet or to test without waiting. At a
+        shared instant, heals fire before applies (a link frees before another cuts)."""
+        faults: tuple[Partition | Crash, ...] = (*self.partitions, *self.crashes)
+        # (time, is_apply, fault); is_apply False (heal) sorts before True (apply) at the same instant.
+        events = sorted(
+            [(f.start, True, f) for f in faults] + [(f.end, False, f) for f in faults],
+            key=lambda e: (e[0], e[1]),
+        )
+        now = 0
+        applied = healed = 0
+        for t, is_apply, fault in events:
+            if t > now:
+                sleep((t - now) * seconds_per_tick)
+                now = t
+            if is_apply:
+                apply_fault(fault)
+                applied += 1
+            else:
+                heal_fault(fault)
+                healed += 1
+        return FaultDrive(applied=applied, healed=healed, heal_time=self.heal_time())
 
     def link_cut(self, src: str, dst: str, t: int) -> bool:
         return any(p.cuts(src, dst, t) for p in self.partitions)
@@ -244,8 +299,8 @@ class AdversarialNode(BaseNode):
         self,
         behaviors: list[
             tuple[
-                Callable[[str, object], bool],         # guard(src, payload)
-                Callable[[Context, str, object], None], # response(ctx, src, payload)
+                Callable[[str, object], bool],  # guard(src, payload)
+                Callable[[Context, str, object], None],  # response(ctx, src, payload)
             ]
         ],
     ) -> None:
@@ -264,8 +319,20 @@ class Simulator:
     (nodes, seed, network) always produce the identical run."""
 
     __slots__ = (
-        "_active_timers", "_counter", "_ctxs", "_delivered", "_dropped", "_events",
-        "_faults", "_net", "_nodes", "_now", "_queue", "_rebuild", "_rng", "_started",
+        "_active_timers",
+        "_counter",
+        "_ctxs",
+        "_delivered",
+        "_dropped",
+        "_events",
+        "_faults",
+        "_net",
+        "_nodes",
+        "_now",
+        "_queue",
+        "_rebuild",
+        "_rng",
+        "_started",
     )
 
     def __init__(
@@ -476,8 +543,18 @@ class _Oracle[W, S: Hashable]:
     failure and raises ``_OracleStop`` to abort the run."""
 
     __slots__ = (
-        "_converge_within", "_goal", "_goal_name", "_heal_time", "_invariants", "_monitor",
-        "_post_heal", "_seed", "_sim", "_snapshot", "failure", "history",
+        "_converge_within",
+        "_goal",
+        "_goal_name",
+        "_heal_time",
+        "_invariants",
+        "_monitor",
+        "_post_heal",
+        "_seed",
+        "_sim",
+        "_snapshot",
+        "failure",
+        "history",
     )
 
     def __init__(
@@ -494,7 +571,9 @@ class _Oracle[W, S: Hashable]:
         converge_within: int | None = None,
     ) -> None:
         self._seed = seed
-        self._sim = sim  # snapshot through the live sim so a cold restart's swapped instance is seen
+        self._sim = (
+            sim  # snapshot through the live sim so a cold restart's swapped instance is seen
+        )
         self._snapshot = snapshot
         self._invariants = invariants
         self._monitor = monitor
@@ -512,12 +591,16 @@ class _Oracle[W, S: Hashable]:
         step = len(self.history) - 1
         for name, predicate in self._invariants.items():
             if not predicate(world):
-                self.failure = SimFailure(self._seed, "invariant", name, step, world, tuple(self.history))
+                self.failure = SimFailure(
+                    self._seed, "invariant", name, step, world, tuple(self.history)
+                )
                 raise _OracleStop
         if self._monitor is not None:
             violation = self._monitor.observe(world)
             if violation is not None:
-                self.failure = SimFailure(self._seed, "refinement", str(violation), step, world, tuple(self.history))
+                self.failure = SimFailure(
+                    self._seed, "refinement", str(violation), step, world, tuple(self.history)
+                )
                 raise _OracleStop
         # liveness bound: once faults have healed, the goal must be reached within converge_within
         # steps -- catches livelock (busy but never converging) before quiescence/max_steps.
@@ -529,7 +612,9 @@ class _Oracle[W, S: Hashable]:
         ):
             self._post_heal += 1
             if self._post_heal > self._converge_within:
-                self.failure = SimFailure(self._seed, "liveness", self._goal_name, step, world, tuple(self.history))
+                self.failure = SimFailure(
+                    self._seed, "liveness", self._goal_name, step, world, tuple(self.history)
+                )
                 raise _OracleStop
 
 
@@ -561,7 +646,9 @@ def simulate[W, S: Hashable](
     (``report.failure.seed``). ``factory`` builds a fresh node map per run (also reused to cold-restart
     a crashed node); ``snapshot`` maps the live nodes to an immutable world value used by the oracle."""
     if model is not None and abstraction is None:
-        raise ValueError("model given without abstraction: pass abstraction=... to map worlds to model states")
+        raise ValueError(
+            "model given without abstraction: pass abstraction=... to map worlds to model states"
+        )
     invs: Mapping[str, Callable[[W], bool]] = invariants if invariants is not None else {}
     runs = 0
     for seed in seeds:
@@ -576,8 +663,15 @@ def simulate[W, S: Hashable](
             else None
         )
         oracle = _Oracle(
-            seed, sim, snapshot, invs, monitor,
-            goal=goal, goal_name=goal_name, heal_time=heal_time, converge_within=converge_within,
+            seed,
+            sim,
+            snapshot,
+            invs,
+            monitor,
+            goal=goal,
+            goal_name=goal_name,
+            heal_time=heal_time,
+            converge_within=converge_within,
         )
         try:
             sim.run(max_steps=max_steps, after_start=oracle, on_step=oracle)
