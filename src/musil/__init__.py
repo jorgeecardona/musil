@@ -86,7 +86,7 @@ from musil.ltl import (
     check_ltl,
 )
 
-__version__ = "0.35.6"  # the single source of truth; pyproject reads it via [tool.hatch.version]
+__version__ = "0.36.0"  # the single source of truth; pyproject reads it via [tool.hatch.version]
 
 __all__ = [
     "LTL",

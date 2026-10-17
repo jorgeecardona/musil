@@ -18,7 +18,9 @@ from collections.abc import Callable, Hashable, Iterable
 from musil.core import Action
 
 __all__ = [
+    "budget",
     "crash_actions",
+    "once",
     "partition_actions",
 ]
 
@@ -55,7 +57,9 @@ def crash_actions[S: Hashable](
         actions.append(
             Action(
                 name=f"{name}:crash:{node}",
-                enabled=lambda s, node=node: get_up(s, node) and (budget is None or down_count(s) < budget),
+                enabled=lambda s, node=node: (
+                    get_up(s, node) and (budget is None or down_count(s) < budget)
+                ),
                 apply=lambda s, node=node: set_up(s, node, False),
             )
         )
@@ -110,3 +114,59 @@ def partition_actions[S: Hashable](
             )
         )
     return actions
+
+
+def once[S: Hashable](
+    action: Action[S],
+    *,
+    fired: Callable[[S], bool],
+    mark: Callable[[S], S],
+) -> Action[S]:
+    """Wrap ``action`` so it fires AT MOST ONCE per run — a declarative one-shot latch.
+
+    ``fired(state) -> bool`` reads the latch (has it already fired?); ``mark(state) -> S`` returns the
+    state with the latch SET (a lens the caller owns — a single ``bool`` field is the usual shape, and
+    ``mark`` then ``fired`` must round-trip to ``True``). The returned action keeps ``action``'s name and
+    fairness, but its guard gains ``not fired(s)`` and its apply sets the latch on the resulting state. So
+    the caller stops hand-writing the ``and not s.*_done`` guard and the ``replace(s, *_done=True)`` update
+    that keep a one-shot fault from re-firing (and the reachable space finite).
+
+    The latch field still lives in the caller's dataclass — ``once`` owns the BOOKKEEPING logic, not the
+    storage — so every invariant, guard, and symmetry key sees the ordinary state. Keep one-shot FAULTS
+    unfair (wrap an action whose ``fair`` is ``None``), like ``crash_actions``, so a liveness proof cannot
+    lean on the fault being scheduled."""
+    return Action(
+        name=action.name,
+        enabled=lambda s: not fired(s) and action.enabled(s),
+        apply=lambda s: mark(action.apply(s)),
+        fair=action.fair,
+    )
+
+
+def budget[S: Hashable](
+    action: Action[S],
+    n: int,
+    *,
+    count: Callable[[S], int],
+    tick: Callable[[S], S],
+) -> Action[S]:
+    """Wrap ``action`` so it fires AT MOST ``n`` times per run — a declarative bounded budget.
+
+    ``count(state) -> int`` reads how many firings have been spent; ``tick(state) -> S`` returns the state
+    with the counter INCREMENTED (a lens the caller owns — a single ``int`` field is the usual shape, and
+    ``tick`` must raise ``count`` by exactly one). The returned action keeps ``action``'s name and fairness,
+    but its guard gains ``count(s) < n`` and its apply increments the counter on the resulting state.
+    ``n`` must be ``>= 0`` (``0`` disables the action; a negative budget is a bug and raises).
+
+    A SHARED pool across several actions needs no separate API: pass the SAME ``count`` / ``tick`` (the one
+    counter field) to each ``budget`` call, and their firings draw from the one pool — ``count(s) < n`` is
+    checked against the shared counter and every wrapped action ticks it. Keep budgeted FAULTS unfair, like
+    ``crash_actions``, so a liveness proof cannot lean on the fault firing."""
+    if n < 0:
+        raise ValueError(f"budget n must be >= 0, got {n}")
+    return Action(
+        name=action.name,
+        enabled=lambda s: count(s) < n and action.enabled(s),
+        apply=lambda s: tick(action.apply(s)),
+        fair=action.fair,
+    )

@@ -2,6 +2,21 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `once` / `budget` (#28): declarative one-shot and bounded-budget fault combinators
+
+- `musil.faults.once(action, *, fired, mark)` wraps an action so it fires AT MOST ONCE per run, and
+  `musil.faults.budget(action, n, *, count, tick)` so it fires at most `n` times. The combinator owns the
+  re-fire guard (`not fired(s)` / `count(s) < n`) and the latch/counter update, so a fault model stops
+  hand-writing the `*_done` guard and the `replace(s, *_done=True)` bookkeeping that keep a one-shot fault
+  from re-firing (and the reachable space finite). `n < 0` raises; `n == 0` disables the action.
+- Accessor-threading, the `crash_actions` lens idiom: the latch/counter field stays in the caller's own
+  dataclass (a `bool` for `once`, an `int` for `budget`), so every invariant, guard and symmetry key still
+  sees the ordinary state — `once`/`budget` own the bookkeeping LOGIC, not the storage. A SHARED budget pool
+  across several actions needs no new API: pass the same `count`/`tick` to each `budget` call and their
+  firings draw from the one counter.
+- Both preserve the wrapped action's `name` and `fair` tag; keep one-shot / budgeted FAULTS unfair so a
+  liveness proof cannot lean on a fault being scheduled.
+
 ### Added — `block_volume_faults` (#40): the block-volume fault contract for stateful nodes
 
 - `musil.environments.storage.block_volume_faults(...)` is an `EnvironmentSpec` factory for the fault class
