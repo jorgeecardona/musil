@@ -3,6 +3,21 @@
 Developer and maintainer notes: toolchain, CI, and the release process. (Package *users* need none of this —
 see the [README](README.md) for what musil does and how to use it.)
 
+## Contributing with an AI agent
+
+Most changes here will be written with a coding agent — that's expected and welcome. To get a good
+result from yours:
+
+- **Point it at [`AGENTS.md`](AGENTS.md) first** — the machine-facing contract for this repo: build
+  and test commands, the typed-API and style rules, and the repo-specific gotchas. Agents read it
+  automatically when started from the repo root.
+- **Ship a green `make check`** (lint + typecheck + test). Have the agent run it and fix what it
+  finds *before* opening the MR, not leave it for review.
+- **Don't let it bypass the hooks.** The patch version auto-bumps on `src/` changes and CI's
+  version-guard enforces it; a `--no-verify` commit fails the pipeline.
+- **States must stay frozen and hashable, and the public API typed** (see AGENTS.md); add a
+  `CHANGELOG.md` entry and don't reformat unrelated files.
+
 ## Development & CI
 
 The toolchain is pinned with [proto](https://moonrepo.dev/proto) (`.prototools`: `moon` + `uv`)
