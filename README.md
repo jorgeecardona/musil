@@ -82,9 +82,9 @@ INVARIANT VIOLATED: both-increments-counted
 
 In a test, `check(model)` is truthy exactly when it holds, so `assert check(model).ok` passes or
 fails with that trace. The result also carries the broken invariant, the `trace`, and
-`states_explored`. This is [`examples/lost_update.py`](examples/lost_update.py); the Peterson mutual-exclusion
-proof is in [`examples/mutex.py`](examples/mutex.py), and ~30 more runnable models live in
-[`examples/`](examples/).
+`states_explored`. This is [`examples/lost_update.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/lost_update.py); the Peterson mutual-exclusion
+proof is in [`examples/mutex.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/mutex.py), and ~30 more runnable models live in
+[`examples/`](https://gitlab.com/cardona-oss/musil/-/tree/main/examples).
 
 ## Why musil
 
@@ -126,8 +126,8 @@ bounded domain of candidate states.
 Beyond these, musil also does full LTL (`check_ltl`), exact DTMC/MDP probabilities
 (`musil.probabilistic`), k-induction (`check_inductive`), coverage & vacuity analysis, and
 model-building kits (`compose`, channels, `musil.fsm`, open-system checking, `simulate`). Every
-claim has a runnable model in [`examples/`](examples/); the full feature tour lives in the
-[`docs/`](docs/).
+claim has a runnable model in [`examples/`](https://gitlab.com/cardona-oss/musil/-/tree/main/examples); the full feature tour lives in the
+[`docs/`](https://cardona-oss.gitlab.io/musil/).
 
 ## Links
 
