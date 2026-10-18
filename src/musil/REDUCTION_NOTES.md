@@ -153,6 +153,33 @@ reaches musil's 1M-state ceiling near n ≈ 17; the reduced search does not). Th
 issue noted was undocumented). POR stays deferred per the status above; if a workload ever appears whose
 symmetry does *not* collapse it, this is the measured starting point for building it.
 
+## Measured: parallel exploration (#17) — cores, not a reduction
+
+`parallel_check` (`check(workers=N)`, `musil.parallel`) is NOT a reduction: it does not shrink the
+reachable space, it spends more cores on whatever space is left. So it composes with symmetry rather than
+competing — reduce the space first (symmetry changes the complexity class), then throw cores at the
+expansion that remains. It is level-synchronous BFS fanned across `fork` processes, returning the SAME
+`Result` as serial `check` (verified by equality tests across ok / invariant / deadlock / edge-invariant /
+symmetry / non-hashable-key models).
+
+The gate (#17 ships it only if it beats serial): it depends ENTIRELY on whether the model's own
+`apply`/`enabled`/invariant closures cost more than pickling a state across the per-level barrier. Measured
+on a grid model (16-core box, Python 3.12), serial vs `workers=`:
+
+| workload | states | serial | w=4 | w=8 |
+| --- | --- | --- | --- | --- |
+| cheap transition (`work=0`) | 46 656 | 0.62s | 1.49s (**0.41×**) | 1.69s (**0.36×**) |
+| cheap transition (`work=0`) | 78 125 | 1.41s | 4.79s (**0.29×**) | 2.97s (**0.47×**) |
+| heavy transition (`work=400`) | 46 656 | 7.85s | 4.90s (**1.60×**) | 3.40s (**2.31×**) |
+| heavy transition (`work=400`) | 78 125 | 15.58s | 8.29s (**1.88×**) | 6.43s (**2.42×**) |
+
+Conclusion: **parallelism LOSES on cheap expansion** (2–3× slower — the state pickling across processes
+dwarfs a trivial transition) and **WINS on expensive expansion** (up to ~2.4×), which is exactly the case
+#17 was filed for (a 5–20s CPU-bound check with real closures). Speedup plateaus near 2.4× well below the
+core count: the level-synchronous barrier and the parent's serial visited-set merge are the Amdahl ceiling,
+and the per-level pickle round-trip is pure overhead serial never pays. So `workers=N` is a lever for
+models whose transition relation is genuinely expensive, not a free default — hence opt-in, left at 1.
+
 ## References
 
 - Flanagan & Godefroid, "Dynamic Partial-Order Reduction for Model Checking Software" (POPL 2005) —

@@ -64,6 +64,8 @@ State-space reductions with their soundness gates, and proof by induction beyond
 
 ::: musil.induction
 
+::: musil.parallel
+
 ## Conformance to code
 
 Checking that real code behaves like the model — trace replay and refinement.

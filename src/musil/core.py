@@ -544,10 +544,16 @@ def check[S: Hashable](
     max_states: int = 1_000_000,
     canonicalize: Callable[[S], S] | None = None,
     key: Callable[[S], Hashable] | None = None,
+    workers: int = 1,
 ) -> Result[S]:
     """Breadth-first sweep of every reachable state. Returns the first invariant violation or
     deadlock found (shortest trace, because BFS visits by increasing depth), else OK once the whole
     reachable space is exhausted. ``max_states`` is a runaway guard for unbounded models.
+
+    ``workers`` > 1 runs the SAME sweep across that many fork processes (:func:`musil.parallel.parallel_check`)
+    to cut wall-clock on a large, CPU-bound space — same verdict and same shortest trace, just faster. It
+    falls back to this serial sweep when the platform has no ``fork`` start method; states must be picklable
+    (frozen dataclasses are). See ``musil.parallel`` for the design and its benchmark gate.
 
     ``canonicalize`` enables **symmetry reduction** (OPT-IN, soundness is the caller's obligation):
     map each state to a canonical representative of its symmetry-equivalence class and only that
@@ -569,6 +575,13 @@ def check[S: Hashable](
     ``canonicalize``, a NON-injective ``key`` is never sound. (``explore`` and the tools built on it still
     require hashable states.) The model's ``actions_fn`` (if set) supplies the per-state action list;
     otherwise the static ``actions`` are used."""
+    if workers > 1:
+        # lazy import: musil.parallel imports core, so importing it at module load would cycle
+        from musil.parallel import parallel_check
+
+        return parallel_check(
+            model, workers=workers, max_states=max_states, canonicalize=canonicalize, key=key
+        )
     source = actions_source(model)
     canon: Callable[[S], S] = canonicalize if canonicalize is not None else (lambda s: s)
     ident: Callable[[S], Hashable] = key if key is not None else (lambda s: s)

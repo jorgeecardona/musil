@@ -35,6 +35,7 @@ assertions. Everything else lives in a submodule, imported directly:
 - ``musil.metrics`` — coverage and vacuity (is a green check meaningful?)
 - ``musil.induction`` — ``check_inductive`` (proof by k-induction, unbounded depth)
 - ``musil.symmetry`` / ``musil.por`` — symmetry and partial-order reduction, with soundness gates
+- ``musil.parallel`` — ``parallel_check``: the BFS fanned across fork processes (``check(workers=N)``)
 - ``musil.refine`` / ``musil.conformance`` — refinement and code-conformance checking
 - ``musil.fsm`` / ``musil.petri`` / ``musil.faults`` / ``musil.channels`` / ``musil.compose`` /
   ``musil.clock`` / ``musil.reconciler`` — model-building kits
@@ -86,7 +87,7 @@ from musil.ltl import (
     check_ltl,
 )
 
-__version__ = "0.36.5"  # the single source of truth; pyproject reads it via [tool.hatch.version]
+__version__ = "0.36.6"  # the single source of truth; pyproject reads it via [tool.hatch.version]
 
 __all__ = [
     "LTL",
@@ -237,6 +238,7 @@ _MOVED = {
     "multi_status_field_actions": "fsm",
     "never": "core",
     "no_trace": "tracing",
+    "parallel_check": "parallel",
     "partition_actions": "faults",
     "petri_actions": "petri",
     "petri_enabled": "petri",

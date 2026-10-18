@@ -2,6 +2,26 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `check(workers=N)`: parallel state-space exploration (#17)
+
+- `check(model, workers=N)` (engine in `musil.parallel.parallel_check`) runs the SAME breadth-first sweep
+  across `N` fork processes, returning the SAME `Result` — same verdict, same shortest counterexample — as
+  the serial `check`, just faster on a large space. It is level-synchronous (BSP): each BFS level is fanned
+  across the pool and the parent extends the frontier in the serial FIFO order, so discovery order (and so
+  the visited set, the parent pointers and the first problem found) is byte-identical to serial — the
+  correctness anchor, verified by equality tests across ok / invariant / deadlock / edge-invariant /
+  symmetry / non-hashable-`key` models.
+- Processes, not threads, because standard CPython 3.12 still has the GIL (threads would not run Python in
+  parallel); `fork` specifically, because a `Model` is built from lambdas/closures that `pickle` cannot
+  serialize — forked workers INHERIT the model in memory (copy-on-write), so only STATES cross the per-level
+  barrier. Falls back to the serial sweep when the platform has no `fork` (Windows, macOS spawn) or
+  `workers <= 1`; states must be picklable (frozen dataclasses are).
+- **Measured, opt-in on purpose** (`REDUCTION_NOTES.md`): parallelism is not a reduction (it does not shrink
+  the space, it spends cores on it) and composes with symmetry rather than competing. It LOSES ~2–3× on
+  cheap transitions (state pickling dwarfs the work) and WINS up to ~2.4× on expensive ones — the 5–20s
+  CPU-bound check #17 was filed for. So `workers` stays 1 by default; raise it for models whose transition
+  relation is genuinely costly.
+
 ### Added — `drive_scenarios`: the generate_traces-driven scenario harness (#33, need 4)
 
 - `musil.conformance.drive_scenarios(traces, *, monitor, apply_action, matches, within, reset=,

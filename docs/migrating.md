@@ -43,6 +43,7 @@ module:
 | `musil.induction` | `check_inductive`, `InductionResult` |
 | `musil.symmetry` | `canonical_by_sorting`, `canonical_by_fields`, `canonical_by_permutations` |
 | `musil.por` | `explore_por`, `por_sound`, `independent` |
+| `musil.parallel` | `parallel_check` |
 | `musil.faults` | `crash_actions`, `partition_actions` |
 | `musil.channels` | `channel_actions`, `fifo_channel_actions`, `send`, `fifo_send` |
 | `musil.compose` | `compose`, `Composite` |
