@@ -36,7 +36,7 @@ Key modules: `core.py` (Model, Action, check, Result), `graph.py` (BFS explorer)
 ## Style
 
 - Format and autofix: `make format` (ruff format + ruff check --fix, line length 100).
-- Lint: `make lint` (ruff). Types: `make typecheck` (pyright, strict, on `src`, `tests`, `examples`).
+- Lint: `make lint` (ruff, `select = ["E","F","W","I","B","UP","SIM","RUF"]`). Types: `make typecheck` (pyright, strict, on `src`, `tests`, `examples`).
 - Prefer frozen dataclasses and explicit types; keep the public API typed (`py.typed`). All public
   symbols are re-exported from `src/musil/__init__.py`; add new public API there.
 - The package is zero-dependency by design. Do not add anything to `[project.dependencies]`; dev/test
@@ -44,10 +44,10 @@ Key modules: `core.py` (Model, Action, check, Result), `graph.py` (BFS explorer)
 
 ## Gotchas
 
-- **Version lives only in `pyproject.toml`** (static `version = "…"`, not dynamic). The pre-commit
-  hook auto-bumps the patch when a commit touches `src/`, and `moon run :version-guard` (part of
-  `:ci`) enforces the same rule in CI. For a deliberate minor/major bump run `make bump TYPE=minor`
-  (or `major`). Never edit the version by hand.
+- **Version:** the `__version__` literal in `src/musil/__init__.py`, which hatchling reads so
+  `pyproject.toml` never disagrees. Do not edit it by hand: the pre-commit hook auto-bumps it when
+  anything under `src/` changes, and CI's version-guard enforces that a `src/` change carries a
+  bump. For a deliberate minor/major bump run `make bump TYPE=minor` (or `major`).
 - **Merging a version bump to `main` releases itself:** a green `main` pipeline publishes to PyPI via
   OIDC when that version is not yet published (no-op otherwise). There is no tag step.
 - **`format-check` is intentionally NOT in the `:ci` gate yet** (the tree is not ruff-format-clean),
