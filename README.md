@@ -1,5 +1,10 @@
 # musil
 
+[![pipeline status](https://gitlab.com/cardona-oss/musil/badges/main/pipeline.svg)](https://gitlab.com/cardona-oss/musil/-/pipelines)
+[![PyPI version](https://img.shields.io/pypi/v/musil.svg)](https://pypi.org/project/musil/)
+[![Python versions](https://img.shields.io/pypi/pyversions/musil.svg)](https://pypi.org/project/musil/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A tiny, dependency-free explicit-state model checker for Python: safety, deadlock, reachability,
 liveness — and concurrency by interleaving.
 
@@ -128,12 +133,12 @@ claim has a runnable model in [`examples/`](examples/); the full feature tour li
 
 - **Repository:** https://gitlab.com/cardona-oss/musil
 - **PyPI:** https://pypi.org/project/musil/
-- **Changelog:** [CHANGELOG.md](CHANGELOG.md)
+- **Changelog:** [CHANGELOG.md](https://gitlab.com/cardona-oss/musil/-/blob/main/CHANGELOG.md)
 - **Documentation:** <https://cardona-oss.gitlab.io/musil/>
 
 ## Contributing
 
-Toolchain, CI, and the release process live in [CONTRIBUTING.md](CONTRIBUTING.md). In short:
+Toolchain, CI, and the release process live in [CONTRIBUTING.md](https://gitlab.com/cardona-oss/musil/-/blob/main/CONTRIBUTING.md). In short:
 `proto install` then `moon run :ci` (lint + typecheck + test + build + docs); releases publish
 themselves from a green `main` pipeline.
 

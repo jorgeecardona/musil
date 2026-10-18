@@ -26,6 +26,10 @@ uv.lock.bak
 .idea/
 *.swp
 
+# Claude Code local state (per-machine; tracked .claude files and AGENTS.md stay in git)
+.claude/settings.local.json
+.claude/worktrees/
+
 # Local session logs
 logs/
 
