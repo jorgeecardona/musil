@@ -25,12 +25,16 @@ from typing import cast
 from musil.core import Graph, Model, Step, explore
 
 __all__ = [
+    "Checkpoint",
     "ConformanceResult",
     "Convergence",
     "ConvergenceMonitor",
     "Divergence",
+    "ScenarioResult",
     "areplay",
     "assert_converged",
+    "assert_scenarios",
+    "drive_scenarios",
     "generate_traces",
     "replay",
 ]
@@ -167,6 +171,130 @@ def assert_converged[G](result: Convergence[G], *, message: str | None = None) -
     Pass the result of :meth:`ConvergenceMonitor.wait`."""
     __tracebackhide__ = True
     if not result.converged:
+        raise AssertionError(f"{message}\n{result}" if message else str(result))
+
+
+# --- The scenario-driver: generate the harness from the model (#33 need 4) ----------------------
+#
+# `replay` drives the real system through `generate_traces` output and compares LOCK-STEP. An
+# eventually-consistent system needs the convergence version: walk the same traces, but each step is
+# a CONVERGENCE CHECKPOINT — a per-action callback drives the real fleet (meshlab's `procs[3].kill()`
+# and `ip link set ... down`, keyed on the model's action name), then poll the `ConvergenceMonitor`
+# until the observed global view matches the model-predicted state, allowing churn in between. This is
+# the piece that keeps meshlab's hand-transcribed scenario list (A. CONVERGENCE / B. DEATH /
+# C. PARTITION / D. HEAL+REJOIN) in sync with the model: the scenarios ARE the model's traces, so the
+# harness is generated, not kept in sync by hand.
+
+
+@dataclass(frozen=True, slots=True)
+class Checkpoint[S: Hashable, G]:
+    """One convergence checkpoint reached while driving a trace: after ``action`` (step ``step_index``
+    of trace ``trace_index``), the model predicted ``expected`` and the real system was watched to see
+    if it settled there. ``convergence`` is the :class:`Convergence` outcome — converged or not, with
+    the last observed global view as the evidence."""
+
+    trace_index: int
+    step_index: int
+    action: str
+    expected: S
+    convergence: Convergence[G]
+
+
+@dataclass(frozen=True, slots=True)
+class ScenarioResult[S: Hashable, G]:
+    """The outcome of driving every trace. ``ok`` is True when every checkpoint converged; otherwise
+    ``failure`` is the first checkpoint that did not settle in time."""
+
+    ok: bool
+    traces_run: int
+    checkpoints: int
+    failure: Checkpoint[S, G] | None = None
+
+    def __bool__(self) -> bool:
+        return self.ok
+
+    def __str__(self) -> str:
+        if self.ok:
+            return (
+                f"ALL CONVERGED -- {self.traces_run} traces, {self.checkpoints} checkpoints, "
+                f"every one settled"
+            )
+        f = self.failure
+        assert f is not None
+        return (
+            f"DID NOT CONVERGE in trace {f.trace_index} at step {f.step_index} after '{f.action}':\n"
+            f"  model expected: {f.expected}\n"
+            f"  {f.convergence}\n"
+            f"({self.traces_run} traces, {self.checkpoints} checkpoints run)"
+        )
+
+
+def drive_scenarios[S: Hashable, N: Hashable, O, G](
+    traces: Iterable[Sequence[Step[S]]],
+    *,
+    monitor: ConvergenceMonitor[N, O, G],
+    apply_action: Callable[[str], None],
+    matches: Callable[[G, S], bool],
+    within: float,
+    reset: Callable[[], None] | None = None,
+    checkpoint: Callable[[Step[S]], bool] = lambda _step: True,
+    poll: float = 0.5,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+) -> ScenarioResult[S, G]:
+    """Drive a real eventually-consistent system through ``generate_traces`` output, convergence-checking
+    each step instead of comparing lock-step. For each trace: ``reset()`` (if given) puts the real
+    system back to the starting scenario; then for each step ``apply_action(step.action)`` drives the
+    real fleet (the ``<init>`` step at index 0 applies nothing — it is the starting scenario) and, when
+    ``checkpoint(step)`` holds, :meth:`ConvergenceMonitor.wait` polls until ``matches(observed, expected)``
+    — the observed merged global view against the model-predicted state — or ``within`` seconds pass.
+
+    The first checkpoint that does not converge stops the run and is returned as ``failure``; otherwise
+    every checkpoint settled. ``matches`` takes the observed global view first and the model-predicted
+    state second. ``checkpoint`` selects which steps are checkpoints (default: all), for a model whose
+    intermediate steps are not settle points. ``clock``/``sleep`` are forwarded to ``wait`` so the whole
+    driver runs on a virtual clock in tests."""
+    traces_run = 0
+    checkpoints = 0
+    for trace_index, trace in enumerate(traces):
+        if not trace:
+            continue
+        traces_run += 1
+        if reset is not None:
+            reset()
+        for step_index, step in enumerate(trace):
+            if step_index > 0:
+                apply_action(step.action)
+            if not checkpoint(step):
+                continue
+            expected = step.state
+            conv = monitor.wait(
+                lambda g, expected=expected: matches(g, expected),
+                within=within,
+                goal_name=str(expected),
+                poll=poll,
+                clock=clock,
+                sleep=sleep,
+            )
+            checkpoints += 1
+            if not conv.converged:
+                return ScenarioResult(
+                    ok=False,
+                    traces_run=traces_run,
+                    checkpoints=checkpoints,
+                    failure=Checkpoint(trace_index, step_index, step.action, expected, conv),
+                )
+    return ScenarioResult(ok=True, traces_run=traces_run, checkpoints=checkpoints)
+
+
+def assert_scenarios[S: Hashable, G](
+    result: ScenarioResult[S, G], *, message: str | None = None
+) -> None:
+    """Assert every checkpoint converged — a clean pytest failure (naming the trace, step, action, the
+    model-predicted state and the last observed global view) when the real system did not settle in
+    time. Pass the result of :func:`drive_scenarios`."""
+    __tracebackhide__ = True
+    if not result.ok:
         raise AssertionError(f"{message}\n{result}" if message else str(result))
 
 

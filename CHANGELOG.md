@@ -2,6 +2,23 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Added — `drive_scenarios`: the generate_traces-driven scenario harness (#33, need 4)
+
+- `musil.conformance.drive_scenarios(traces, *, monitor, apply_action, matches, within, reset=,
+  checkpoint=, poll=, clock=, sleep=)` drives a real eventually-consistent system through
+  `generate_traces` output, turning each step into a CONVERGENCE CHECKPOINT instead of the lock-step
+  comparison `replay` does. For each trace it `reset()`s the fleet, then for each step `apply_action(action)`
+  drives the real system (keyed on the model's action name, as meshlab keys its `proc.kill()` /
+  `ip link down`) and a `ConvergenceMonitor` polls until `matches(observed, expected)` holds — the observed
+  merged global view against the model-predicted state — or `within` seconds pass. This closes the gap
+  that made paas's `meshlab.py` hand-transcribe scenarios A–D (CONVERGENCE / DEATH / PARTITION /
+  HEAL+REJOIN) from the model's trace set: the scenarios ARE the traces, so the harness is generated, not
+  kept in sync by hand. Returns a `ScenarioResult` (`ok`, `traces_run`, `checkpoints`, and the first
+  non-converging `Checkpoint` as `failure`); `assert_scenarios(result)` is the clean-pytest-failure
+  assertion. `checkpoint=` selects which steps are checkpoints (default: all); `clock`/`sleep` are
+  forwarded to `wait` so the whole driver runs on a virtual clock in tests. This completes #33 (needs
+  1–4).
+
 ### Added — `FaultSchedule.drive` for driving faults into a real fleet (#33, need 2)
 
 - `musil.sim.FaultSchedule.drive(apply_fault, heal_fault, *, seconds_per_tick=, sleep=)` walks the

@@ -86,7 +86,7 @@ from musil.ltl import (
     check_ltl,
 )
 
-__version__ = "0.36.4"  # the single source of truth; pyproject reads it via [tool.hatch.version]
+__version__ = "0.36.5"  # the single source of truth; pyproject reads it via [tool.hatch.version]
 
 __all__ = [
     "LTL",
@@ -136,6 +136,7 @@ _MOVED = {
     "BaseNode": "sim",
     "BoundedClock": "clock",
     "Buchi": "ltl",
+    "Checkpoint": "conformance",
     "Citation": "citations",
     "Composite": "compose",
     "ConformanceResult": "conformance",
@@ -169,6 +170,7 @@ _MOVED = {
     "RefinementResult": "refine",
     "RefinementViolation": "refine",
     "RunResult": "sim",
+    "ScenarioResult": "conformance",
     "SimFailure": "sim",
     "SimReport": "sim",
     "Simulator": "sim",
@@ -185,6 +187,7 @@ _MOVED = {
     "assert_covers_table": "fsm",
     "assert_place_invariant": "petri",
     "assert_probability": "probabilistic",
+    "assert_scenarios": "conformance",
     "bounded_clock": "clock",
     "canonical_by_fields": "symmetry",
     "canonical_by_permutations": "symmetry",
@@ -205,6 +208,7 @@ _MOVED = {
     "declared_accounts": "fsm",
     "declared_states": "fsm",
     "diff": "diffing",
+    "drive_scenarios": "conformance",
     "endpoints_of": "fsm",
     "enumerate_actions": "core",
     "eventually": "patterns",
