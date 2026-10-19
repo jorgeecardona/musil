@@ -19,6 +19,29 @@ symbolically — simple, and exact for systems small enough to fit.)
 
 Named for Robert Musil, the engineer-mathematician turned novelist.
 
+## Why musil
+
+The expensive bugs in stateful and distributed systems are temporal and concurrent: a resource
+wedged forever, a race that drops data, a deadlock. Tests sample executions; a model checker proves
+a property over *all* of them.
+
+TLA+/TLC is the reference tool in this space, and it scales further than musil. But its model is a
+separate `.tla` spec in a math-based language, checked by a JVM binary, living outside your code and
+test suite. musil's bet is the opposite: the model is ordinary Python *in* your repo. States are
+frozen dataclasses, actions are guarded functions, invariants are predicates, and `check` runs under
+pytest like any other test. The model can even be driven from the same allowed-transitions table
+your code already enforces (`musil.fsm`), so it can't silently drift from the code.
+
+**Reach for musil when** your state space is bounded and small, you want the model next to the code
+with zero new tooling, and the win is catching races / deadlocks / stuck states and proving
+convergence.
+
+**Reach for TLA+ (or a symbolic tool like Apalache) when** the state space is large or infinite and
+you need symbolic reasoning rather than enumeration — musil enumerates, so it is for bounded models
+and blows up on very large ones (cap it with `max_states`; the result flags `truncated`).
+`check_inductive` pushes the *depth* bound to unbounded via k-induction, but still enumerates a
+bounded domain of candidate states.
+
 ## Install
 
 ```
@@ -85,29 +108,6 @@ fails with that trace. The result also carries the broken invariant, the `trace`
 `states_explored`. This is [`examples/lost_update.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/lost_update.py); the Peterson mutual-exclusion
 proof is in [`examples/mutex.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/mutex.py), and ~30 more runnable models live in
 [`examples/`](https://gitlab.com/cardona-oss/musil/-/tree/main/examples).
-
-## Why musil
-
-The expensive bugs in stateful and distributed systems are temporal and concurrent: a resource
-wedged forever, a race that drops data, a deadlock. Tests sample executions; a model checker proves
-a property over *all* of them.
-
-TLA+/TLC is the reference tool in this space, and it scales further than musil. But its model is a
-separate `.tla` spec in a math-based language, checked by a JVM binary, living outside your code and
-test suite. musil's bet is the opposite: the model is ordinary Python *in* your repo. States are
-frozen dataclasses, actions are guarded functions, invariants are predicates, and `check` runs under
-pytest like any other test. The model can even be driven from the same allowed-transitions table
-your code already enforces (`musil.fsm`), so it can't silently drift from the code.
-
-**Reach for musil when** your state space is bounded and small, you want the model next to the code
-with zero new tooling, and the win is catching races / deadlocks / stuck states and proving
-convergence.
-
-**Reach for TLA+ (or a symbolic tool like Apalache) when** the state space is large or infinite and
-you need symbolic reasoning rather than enumeration — musil enumerates, so it is for bounded models
-and blows up on very large ones (cap it with `max_states`; the result flags `truncated`).
-`check_inductive` pushes the *depth* bound to unbounded via k-induction, but still enumerates a
-bounded domain of candidate states.
 
 ## Key features
 
