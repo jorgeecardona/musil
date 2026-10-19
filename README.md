@@ -3,7 +3,7 @@
 [![pipeline status](https://gitlab.com/cardona-oss/musil/badges/main/pipeline.svg)](https://gitlab.com/cardona-oss/musil/-/pipelines)
 [![PyPI version](https://img.shields.io/pypi/v/musil.svg)](https://pypi.org/project/musil/)
 [![Python versions](https://img.shields.io/pypi/pyversions/musil.svg)](https://pypi.org/project/musil/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://gitlab.com/cardona-oss/musil/-/blob/main/LICENSE)
 
 A tiny, dependency-free explicit-state model checker for Python: safety, deadlock, reachability,
 liveness — and concurrency by interleaving.
@@ -144,4 +144,4 @@ themselves from a green `main` pipeline.
 
 ## License
 
-MIT © Jorge Cardona. See [LICENSE](LICENSE).
+MIT © Jorge Cardona. See [LICENSE](https://gitlab.com/cardona-oss/musil/-/blob/main/LICENSE).
