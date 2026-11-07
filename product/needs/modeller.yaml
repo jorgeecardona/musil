@@ -1,0 +1,111 @@
+who: developer checking a stateful system in Python
+
+needs:
+
+  - id: MU-1
+    text: >
+      When the developer checks a model, they can get the shortest trace to a broken invariant, or a
+      confirmation that no reachable state breaks one.
+    must: true
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#key-features (Safety)"}
+    proofs:
+      - "test:tests/test_core.py::test_invariant_violation_reports_shortest_trace"
+      - "test:tests/test_core.py::test_safe_cyclic_machine_is_ok"
+      - "test:tests/test_core.py::test_reachable_violations_enumerates_all_bad_states"
+
+  - id: MU-2
+    text: >
+      When the developer gives each actor's actions, they can find a race that only some interleavings
+      hit.
+    must: true
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#quickstart"}
+    proofs:
+      - "test:tests/test_core.py::test_interleaving_finds_lost_update_race"
+      - "test:tests/test_example_lost_update.py::test_example_runs_and_finds_the_lost_update"
+
+  - id: MU-3
+    text: >
+      When a reachable state has no next step and is not declared terminal, the developer can see it
+      reported as a deadlock.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#key-features (Deadlock & reachability)"}
+    proofs:
+      - "test:tests/test_core.py::test_deadlock_detected"
+      - "test:tests/test_core.py::test_terminal_sink_is_not_a_deadlock"
+      - "test:tests/test_core.py::test_reaches_returns_states_that_can_still_get_to_goal"
+
+  - id: MU-4
+    text: >
+      When the developer asks whether a goal is eventually reached, they can get a proof under weak or
+      strong fairness, or a lasso counterexample.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#key-features (Liveness)"}
+    proofs:
+      - "test:tests/test_liveness.py::test_eventually_reached_on_every_run"
+      - "test:tests/test_liveness.py::test_fair_cycle_violates_without_fairness_but_holds_with_it"
+      - "test:tests/test_liveness.py::test_strong_fairness_forces_a_flickering_action_that_weak_cannot"
+
+  - id: MU-5
+    text: >
+      When the state space is too large, the developer can cap it with max_states and see the result
+      flagged as truncated.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#why-musil"}
+    proofs:
+      - "test:tests/test_core.py::test_max_states_truncation_is_reported"
+
+  - id: MU-6
+    text: >
+      When the developer needs an unbounded-depth proof, they can run k-induction with check_inductive.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#why-musil (check_inductive)"}
+    proofs:
+      - "test:tests/test_induction.py::test_proven_for_a_1_inductive_invariant"
+      - "test:tests/test_induction.py::test_k_induction_proves_what_1_induction_could_not"
+
+  - id: MU-7
+    text: >
+      When the developer writes an LTL property, they can check it with check_ltl and get a lasso when
+      it fails.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#key-features (full LTL)"}
+    proofs:
+      - "test:tests/test_ltl.py::test_response_g_implies_f"
+      - "test:tests/test_ltl.py::test_engine_returns_a_counterexample_lasso"
+
+  - id: MU-8
+    text: >
+      When the developer models a DTMC or MDP, they can get exact reachability probabilities.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#key-features (musil.probabilistic)"}
+    proofs:
+      - "test:tests/test_probabilistic.py::test_fair_walk_matches_i_over_n"
+      - "test:tests/test_probabilistic.py::test_mdp_max_and_min_pick_opposite_coins"
+
+  - id: MU-9
+    text: >
+      When the code already enforces an allowed-transitions table, the developer can build the model
+      from that table with musil.fsm.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#why-musil (musil.fsm)"}
+    proofs:
+      - "test:tests/test_fsm.py::test_model_built_from_table_is_reachable_and_sound"
+      - "test:tests/test_fsm.py::test_transition_actions_cover_every_edge"
+
+  - id: MU-10
+    text: >
+      When a check fails under pytest, the developer can read the whole rendered trace in the failure
+      message through assert_ok.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "docs/api.md"}
+    proofs:
+      - "test:tests/test_core.py::test_assert_ok_raises_with_the_rendered_trace_not_the_repr"
+      - "test:tests/test_core.py::test_pytest_shows_the_whole_trace_through_assert_ok_and_elides_it_without"
+
+  - id: MU-11
+    text: >
+      When the developer installs musil, they can use it with only the standard library.
+    sources:
+      - {kind: secondary, date: 2026-11-07, locator: "README.md#install"}
