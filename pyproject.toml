@@ -3,7 +3,7 @@
 # Qualities"). A standalone, dependency-free explicit-state model checker.
 name = "musil"
 dynamic = ["version"]  # the single source of truth is __version__ in src/musil/__init__.py (see [tool.hatch.version])
-description ="A tiny, dependency-free explicit-state model checker for Python: safety, deadlock, liveness, full LTL, and exact DTMC/MDP probabilities — concurrency by interleaving."
+description = "An explicit-state model checker for concurrent systems modelled in Python"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"

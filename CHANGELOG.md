@@ -2,6 +2,10 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Changed: PyPI page (0.36.8)
+
+- PyPI page: shorter summary and clearer README top.
+
 ### Added — `check(workers=N)`: parallel state-space exploration (#17)
 
 - `check(model, workers=N)` (engine in `musil.parallel.parallel_check`) runs the SAME breadth-first sweep

@@ -5,56 +5,29 @@
 [![Python versions](https://img.shields.io/pypi/pyversions/musil.svg)](https://pypi.org/project/musil/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://gitlab.com/cardona-oss/musil/-/blob/main/LICENSE)
 
-A tiny, dependency-free explicit-state model checker for Python: safety, deadlock, reachability,
-liveness — and concurrency by interleaving.
+An explicit-state model checker that runs inside pytest. States are frozen dataclasses, actions
+are guarded functions, invariants are predicates. musil explores every reachable state, in every
+order concurrent actions can run. It returns the shortest trace that breaks an invariant, or
+confirms that none exists.
 
-You describe a system as *states*, the guarded *actions* that step between them, and *invariants*
-that must hold in every state. musil explores every reachable state, in every order concurrent
-actions can run, and either returns the shortest sequence of steps that breaks a rule or confirms
-none can. Your states are frozen dataclasses, your invariants are predicates, and the whole thing
-runs in pytest next to your other tests — no spec language, no external binary, no JVM.
+No dependencies, no spec language, no JVM. It enumerates states one by one, so it is for bounded
+models.
 
-("Explicit-state" means it enumerates reachable states one by one rather than reasoning about them
-symbolically — simple, and exact for systems small enough to fit.)
-
-Named for Robert Musil, the engineer-mathematician turned novelist.
-
-## Why musil
-
-The expensive bugs in stateful and distributed systems are temporal and concurrent: a resource
-wedged forever, a race that drops data, a deadlock. Tests sample executions; a model checker proves
-a property over *all* of them.
-
-TLA+/TLC is the reference tool in this space, and it scales further than musil. But its model is a
-separate `.tla` spec in a math-based language, checked by a JVM binary, living outside your code and
-test suite. musil's bet is the opposite: the model is ordinary Python *in* your repo. States are
-frozen dataclasses, actions are guarded functions, invariants are predicates, and `check` runs under
-pytest like any other test. The model can even be driven from the same allowed-transitions table
-your code already enforces (`musil.fsm`), so it can't silently drift from the code.
-
-**Reach for musil when** your state space is bounded and small, you want the model next to the code
-with zero new tooling, and the win is catching races / deadlocks / stuck states and proving
-convergence.
-
-**Reach for TLA+ (or a symbolic tool like Apalache) when** the state space is large or infinite and
-you need symbolic reasoning rather than enumeration — musil enumerates, so it is for bounded models
-and blows up on very large ones (cap it with `max_states`; the result flags `truncated`).
-`check_inductive` pushes the *depth* bound to unbounded via k-induction, but still enumerates a
-bounded domain of candidate states.
+It also checks deadlock, liveness under fairness, full LTL, and exact DTMC/MDP probabilities.
 
 ## Install
 
-```
+```bash
 pip install musil      # or: uv add musil
 ```
 
-Pure standard library; Python 3.12+.
+Standard library only. Python 3.12+.
 
 ## Quickstart
 
-A lost-update race: two actors each increment a shared counter as two non-atomic steps (read, then
-write back `read + 1`). A normal test hits the bug only on an unlucky interleaving. musil checks
-*every* interleaving and returns the shortest one that loses an update.
+A lost-update race: two actors each increment a shared counter in two steps (read, then write
+back `read + 1`). A normal test fails only on one unlucky interleaving. musil checks every
+interleaving and returns the shortest one that loses an update.
 
 ```python
 from dataclasses import dataclass, replace
@@ -93,7 +66,7 @@ model = Model(
 print(check(model))
 ```
 
-```
+```text
 INVARIANT VIOLATED: both-increments-counted
   Init: Counter(x=0, a_reg=None, b_reg=None, a_done=False, b_done=False)
   → A_read: Counter(x=0, a_reg=0, b_reg=None, a_done=False, b_done=False)
@@ -109,19 +82,42 @@ fails with that trace. The result also carries the broken invariant, the `trace`
 proof is in [`examples/mutex.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/mutex.py), and ~30 more runnable models live in
 [`examples/`](https://gitlab.com/cardona-oss/musil/-/tree/main/examples).
 
+## Why musil
+
+The expensive bugs in stateful and distributed systems are temporal and concurrent: a resource
+wedged forever, a race that drops data, a deadlock. Tests sample executions; a model checker proves
+a property over *all* of them.
+
+TLA+/TLC is the reference tool in this space, and it scales further than musil. But its model is a
+separate `.tla` spec in a math-based language, checked by a JVM binary, living outside your code and
+test suite. musil does the opposite: the model is ordinary Python *in* your repo. States are
+frozen dataclasses, actions are guarded functions, invariants are predicates, and `check` runs under
+pytest like any other test. The model can even be driven from the same allowed-transitions table
+your code already enforces (`musil.fsm`), so it can't silently drift from the code.
+
+Use musil when your state space is bounded and small, you want the model next to the code
+with zero new tooling, and the win is catching races / deadlocks / stuck states and proving
+convergence.
+
+Use TLA+ (or a symbolic tool like Apalache) when the state space is large or infinite and
+you need symbolic reasoning rather than enumeration. musil enumerates, so it is for bounded models
+and blows up on very large ones (cap it with `max_states`; the result flags `truncated`).
+`check_inductive` pushes the *depth* bound to unbounded via k-induction, but still enumerates a
+bounded domain of candidate states.
+
 ## Key features
 
-- **Safety** — `check(model)` sweeps every reachable state and returns the shortest trace to a broken
+- Safety: `check(model)` sweeps every reachable state and returns the shortest trace to a broken
   invariant or a deadlock, or confirms none exists. `reachable_violations` lists every offending
   state/rule for a full audit.
-- **Concurrency by interleaving** — hand it each actor's actions and it tries every order they can
+- Concurrency by interleaving: hand it each actor's actions and it tries every order they can
   run in, surfacing races a normal test would only hit by luck.
-- **Deadlock & reachability** — a state with no next step is reported as a bug unless declared
+- Deadlock and reachability: a state with no next step is reported as a bug unless declared
   `terminal`; `reaches(graph, P)` answers "from which states can P still be reached?".
-- **Liveness** — `check_liveness(model, goal=P)` proves something good eventually (or always
-  eventually) happens, with weak/strong **fairness** assumptions; failures come back as a lasso
+- Liveness: `check_liveness(model, goal=P)` proves something good eventually (or always
+  eventually) happens, with weak/strong fairness assumptions; failures come back as a lasso
   (stem into a repeating cycle).
-- **Dependency-free & typed** — standard library only, ships `py.typed`, pyright-strict.
+- Dependency-free and typed: standard library only, ships `py.typed`, pyright-strict.
 
 Beyond these, musil also does full LTL (`check_ltl`), exact DTMC/MDP probabilities
 (`musil.probabilistic`), k-induction (`check_inductive`), coverage & vacuity analysis, and
@@ -143,5 +139,7 @@ Toolchain, CI, and the release process live in [CONTRIBUTING.md](https://gitlab.
 themselves from a green `main` pipeline.
 
 ## License
+
+musil is named for Robert Musil, the engineer-mathematician turned novelist.
 
 MIT © Jorge Cardona. See [LICENSE](https://gitlab.com/cardona-oss/musil/-/blob/main/LICENSE).
