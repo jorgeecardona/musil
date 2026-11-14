@@ -84,6 +84,21 @@ plugins:
             separate_signature: true
             show_signature_annotations: true
             docstring_section_style: spacy
+  - llmstxt:
+      markdown_description: An explicit-state model checker for concurrent systems modelled in Python.
+      full_output: llms-full.txt
+      sections:
+        Usage documentation:
+          - index.md
+          - verifying-distributed-systems.md
+          - open-systems.md
+          - environments.md
+          - migrating.md
+        Examples:
+          - textbook.md
+          - examples/*.md
+        API reference:
+          - api.md
 
 nav:
   - Home: index.md
