@@ -251,3 +251,20 @@ def test_strong_fairness_checks_a_cycle_inside_a_larger_scc() -> None:
     actions.append(Action("g", lambda s: s == "G", lambda _s: "G"))
     model = Model(init="A", actions=actions, invariants={})
     assert not check_liveness(model, goal=lambda s: s == "G", fair_strong=("z",)).ok
+
+
+def test_fair_cycle_is_the_printed_loop_not_an_unfair_self_loop() -> None:
+    # The SCC {a, b} is fair as a whole: 'fix' (weakly fair) is disabled in b. The self-loop at a is
+    # not fair, because 'fix' stays enabled there, so the printed loop must go through b (#43).
+    actions = [
+        Action("idle", lambda s: s == "a", lambda _s: "a"),
+        Action("go", lambda s: s == "a", lambda _s: "b"),
+        Action("back", lambda s: s == "b", lambda _s: "a"),
+        Action("fix", lambda s: s == "a", lambda _s: "G"),
+        Action("stay", lambda s: s == "G", lambda _s: "G"),
+    ]
+    model = Model(init="a", actions=actions, invariants={})
+    result = check_liveness(model, goal=lambda s: s == "G", fair=("fix",))
+    assert not result.ok
+    assert result.kind == "fair-cycle"
+    assert "b" in [step.state for step in result.cycle]

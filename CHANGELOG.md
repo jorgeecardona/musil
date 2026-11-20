@@ -2,6 +2,13 @@
 
 All notable changes to musil are documented here. Versioning is [SemVer](https://semver.org/).
 
+### Fixed: the loop of a fair-cycle counterexample is fair (#43)
+
+- `check_liveness` prints a loop that is itself fair. Before, it printed the shortest loop through the entry
+  state, which could be a one-state self-loop where a weakly-fair action stays enabled. The loop now
+  visits a state that disables each such action, or takes it, so you can read it without checking the
+  enabled actions by hand.
+
 ### Changed: PyPI page (0.36.8)
 
 - PyPI page: shorter summary and clearer README top.

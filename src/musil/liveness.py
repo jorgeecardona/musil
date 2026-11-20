@@ -227,7 +227,8 @@ def check_liveness_of[S: Hashable](
         entry = next(s for s in order if s in fair_scc)  # shortest-stem entry
         return LivenessResult(
             ok=False, states_explored=len(g.states), goal=goal_name, kind="fair-cycle",
-            stem=_stem(parent, entry), cycle=_simple_cycle(fair_scc, entry, bad_succ),
+            stem=_stem(parent, entry),
+            cycle=_fair_cycle(fair_scc, entry, bad_succ, g.edges, fairset, strongset),
         )
 
     return LivenessResult(ok=True, states_explored=len(g.states), goal=goal_name, truncated=g.truncated)
@@ -379,6 +380,95 @@ def _stem[S: Hashable](parent: Mapping[S, tuple[S, str] | None], state: S) -> tu
         cur = prev
     chain.reverse()
     return tuple(chain)
+
+
+def _fair_cycle[S: Hashable](
+    scc: set[S],
+    entry: S,
+    succ: Mapping[S, list[tuple[str, S]]],
+    edges: Mapping[S, tuple[tuple[str, S], ...]],
+    weak: frozenset[str],
+    strong: frozenset[str],
+) -> tuple[Step[S], ...]:
+    """A closed walk from ``entry`` inside ``scc`` that is itself fair, so the printed loop is the real
+    counterexample (#43).
+
+    The shortest loop through ``entry`` can be unfair when ``scc`` is only fair as a whole: a self-loop at a
+    state where a weakly-fair action stays enabled. The walk grows by detours until no obligation is left: a
+    weak action enabled at every visited state needs a step that takes it or a visit to a state that
+    disables it, and a strong action enabled at any visited state needs a step that takes it.
+    """
+    walk: list[Step[S]] = []
+    cur = entry
+    visited = {entry}
+    taken: set[str] = set()
+
+    def has_edge(a: str, s: S) -> bool:
+        return any(name == a and t in scc for name, t in succ[s])
+
+    def go(goal: Callable[[S], bool]) -> None:
+        nonlocal cur
+        path = _path_to(scc, cur, succ, goal)
+        walk.extend(path)
+        taken.update(step.action for step in path)
+        visited.update(step.state for step in path)
+        if path:
+            cur = path[-1].state
+
+    def take(a: str) -> None:
+        nonlocal cur
+        go(lambda s: has_edge(a, s) or (a in weak and not _enables(a, s, edges)))
+        if _enables(a, cur, edges) or a in strong:
+            t = next(t for name, t in succ[cur] if name == a and t in scc)
+            walk.append(Step(action=a, state=t))
+            taken.add(a)
+            visited.add(t)
+            cur = t
+
+    while True:
+        owed = [a for a in sorted(weak - taken) if all(_enables(a, s, edges) for s in visited)]
+        owed += [a for a in sorted(strong - taken) if any(_enables(a, s, edges) for s in visited)]
+        if owed:
+            take(owed[0])
+        elif cur != entry:
+            go(lambda s: s == entry)
+        elif walk:
+            return tuple(walk)
+        else:
+            return _simple_cycle(scc, entry, succ)
+
+
+def _path_to[S: Hashable](
+    scc: set[S], start: S, succ: Mapping[S, list[tuple[str, S]]], goal: Callable[[S], bool]
+) -> list[Step[S]]:
+    """Shortest walk from ``start`` to a state with ``goal`` true, over edges inside ``scc`` (empty when
+    ``start`` already satisfies it)."""
+    parent: dict[S, tuple[S, str]] = {}
+    frontier = [start]
+    seen = {start}
+    head = 0
+    found: S | None = start if goal(start) else None
+    while found is None and head < len(frontier):
+        s = frontier[head]
+        head += 1
+        for a, t in succ[s]:
+            if t in scc and t not in seen:
+                seen.add(t)
+                parent[t] = (s, a)
+                frontier.append(t)
+                if goal(t):
+                    found = t
+                    break
+    if found is None:
+        return []
+    steps: list[Step[S]] = []
+    cur = found
+    while cur != start:
+        pv, pa = parent[cur]
+        steps.append(Step(action=pa, state=cur))
+        cur = pv
+    steps.reverse()
+    return steps
 
 
 def _simple_cycle[S: Hashable](
