@@ -148,6 +148,7 @@ def test_everywhere_recurrence_vs_eventually_from_init() -> None:
 
 # --- leads-to / response: [](Q -> <>P) --------------------------------------------------------
 
+
 @dataclass(frozen=True)
 class Phase:
     at: str = "I"
@@ -156,7 +157,8 @@ class Phase:
 def _phase_model(actions_spec: dict[str, set[str]]) -> Model[Phase]:
     acts: list[Action[Phase]] = [
         Action(f"{a}->{b}", lambda s, _a=a: s.at == _a, lambda s, _b=b: replace(s, at=_b))
-        for a, bs in actions_spec.items() for b in bs
+        for a, bs in actions_spec.items()
+        for b in bs
     ]
     return Model(init=Phase(), actions=acts, terminal=lambda s: not actions_spec.get(s.at))
 
@@ -174,8 +176,9 @@ def test_leadsto_fails_when_trigger_can_avoid_goal_forever() -> None:
     r = check_liveness(model, goal=lambda s: s.at == "G", leadsto_from=lambda s: s.at == "T")
     assert not r.ok and r.kind == "fair-cycle"
     # weak fairness of the escape action repairs it (T->G continuously enabled along the T-loop)
-    r2 = check_liveness(model, goal=lambda s: s.at == "G",
-                        leadsto_from=lambda s: s.at == "T", fair=["T->G"])
+    r2 = check_liveness(
+        model, goal=lambda s: s.at == "G", leadsto_from=lambda s: s.at == "T", fair=["T->G"]
+    )
     assert r2.ok
 
 
@@ -185,7 +188,9 @@ def test_leadsto_is_weaker_than_everywhere() -> None:
     model = _phase_model({"I": {"T", "L"}, "T": {"G"}, "G": {"G"}, "L": {"L"}})
     goal: Callable[[Phase], bool] = lambda s: s.at == "G"  # noqa: E731
     assert not check_liveness(model, goal=goal, everywhere=True).ok  # L loops, never P
-    assert check_liveness(model, goal=goal, leadsto_from=lambda s: s.at == "T").ok  # T always reaches G
+    assert check_liveness(
+        model, goal=goal, leadsto_from=lambda s: s.at == "T"
+    ).ok  # T always reaches G
 
 
 def test_leadsto_p_unreachable_when_trigger_reaches_a_dead_end() -> None:
@@ -199,8 +204,9 @@ def test_leadsto_from_overrides_everywhere_flag() -> None:
     # documented: when leadsto_from is given, `everywhere` is ignored. The L->L ¬P cycle would make
     # everywhere=True fail, but leadsto_from=T (which always reaches G) must still hold regardless.
     model = _phase_model({"I": {"T", "L"}, "T": {"G"}, "G": {"G"}, "L": {"L"}})
-    r = check_liveness(model, goal=lambda s: s.at == "G",
-                       leadsto_from=lambda s: s.at == "T", everywhere=True)
+    r = check_liveness(
+        model, goal=lambda s: s.at == "G", leadsto_from=lambda s: s.at == "T", everywhere=True
+    )
     assert r.ok
 
 
@@ -226,3 +232,22 @@ def test_everywhere_is_always_eventually_not_reachability() -> None:
     strict = check_liveness(model, goal=lambda s: s.done, everywhere=True, goal_name="done")
     assert not strict.ok and strict.kind == "fair-cycle"  # ... yet a run can loop forever
     assert check_liveness(model, goal=lambda s: s.done, everywhere=True, fair=["finish"]).ok
+
+
+def test_strong_fairness_checks_a_cycle_inside_a_larger_scc() -> None:
+    # {A, B, C} is one SCC and 'z' is enabled in C. The sub-cycle A <-> B never enables 'z',
+    # so it is strongly fair and never reaches G (#45).
+    def move(src: str, dst: str) -> Callable[[str], str]:
+        return lambda _s: dst
+
+    edges = [
+        ("ab", "A", "B"),
+        ("ba", "B", "A"),
+        ("bc", "B", "C"),
+        ("cb", "C", "B"),
+        ("z", "C", "G"),
+    ]
+    actions = [Action(name, lambda s, a=src: s == a, move(src, dst)) for name, src, dst in edges]
+    actions.append(Action("g", lambda s: s == "G", lambda _s: "G"))
+    model = Model(init="A", actions=actions, invariants={})
+    assert not check_liveness(model, goal=lambda s: s == "G", fair_strong=("z",)).ok
