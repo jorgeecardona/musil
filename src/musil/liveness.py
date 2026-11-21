@@ -44,9 +44,8 @@ class LivenessResult[S: Hashable]:
 
     For ``"fair-cycle"``, ``cycle`` is built to be fair on its own, so it is not always the shortest
     loop through the offending state (#43). It takes each strongly-fair action enabled at a state it
-    visited, and for each weakly-fair action it takes the action or visits a state that disables it.
-    Limit: when the offending state itself owes no fair action, ``cycle`` is the shortest loop through
-    it, and that loop can skip a strongly-fair action enabled at another state of the loop.
+    visits, and for each weakly-fair action it takes the action or visits a state that disables it.
+    When no fair action forces a detour, ``cycle`` is the shortest loop through the offending state.
     """
 
     ok: bool
@@ -403,7 +402,12 @@ def _fair_cycle[S: Hashable](
     The shortest loop through ``entry`` can be unfair when ``scc`` is only fair as a whole: a self-loop at a
     state where a weakly-fair action stays enabled. The walk grows by detours until no obligation is left: a
     weak action enabled at every visited state needs a step that takes it or a visit to a state that
-    disables it, and a strong action enabled at any visited state needs a step that takes it.
+    disables it, and a strong action enabled at any visited state needs a step that takes it. When
+    ``entry`` owes nothing, the walk starts as the shortest loop through it, and the states of that loop
+    are checked the same way.
+
+    Ends because each round takes one owed action or visits a state that disables it, and no action is
+    owed twice. Returns ``()`` only when ``scc`` has no loop through ``entry``.
     """
     walk: list[Step[S]] = []
     cur = entry
@@ -442,7 +446,14 @@ def _fair_cycle[S: Hashable](
         elif walk:
             return tuple(walk)
         else:
-            return _simple_cycle(scc, entry, succ)
+            # Nothing is owed at ``entry`` alone. Start from the shortest loop and check again: the
+            # states it visits can enable a strongly-fair action.
+            loop = _simple_cycle(scc, entry, succ)
+            if not loop:
+                return ()
+            walk.extend(loop)
+            taken.update(step.action for step in loop)
+            visited.update(step.state for step in loop)
 
 
 def _path_to[S: Hashable](

@@ -268,3 +268,48 @@ def test_fair_cycle_is_the_printed_loop_not_an_unfair_self_loop() -> None:
     assert not result.ok
     assert result.kind == "fair-cycle"
     assert "b" in [step.state for step in result.cycle]
+
+
+def _graph_model(init: str, edges: list[tuple[str, str, str]]) -> Model[str]:
+    """A model over string states with one transition per ``(action, source, target)`` triple."""
+    names = sorted({name for name, _src, _dst in edges})
+
+    def enabled(name: str) -> Callable[[str], bool]:
+        return lambda s: any(n == name and src == s for n, src, _dst in edges)
+
+    def step(name: str) -> Callable[[str], str]:
+        return lambda s: next(dst for n, src, dst in edges if n == name and src == s)
+
+    return Model(init=init, actions=[Action(n, enabled(n), step(n)) for n in names], invariants={})
+
+
+def test_fair_cycle_takes_a_strong_action_enabled_off_the_entry_state() -> None:
+    # The entry state e enables no fair action, so nothing is owed there. The shortest loop x, y
+    # visits s, where 'A' (strongly fair) is enabled, so the printed loop must take 'A' (#43).
+    edges = [("x", "e", "s"), ("y", "s", "e"), ("A", "s", "s"), ("g", "e", "G"), ("stay", "G", "G")]
+    result = check_liveness(_graph_model("e", edges), goal=lambda s: s == "G", fair_strong=("A",))
+    assert not result.ok
+    assert result.kind == "fair-cycle"
+    assert "A" in [step.action for step in result.cycle]
+    assert result.cycle[-1].state == "e"
+
+
+def test_fair_cycle_detours_to_take_a_strong_action_seen_on_the_first_loop() -> None:
+    # 'A' is enabled at s, on the shortest loop through e, but it only stays inside the SCC from t.
+    # The printed loop must go to t and take 'A' there (#43).
+    edges = [
+        ("x", "e", "s"),
+        ("y", "s", "e"),
+        ("A", "s", "G"),
+        ("down", "s", "t"),
+        ("up", "t", "s"),
+        ("A", "t", "t"),
+        ("g", "e", "G"),
+        ("stay", "G", "G"),
+    ]
+    result = check_liveness(_graph_model("e", edges), goal=lambda s: s == "G", fair_strong=("A",))
+    assert not result.ok
+    assert result.kind == "fair-cycle"
+    assert "A" in [step.action for step in result.cycle]
+    assert "G" not in [step.state for step in result.cycle]
+    assert result.cycle[-1].state == "e"

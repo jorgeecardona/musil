@@ -4,6 +4,15 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
 
 ## [Unreleased]
 
+## [0.36.11] - 2026-11-21
+
+### Fixed: the loop of a fair-cycle counterexample takes every strongly-fair action it enables (#43)
+
+- `check_liveness` printed an unfair loop when the entry state of the loop enabled no fair action.
+  The loop was then the shortest one through that state, and it could visit a state that enables a
+  strongly-fair action (`fair_strong`) without taking the action. The loop now takes it. The
+  verdict (`ok`, `kind`) and the `stem` do not change.
+
 ## [0.36.10] - 2026-11-21
 
 ### Changed: README and PyPI page
@@ -22,6 +31,8 @@ All notable changes to musil are documented here. Versioning is [SemVer](https:/
   the entry state, which could be a one-state self-loop where a weakly-fair action stays enabled.
   The loop now visits a state that disables each such action, or takes it, so you can read it
   without checking the enabled actions by hand.
+- Limit, fixed in 0.36.11: the loop could still skip a strongly-fair action enabled at a state
+  other than the entry state.
 
 ## [0.36.8] - 2026-11-14
 
