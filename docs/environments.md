@@ -57,7 +57,7 @@ for a in result.unverified_assumptions:
 
 ## Available environments
 
-### `musil.environments.k8s` — Kubernetes
+### `musil.environments.k8s`: Kubernetes
 
 Models Kubernetes pod scheduler faults.
 
@@ -71,14 +71,15 @@ Models Kubernetes pod scheduler faults.
 
 **Factories:**
 
-- `pod_eviction(*, can_evict, on_evict, can_oom_kill=None, on_oom_kill=None, extra_assumptions=None)`
-  — `EnvironmentSpec` for pod eviction and optional OOM kills
-- `eviction_notifier(*, msg="k8s:evict")` — `AdversarialNode` that replies to any message with an eviction notification
-- `oom_notifier(*, msg="k8s:oom-kill")` — `AdversarialNode` for OOM kill
+- `pod_eviction(*, can_evict, on_evict, can_oom_kill=None, on_oom_kill=None,
+  extra_assumptions=None)`: `EnvironmentSpec` for pod eviction and optional OOM kills
+- `eviction_notifier(*, msg="k8s:evict")`: `AdversarialNode` that replies to any message with an
+  eviction notification
+- `oom_notifier(*, msg="k8s:oom-kill")`: `AdversarialNode` for OOM kill
 
 ---
 
-### `musil.environments.aws` — AWS
+### `musil.environments.aws`: AWS
 
 Models AWS API faults: throttling, timeouts.
 
@@ -93,14 +94,14 @@ Models AWS API faults: throttling, timeouts.
 
 **Factories:**
 
-- `aws_api_faults(*, can_throttle, on_throttle, can_timeout=None, on_timeout=None, extra_assumptions=None)`
-  — `EnvironmentSpec` for API failures
-- `throttling_service(*, throttle_msg=...)` — `AdversarialNode` that returns ThrottlingException
-- `timeout_service()` — `AdversarialNode` that drops all messages (silent timeout)
+- `aws_api_faults(*, can_throttle, on_throttle, can_timeout=None, on_timeout=None,
+  extra_assumptions=None)`: `EnvironmentSpec` for API failures
+- `throttling_service(*, throttle_msg=...)`: `AdversarialNode` that returns ThrottlingException
+- `timeout_service()`: `AdversarialNode` that drops all messages (silent timeout)
 
 ---
 
-### `musil.environments.linux` — Linux kernel
+### `musil.environments.linux`: Linux kernel
 
 Models Linux process and filesystem faults.
 
@@ -115,16 +116,16 @@ Models Linux process and filesystem faults.
 
 **Factories:**
 
-- `process_faults(*, can_oom_kill, on_oom_kill, can_sigterm=None, on_sigterm=None, extra_assumptions=None)`
-  — `EnvironmentSpec` for OOM kills and SIGTERM
-- `fs_faults(*, can_enospc, on_enospc, extra_assumptions=None)`
-  — `EnvironmentSpec` for ENOSPC filesystem errors
-- `oom_notifier(*, msg="linux:oom-kill")` — `AdversarialNode`
-- `signal_sender(*, signal="SIGTERM")` — `AdversarialNode`
+- `process_faults(*, can_oom_kill, on_oom_kill, can_sigterm=None, on_sigterm=None,
+  extra_assumptions=None)`: `EnvironmentSpec` for OOM kills and SIGTERM
+- `fs_faults(*, can_enospc, on_enospc, extra_assumptions=None)`:
+  `EnvironmentSpec` for ENOSPC filesystem errors
+- `oom_notifier(*, msg="linux:oom-kill")`: `AdversarialNode`
+- `signal_sender(*, signal="SIGTERM")`: `AdversarialNode`
 
 ---
 
-### `musil.environments.sel4` — seL4 microkernel
+### `musil.environments.sel4`: seL4 microkernel
 
 Models seL4 capability and IPC faults. seL4's formal verification (Klein et al., SOSP 2009)
 is explicitly represented through verified/axiom assumption statuses.
@@ -137,20 +138,20 @@ is explicitly represented through verified/axiom assumption statuses.
 | `sel4:capability-integrity` | **verified** | Klein et al., SOSP 2009 § 4 |
 | `sel4:ipc-liveness` | unverified | seL4 Reference Manual § 4 (IPC) |
 
-`HARDWARE_MEMORY_SAFETY` is an *axiom* — seL4's proof rests on it but cannot prove it from
+`HARDWARE_MEMORY_SAFETY` is an *axiom*: seL4's proof rests on it but cannot prove it from
 within the system. It surfaces in `OpenResult.unverified_assumptions` as a residual obligation.
 
-`CAP_INTEGRITY` is *verified* by the formal proof — it does NOT appear in unverified assumptions.
+`CAP_INTEGRITY` is *verified* by the formal proof. It does NOT appear in unverified assumptions.
 
 **Factories:**
 
-- `capability_revocation(*, can_revoke, on_revoke, can_ipc_timeout=None, on_ipc_timeout=None, extra_assumptions=None)`
-  — `EnvironmentSpec` for capability revocation and IPC timeouts
-- `cap_revocation_notifier(*, msg="sel4:cap-revoked")` — `AdversarialNode`
+- `capability_revocation(*, can_revoke, on_revoke, can_ipc_timeout=None, on_ipc_timeout=None,
+  extra_assumptions=None)`: `EnvironmentSpec` for capability revocation and IPC timeouts
+- `cap_revocation_notifier(*, msg="sel4:cap-revoked")`: `AdversarialNode`
 
 ---
 
-### `musil.environments.etcd` — etcd cluster
+### `musil.environments.etcd`: etcd cluster
 
 Models etcd cluster faults: leader election, write conflicts, compaction.
 
@@ -163,17 +164,18 @@ Models etcd cluster faults: leader election, write conflicts, compaction.
 | `etcd:unique-leader` | **verified** | Ongaro & Ousterhout, USENIX ATC 2014 § 5 (Safety) |
 | `etcd:compaction-bounded` | unverified | etcd docs: Maintenance § History compaction |
 
-`UNIQUE_LEADER` is verified by the Raft safety proof — it does NOT appear in unverified assumptions.
+`UNIQUE_LEADER` is verified by the Raft safety proof. It does NOT appear in unverified assumptions.
 
 **Factories:**
 
-- `cluster_faults(*, can_leader_change, on_leader_change, can_write_conflict=None, on_write_conflict=None, can_compaction=None, on_compaction=None, extra_assumptions=None)`
-  — `EnvironmentSpec` for cluster faults
-- `etcd_adversary(*, msg="etcd:leader-change")` — `AdversarialNode`
+- `cluster_faults(*, can_leader_change, on_leader_change, can_write_conflict=None,
+  on_write_conflict=None, can_compaction=None, on_compaction=None, extra_assumptions=None)`:
+  `EnvironmentSpec` for cluster faults
+- `etcd_adversary(*, msg="etcd:leader-change")`: `AdversarialNode`
 
 ---
 
-### `musil.environments.distributed` — stateful storage/state faults
+### `musil.environments.distributed`: stateful storage/state faults
 
 The fault classes that dominate a stateful distributed system's incident history, parameterized over
 model-supplied accessors (no assumed state shape).
@@ -187,21 +189,23 @@ model-supplied accessors (no assumed state shape).
 
 **Factories:**
 
-- `credential_rotation(*, can_rotate, on_rotate, extra_assumptions=None)` — `EnvironmentSpec` for a
+- `credential_rotation(*, can_rotate, on_rotate, extra_assumptions=None)`: `EnvironmentSpec` for a
   credential invalidated mid-flight.
-- `record_reality_divergence(*, can_diverge, on_diverge, extra_assumptions=None)` — `EnvironmentSpec` for a
-  cached RECORD ceasing to match REALITY (a restart, a cutover). "Stale view after restart" is a usage of this
-  one factory; for BLOCK-VOLUME faults specifically, prefer the dedicated `storage` contract below.
+- `record_reality_divergence(*, can_diverge, on_diverge, extra_assumptions=None)`: `EnvironmentSpec`
+  for a cached RECORD ceasing to match REALITY (a restart, a cutover). "Stale view after restart" is
+  a usage of this one factory; for BLOCK-VOLUME faults specifically, prefer the dedicated `storage`
+  contract below.
 
 Not shipped here on purpose: **message lost/reordered/duplicated** is already `musil.channels` +
-`sim.NetworkModel` (reuse those); **grace-window races** couple to `bounded_clock` and are left downstream.
+`sim.NetworkModel` (reuse those); **grace-window races** couple to `bounded_clock` and are left
+downstream.
 
 ---
 
-### `musil.environments.storage` — block volumes
+### `musil.environments.storage`: block volumes
 
-The fault class behind most stateful-node data-loss incidents, as a dedicated contract (rather than the
-generic `record_reality_divergence` above), parameterized over model-supplied accessors.
+The fault class behind most stateful-node data-loss incidents, as a dedicated contract (rather than
+the generic `record_reality_divergence` above), parameterized over model-supplied accessors.
 
 **Assumptions:**
 
@@ -212,19 +216,21 @@ generic `record_reality_divergence` above), parameterized over model-supplied ac
 
 **Factory:**
 
-- `block_volume_faults(*, can_detach/on_detach, can_wrong_attach/on_wrong_attach, can_empty_attach/on_empty_attach, can_detach_during_write/on_detach_during_write, extra_assumptions=None)` —
-  `EnvironmentSpec` for block-volume faults. Each fault is opt-in via a `can_/on_` pair (both or neither; at
-  least one required): `storage:volume-detached`, `storage:wrong-volume-attached` (a different volume's data —
-  a silent tenant wipe), `storage:empty-volume-attached`, `storage:detach-during-write`. The
-  `storage:data-presence-sensed` assumption is what makes recovery (`[]<>recovered`) provable: a node that
-  senses a wrong/empty volume refuses to serve it and re-attaches. Compose it with `check_open` instead of
-  hand-rolling these faults as bespoke `Action`s.
+- `block_volume_faults(*, can_detach/on_detach, can_wrong_attach/on_wrong_attach,
+  can_empty_attach/on_empty_attach, can_detach_during_write/on_detach_during_write,
+  extra_assumptions=None)`: `EnvironmentSpec` for block-volume faults. Each fault is opt-in via a
+  `can_/on_` pair (both or neither; at least one required): `storage:volume-detached`,
+  `storage:wrong-volume-attached` (a different volume's data, a silent tenant wipe),
+  `storage:empty-volume-attached`, `storage:detach-during-write`. The `storage:data-presence-sensed`
+  assumption is what makes recovery (`[]<>recovered`) provable: a node that senses a wrong/empty
+  volume refuses to serve it and re-attaches. Compose it with `check_open` instead of hand-rolling
+  these faults as bespoke `Action`s.
 
 ---
 
 ## Composing multiple environments
 
-Pass multiple `EnvironmentSpec` objects to `check_open` — behaviors and assumptions are merged:
+Pass multiple `EnvironmentSpec` objects to `check_open`. Behaviors and assumptions are merged:
 
 ```python
 from musil.env import check_open
@@ -243,7 +249,9 @@ result = check_open(
 The BFS explores all interleavings of all environment behaviors. Assumptions from every
 environment are collected into `result.unverified_assumptions`.
 
-See [examples/open_system_composed.py](https://gitlab.com/jorgecardona/musil/-/blob/main/examples/open_system_composed.py) for a complete multi-environment example.
+See
+[examples/open_system_composed.py](https://gitlab.com/jorgecardona/musil/-/blob/main/examples/open_system_composed.py)
+for a complete multi-environment example.
 
 ---
 

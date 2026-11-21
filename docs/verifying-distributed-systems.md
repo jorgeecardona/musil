@@ -2,27 +2,27 @@
 
 musil gives you two layers, in pure Python, that fit together:
 
-1. **Model-check the design** — describe the protocol as a state machine and prove (over a bounded
-   state space) that it is safe and converges. This is the [TLA+](https://lamport.azurewebsites.net/tla/tla.html)
-   job: find the *design* bugs.
-2. **Deterministic simulation testing of the real code** — run your *actual* node logic under a
+1. **Model-check the design**: describe the protocol as a state machine and prove (over a bounded
+   state space) that it is safe and converges. This is the
+   [TLA+](https://lamport.azurewebsites.net/tla/tla.html) job: find the *design* bugs.
+2. **Deterministic simulation testing of the real code**. Run your *actual* node logic under a
    controlled clock and a fault-injecting network, reproducibly from a seed, and hold it to the same
    model. This is the [FoundationDB](https://apple.github.io/foundationdb/testing.html) /
    [TigerBeetle](https://tigerbeetle.com/) job: find the *implementation* bugs.
 
 It is **bug-finding, not proof.** A clean run of a bounded model and a few thousand seeds is strong
-evidence, not a theorem (that's theorem-prover territory — Isabelle/Coq/Dafny, person-years). But it
+evidence, not a theorem (that's theorem-prover territory, Isabelle/Coq/Dafny, person-years). But it
 is the same technique the most reliable distributed systems in the world are built with.
 
 !!! note "What this is not"
-    musil is explicit-state and bounded: it enumerates a finite model and samples real-code schedules.
-    It does not prove correctness for unbounded scale, and it only finds faults you model. Model the
-    network explicitly, bound your state, and lean on the small-scope hypothesis.
+    musil is explicit-state and bounded: it enumerates a finite model and samples real-code
+    schedules. It does not prove correctness for unbounded scale, and it only finds faults you
+    model. Model the network explicitly, bound your state, and lean on the small-scope hypothesis.
 
 ## 1. Model-check the design
 
-A control plane pushes a route version to an agent; the agent applies last-writer-wins. Safety: never
-apply a version that wasn't intended. Liveness: always eventually catch up.
+A control plane pushes a route version to an agent; the agent applies last-writer-wins. Safety:
+never apply a version that wasn't intended. Liveness: always eventually catch up.
 
 ```python
 from dataclasses import dataclass
@@ -99,11 +99,11 @@ good = simulate(factory(repush=True), seeds=range(300), snapshot=snapshot, netwo
 assert good.ok
 ```
 
-When a seed fails, [`SimFailure`][musil.sim.SimFailure] tells you exactly which one — re-run with
+When a seed fails, [`SimFailure`][musil.sim.SimFailure] tells you exactly which one. Re-run with
 `seeds=[that_seed]` and the run replays bit-for-bit, because the whole simulation is a deterministic
 function of the seed. That is the property that makes simulation testing debuggable.
 
-Here is the full, runnable example in one piece — run it with `python examples/route_delivery.py`:
+Here is the full, runnable example in one piece. Run it with `python examples/route_delivery.py`:
 
 ```python
 --8<-- "examples/route_delivery.py"
@@ -112,7 +112,7 @@ Here is the full, runnable example in one piece — run it with `python examples
 ## The faults you can inject
 
 [`NetworkModel`][musil.sim.NetworkModel] controls the link: `loss` (drop probability), `duplicate`
-(redelivery probability), and a `min_latency`/`max_latency` spread (latency variance is what produces
-**reordering** and delay). The default is a reliable, in-order channel — faults are opt-in, so you
-turn on exactly the adversity you want to test against. Timers (`ctx.set_timer`) let nodes detect and
-recover from loss; the seeded clock makes timeouts fire deterministically.
+(redelivery probability), and a `min_latency`/`max_latency` spread (latency variance is what
+produces **reordering** and delay). The default is a reliable, in-order channel. Faults are opt-in,
+so you turn on exactly the adversity you want to test against. Timers (`ctx.set_timer`) let nodes
+detect and recover from loss; the seeded clock makes timeouts fire deterministically.

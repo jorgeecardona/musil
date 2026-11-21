@@ -40,7 +40,14 @@ __all__ = [
 class LivenessResult[S: Hashable]:
     """Outcome of an "eventually P" check. ``ok`` True means every run reaches P. Otherwise ``kind``
     is ``"p-unreachable"`` or ``"fair-cycle"``; ``stem`` is the shortest path from an initial state
-    to the offending state, and ``cycle`` is the recurring loop (empty for a P-unreachable sink)."""
+    to the offending state, and ``cycle`` is the recurring loop (empty for a P-unreachable sink).
+
+    For ``"fair-cycle"``, ``cycle`` is built to be fair on its own, so it is not always the shortest
+    loop through the offending state (#43). It takes each strongly-fair action enabled at a state it
+    visited, and for each weakly-fair action it takes the action or visits a state that disables it.
+    Limit: when the offending state itself owes no fair action, ``cycle`` is the shortest loop through
+    it, and that loop can skip a strongly-fair action enabled at another state of the loop.
+    """
 
     ok: bool
     states_explored: int
@@ -52,8 +59,8 @@ class LivenessResult[S: Hashable]:
 
     @property
     def action_names(self) -> tuple[str, ...]:
-        """The action names along the counterexample — the ``stem`` into the offending state then the
-        ``cycle`` it loops on — excluding the synthetic ``<init>`` step (empty on success)."""
+        """The action names along the counterexample: the ``stem`` into the offending state, then the
+        ``cycle`` it loops on. The synthetic ``<init>`` step is left out. Empty on success."""
         return tuple(step.action for step in (*self.stem, *self.cycle) if step.action != "<init>")
 
     @property

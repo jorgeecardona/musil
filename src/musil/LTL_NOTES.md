@@ -70,7 +70,7 @@ its `!enabled` disjunct, and the user's `φ` never references `taken`.
 ## Terminal states (must handle when wiring check_ltl)
 
 LTL is over INFINITE runs; the Büchi emptiness only sees infinite product runs. A model with a terminal /
-deadlock state has FINITE maximal runs that ending there, which the product simply drops (the product
+deadlock state has FINITE maximal runs that ending there, which the product drops (the product
 state has no successor, so it is in no cycle). So `check_ltl` over a model with terminal states must
 STUTTER-EXTEND them — add a self-loop on every deadlock/terminal state before building the product — so a
 run that would end there instead repeats its last state forever, and `F p` / `G p` get the intended

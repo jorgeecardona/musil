@@ -1,12 +1,12 @@
 # Migrating to the 0.35 API
 
-**0.35 reorganises the public API.** The top-level `musil` package went from re-exporting all ~158 names to
-exporting only the **core checking API** (~34 names). Every specialised layer now lives in its own submodule
-and is imported directly. This makes the top level small enough to discover and teach, and makes the layering
-explicit.
+**0.35 reorganises the public API.** The top-level `musil` package went from re-exporting all ~158
+names to exporting only the **core checking API** (~34 names). Every specialised layer now lives in
+its own submodule and is imported directly. This makes the top level small enough to discover and
+teach, and makes the layering explicit.
 
-Nothing was renamed or removed — every function and class is exactly where it was defined. Only the *import
-path* changed for the specialised names.
+Nothing was renamed or removed. Every function and class is exactly where it was defined. Only the
+*import path* changed for the specialised names.
 
 ## What stays at the top level
 
@@ -27,8 +27,8 @@ If your code only used these, nothing changes.
 
 ## What moved to a submodule
 
-Everything else is now `from musil.<module> import <name>`. Find the name in the table and prefix it with its
-module:
+Everything else is now `from musil.<module> import <name>`. Find the name in the table and prefix it
+with its module:
 
 | Import from | Names |
 |---|---|
@@ -65,6 +65,7 @@ module:
 
 ## Quick fix
 
-Most codebases only need to move a handful of imports. If your editor flags an unresolved
-`from musil import X`, look up `X` above and change it to `from musil.<module> import X`. A green
-`pyright` / `ruff` run confirms the switch — no behaviour changed, only where each name is imported from.
+Most codebases only need to move a handful of imports. If your editor flags an unresolved `from
+musil import X`, look up `X` above and change it to `from musil.<module> import X`. A green
+`pyright` / `ruff` run confirms the switch. No behaviour changed, only where each name is imported
+from.

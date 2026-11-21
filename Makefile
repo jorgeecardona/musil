@@ -30,7 +30,7 @@ check: lint typecheck test ## the full CI test stage: lint + typecheck + test
 bump: ## bump __version__ in src/musil/__init__.py -- TYPE=patch|minor|major (default patch)
 	./scripts/bump-version $(or $(TYPE),patch)
 
-docs: ## build docs strictly (as CI / Read the Docs do)
+docs: ## build docs strictly (as CI does)
 	uv run --extra docs mkdocs build --strict
 
 build: ## build sdist + wheel into dist/

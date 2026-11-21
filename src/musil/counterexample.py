@@ -8,7 +8,7 @@ regression test (``as_regression_test``, issue #15).
 
 Note on where it helps: a ``check``/``check_all`` counterexample is BFS-shortest, so no strict
 subsequence of it can violate (BFS would have returned that shorter path first) and ``minimize`` returns
-it essentially unchanged. Its value is on traces that are NOT step-minimal: a long simulation (VOPR) run,
+it unchanged. Its value is on traces that are NOT step-minimal: a long simulation (VOPR) run,
 an externally assembled action sequence, or any trace carrying actions irrelevant to the violation. On
 those it strips the irrelevant actions down to the minimal failing subsequence.
 """

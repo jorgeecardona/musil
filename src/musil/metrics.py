@@ -328,7 +328,7 @@ def invariant_coverage_of[S: Hashable](graph: Graph[S], model: Model[S]) -> Inva
             if a.enabled(s):
                 continue  # enabled ⇒ successor already reachable ⇒ no new information
             # A partial apply that relies on its guard can raise when applied guarded-off; a state that
-            # cannot exist cannot witness a violation, so that action is simply skipped here.
+            # cannot exist cannot witness a violation, so that action is skipped here.
             try:
                 t = a.apply(s)
             except Exception:

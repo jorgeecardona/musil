@@ -96,7 +96,7 @@ class Crash:
     """A sustained process fault: ``node`` is down over ``[start, end)`` -- inbound messages are
     dropped, its timers don't fire, it runs no handlers -- then restarts. ``lose_state=True`` is a cold
     restart (a fresh node instance that re-runs ``on_start``); the default is a warm resume that keeps
-    the instance's state (it simply missed everything while down)."""
+    the instance's state (it missed everything while down)."""
 
     node: str
     start: int

@@ -1,19 +1,39 @@
-# musil
+<h1 align="center">musil</h1>
 
-[![pipeline status](https://gitlab.com/cardona-oss/musil/badges/main/pipeline.svg)](https://gitlab.com/cardona-oss/musil/-/pipelines)
-[![PyPI version](https://img.shields.io/pypi/v/musil.svg)](https://pypi.org/project/musil/)
-[![Python versions](https://img.shields.io/pypi/pyversions/musil.svg)](https://pypi.org/project/musil/)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://gitlab.com/cardona-oss/musil/-/blob/main/LICENSE)
+<p align="center"><strong>Find races and deadlocks in a pytest test: musil checks every order your concurrent actions can run in and returns the shortest failing trace.</strong></p>
 
-An explicit-state model checker that runs inside pytest. States are frozen dataclasses, actions
-are guarded functions, invariants are predicates. musil explores every reachable state, in every
-order concurrent actions can run. It returns the shortest trace that breaks an invariant, or
-confirms that none exists.
+<p align="center">
+  <a href="https://pypi.org/project/musil/"><img alt="PyPI" src="https://img.shields.io/pypi/v/musil?style=flat-square"></a>
+  <a href="https://pypi.org/project/musil/"><img alt="Python versions" src="https://img.shields.io/pypi/pyversions/musil?style=flat-square"></a>
+  <a href="https://musil-d34e71.gitlab.io/"><img alt="Docs" src="https://img.shields.io/badge/docs-musil--d34e71.gitlab.io-blue?style=flat-square"></a>
+  <a href="https://gitlab.com/cardona-oss/musil/-/pipelines"><img alt="Pipeline" src="https://img.shields.io/gitlab/pipeline-status/cardona-oss%2Fmusil?branch=main&style=flat-square"></a>
+  <a href="https://gitlab.com/cardona-oss/musil/-/blob/main/LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square"></a>
+</p>
 
-No dependencies, no spec language, no JVM. It enumerates states one by one, so it is for bounded
-models.
+<p align="center">
+  <a href="https://musil-d34e71.gitlab.io/textbook/">Examples</a> ·
+  <a href="https://musil-d34e71.gitlab.io/verifying-distributed-systems/">Verifying a distributed system</a> ·
+  <a href="https://musil-d34e71.gitlab.io/#why-musil">Why musil</a> ·
+  <a href="https://musil-d34e71.gitlab.io/api/">API reference</a> ·
+  <a href="https://gitlab.com/cardona-oss/musil/-/blob/main/CHANGELOG.md">Changelog</a>
+</p>
 
-It also checks deadlock, liveness under fairness, full LTL, and exact DTMC/MDP probabilities.
+---
+
+## Overview
+
+musil is a model checker with no dependencies. You write states as frozen dataclasses, actions as
+guarded functions and invariants as predicates. `check` runs in a pytest test. It explores every
+reachable state, in every order the concurrent actions can run, and returns the shortest trace
+that breaks an invariant, or confirms that none exists.
+
+It enumerates states one by one, so it is for bounded models. TLA+ scales further, but needs a
+separate spec language and a JVM.
+
+It also checks deadlock, liveness under fairness, LTL (linear temporal logic) formulas, and exact
+probabilities on Markov chains and Markov decision processes.
+
+Status: beta.
 
 ## Install
 
@@ -76,67 +96,77 @@ INVARIANT VIOLATED: both-increments-counted
 (12 states explored)
 ```
 
-In a test, `check(model)` is truthy exactly when it holds, so `assert check(model).ok` passes or
-fails with that trace. The result also carries the broken invariant, the `trace`, and
-`states_explored`. This is [`examples/lost_update.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/lost_update.py); the Peterson mutual-exclusion
-proof is in [`examples/mutex.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/mutex.py), and ~30 more runnable models live in
+In a test, write `assert check(model).ok`. The result is truthy only when every invariant holds and
+no state deadlocks. It also has the broken invariant, the `trace`, and `states_explored`.
+
+This model is
+[`examples/lost_update.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/lost_update.py).
+The Peterson mutual-exclusion proof is in
+[`examples/mutex.py`](https://gitlab.com/cardona-oss/musil/-/blob/main/examples/mutex.py). About 30
+more runnable models are in
 [`examples/`](https://gitlab.com/cardona-oss/musil/-/tree/main/examples).
 
 ## Why musil
 
 The expensive bugs in stateful and distributed systems are temporal and concurrent: a resource
-wedged forever, a race that drops data, a deadlock. Tests sample executions; a model checker proves
-a property over *all* of them.
+that stays stuck, a race that drops data, a deadlock. Tests sample executions. A model checker
+proves a property over all of them.
 
-TLA+/TLC is the reference tool in this space, and it scales further than musil. But its model is a
-separate `.tla` spec in a math-based language, checked by a JVM binary, living outside your code and
-test suite. musil does the opposite: the model is ordinary Python *in* your repo. States are
-frozen dataclasses, actions are guarded functions, invariants are predicates, and `check` runs under
-pytest like any other test. The model can even be driven from the same allowed-transitions table
-your code already enforces (`musil.fsm`), so it can't silently drift from the code.
+TLA+ with its checker TLC is the reference tool, and it scales further than musil. Its model is a
+separate `.tla` spec in a math-based language, checked by a JVM program, outside your code and
+your test suite.
 
-Use musil when your state space is bounded and small, you want the model next to the code
-with zero new tooling, and the win is catching races / deadlocks / stuck states and proving
-convergence.
+A musil model is ordinary Python in your repo. States are frozen dataclasses, actions are guarded
+functions, invariants are predicates, and `check` runs under pytest like any other test. You can
+build the model from the same allowed-transitions table your code enforces (`musil.fsm`). Then a
+change to the table changes the model too.
 
-Use TLA+ (or a symbolic tool like Apalache) when the state space is large or infinite and
-you need symbolic reasoning rather than enumeration. musil enumerates, so it is for bounded models
-and blows up on very large ones (cap it with `max_states`; the result flags `truncated`).
-`check_inductive` pushes the *depth* bound to unbounded via k-induction, but still enumerates a
+Use musil when the state space is bounded and small, you want the model next to the code with no
+new tooling, and you want to catch races, deadlocks and stuck states, or prove convergence.
+
+Use TLA+ (or a symbolic tool like Apalache) when the state space is large or infinite and you
+need symbolic reasoning. musil enumerates states, so a very large model runs out of time or
+memory. Cap it with `max_states`: the result then sets `truncated`.
+
+`musil.induction.check_inductive` removes the depth bound with k-induction. It still enumerates a
 bounded domain of candidate states.
 
 ## Key features
 
-- Safety: `check(model)` sweeps every reachable state and returns the shortest trace to a broken
-  invariant or a deadlock, or confirms none exists. `reachable_violations` lists every offending
-  state/rule for a full audit.
-- Concurrency by interleaving: hand it each actor's actions and it tries every order they can
-  run in, surfacing races a normal test would only hit by luck.
+- Safety: `check(model)` visits every reachable state and returns the shortest trace to a broken
+  invariant or a deadlock, or confirms none exists. `musil.core.reachable_violations` lists every
+  offending state and rule.
+- Concurrency by interleaving: give it each actor's actions and it tries every order they can
+  run in. It finds races that a normal test hits only by luck.
 - Deadlock and reachability: a state with no next step is reported as a bug unless declared
-  `terminal`; `reaches(graph, P)` answers "from which states can P still be reached?".
-- Liveness: `check_liveness(model, goal=P)` proves something good eventually (or always
-  eventually) happens, with weak/strong fairness assumptions; failures come back as a lasso
-  (stem into a repeating cycle).
-- Dependency-free and typed: standard library only, ships `py.typed`, pyright-strict.
+  `terminal`. `reaches(graph, P)` answers "from which states can P still be reached?".
+- Liveness: `check_liveness(model, goal=P)` proves that P eventually happens (or happens again
+  and again), under weak or strong fairness assumptions. A failure is a lasso: a stem that leads
+  into a repeating cycle.
+- No dependencies, and typed: standard library only, ships `py.typed`, passes pyright strict.
 
-Beyond these, musil also does full LTL (`check_ltl`), exact DTMC/MDP probabilities
-(`musil.probabilistic`), k-induction (`check_inductive`), coverage & vacuity analysis, and
-model-building kits (`compose`, channels, `musil.fsm`, open-system checking, `simulate`). Every
-claim has a runnable model in [`examples/`](https://gitlab.com/cardona-oss/musil/-/tree/main/examples); the full feature tour lives in the
-[`docs/`](https://cardona-oss.gitlab.io/musil/).
+musil also has LTL (`check_ltl`), exact probabilities on Markov chains and Markov decision
+processes (`musil.probabilistic`), k-induction (`musil.induction.check_inductive`), coverage and
+vacuity analysis (`musil.metrics`), and kits to build models (`musil.compose`, `musil.channels`,
+`musil.fsm`, open-system checking in `musil.env`, `musil.sim.simulate`).
+
+Each feature has a runnable model in
+[`examples/`](https://gitlab.com/cardona-oss/musil/-/tree/main/examples). The feature tour is in
+the [docs](https://musil-d34e71.gitlab.io/).
 
 ## Links
 
-- **Repository:** https://gitlab.com/cardona-oss/musil
-- **PyPI:** https://pypi.org/project/musil/
-- **Changelog:** [CHANGELOG.md](https://gitlab.com/cardona-oss/musil/-/blob/main/CHANGELOG.md)
-- **Documentation:** <https://cardona-oss.gitlab.io/musil/>
+- Documentation: <https://musil-d34e71.gitlab.io/>
+- Repository: <https://gitlab.com/cardona-oss/musil>
+- PyPI: <https://pypi.org/project/musil/>
+- Changelog: [CHANGELOG.md](https://gitlab.com/cardona-oss/musil/-/blob/main/CHANGELOG.md)
 
 ## Contributing
 
-Toolchain, CI, and the release process live in [CONTRIBUTING.md](https://gitlab.com/cardona-oss/musil/-/blob/main/CONTRIBUTING.md). In short:
-`proto install` then `moon run :ci` (lint + typecheck + test + build + docs); releases publish
-themselves from a green `main` pipeline.
+Toolchain, CI and the release process are in
+[CONTRIBUTING.md](https://gitlab.com/cardona-oss/musil/-/blob/main/CONTRIBUTING.md). Run
+`proto install`, then `moon run :ci` (lint, typecheck, test, build, docs). A green `main`
+pipeline publishes a release when the version is new.
 
 ## License
 
